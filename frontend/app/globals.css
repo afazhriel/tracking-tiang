@@ -1,0 +1,356 @@
+@import "tailwindcss";
+
+/* =========================================================
+ * THEME: KERTAS HANGAT + TERRAKOTA (warm paper + terracotta)
+ * ------------------------------------------------------------
+ * Semua halaman memakai utilitas `neutral-*` / `brand-*` /
+ * `emerald-*` / `amber-*` / `rose-*` / `blue-*`. Karena itu ramp
+ * di bawah ini yang menentukan karakter warna seluruh aplikasi:
+ * override token di sini mengubah ratusan referensi tanpa perlu
+ * menyentuh file JSX satu pun.
+ *
+ * PRINSIP
+ * 1. Netral   : stone/kertas hangat, bukan abu-abu — terasa seperti
+ *               kertas gambar teknik, bukan dashboard korporat generik.
+ * 2. Brand    : terracotta = warna aksi utama & "suara" produk.
+ * 3. Status   : palet status di-override ke versi yang warms dan
+ *               sedikit didesaturasi agar tidak berteriak di atas
+ *               kertas hangat (emerald→sage, amber→ochre, rose→clay,
+ *               blue→lagoon). Nama utility tidak berubah, jadi
+ *               `bg-emerald-500` tetap bekerja.
+ * 4. Aksen    : plum & lagoon menambah keragaman tanpa kehilangan
+ *               kehangatan — dipakai pada kartu fitur & grafik.
+ * ========================================================= */
+
+@theme {
+  /* --- Warm neutral ramp (kertas hangat) --- */
+  --color-neutral-50: #faf8f4;
+  --color-neutral-100: #f4efe7;
+  --color-neutral-200: #e9e0d2;
+  --color-neutral-300: #d9cbb6;
+  --color-neutral-400: #a89a8a;
+  --color-neutral-500: #77685a;
+  --color-neutral-600: #5c4f43;
+  --color-neutral-700: #42382f;
+  --color-neutral-800: #2f2823;
+  --color-neutral-900: #211c18;
+  --color-neutral-950: #15110e;
+
+  /* --- Brand: terracotta --- */
+  --color-brand-50: #fdf7f3;
+  --color-brand-100: #fbeade;
+  --color-brand-200: #f5d3bd;
+  --color-brand-300: #ecb492;
+  --color-brand-400: #df8f65;
+  --color-brand-500: #c96f42;
+  --color-brand-600: #ad542e;
+  --color-brand-700: #8b4226;
+  --color-brand-800: #703621;
+  --color-brand-900: #5c2e1f;
+  --color-brand-950: #3a1a11;
+
+  /* --- Surface: lapisan kertas --- */
+  --color-canvas: #f6f1e8;
+  --color-paper: #fffdfa;
+  --color-line: #e9e0d2;
+  --color-line-strong: #d6c8b2;
+
+  /* --- Support: aksen & kedalaman --- */
+  --color-sand-100: #f6efe2;
+  --color-sand-300: #e3d3b6;
+  --color-espresso-900: #15110e;
+  --color-espresso-800: #1a1714;
+  --color-espresso-700: #211c18;
+
+  /* --- Plum: aksen dingin-but-hangat untuk kontras --- */
+  --color-plum-50: #f8f1f7;
+  --color-plum-100: #efe2ee;
+  --color-plum-200: #ddc5dd;
+  --color-plum-300: #c4a1c6;
+  --color-plum-400: #ab7cb0;
+  --color-plum-500: #946095;
+  --color-plum-600: #794b7c;
+  --color-plum-700: #613c64;
+  --color-plum-800: #4e3351;
+  --color-plum-900: #412c44;
+
+  /* --- Lagoon: aksen biru-kehijauan untuk data & grafik --- */
+  --color-lagoon-50: #eef5f6;
+  --color-lagoon-100: #d8eaed;
+  --color-lagoon-200: #b2d4da;
+  --color-lagoon-300: #82b6c1;
+  --color-lagoon-400: #50909f;
+  --color-lagoon-500: #36778a;
+  --color-lagoon-600: #2a6172;
+  --color-lagoon-700: #244e5d;
+  --color-lagoon-800: #1f414e;
+  --color-lagoon-900: #1b3743;
+
+  /* ============================================================
+   * STATUS OVERRIDES
+   * Override palet default Tailwind agar warna status menyatu
+   * dengan kertas hangat. Nama utility tetap sama
+   * (`emerald-*`, `amber-*`, `rose-*`, `blue-*`) sehingga tidak ada
+   * file JSX yang perlu diubah.
+   * ============================================================ */
+
+  /* emerald -> sage (hijau lumut, tidak neon) */
+  --color-emerald-50: #f2f7ee;
+  --color-emerald-100: #e2eedb;
+  --color-emerald-200: #c6dcbb;
+  --color-emerald-300: #a2c294;
+  --color-emerald-400: #7ea56d;
+  --color-emerald-500: #5f8a50;
+  --color-emerald-600: #4a6f3f;
+  --color-emerald-700: #3d5a35;
+  --color-emerald-800: #33492e;
+  --color-emerald-900: #2b3d28;
+
+  /* amber -> ochre (kuning tanah) */
+  --color-amber-50: #fdf7ea;
+  --color-amber-100: #f8ecd0;
+  --color-amber-200: #f0d9a4;
+  --color-amber-300: #e5c076;
+  --color-amber-400: #d9a851;
+  --color-amber-500: #c88e33;
+  --color-amber-600: #a97325;
+  --color-amber-700: #8a5c1f;
+  --color-amber-800: #6e4a1e;
+  --color-amber-900: #5a3d1c;
+
+  /* rose -> clay (merah tanah) */
+  --color-rose-50: #fdf2f0;
+  --color-rose-100: #fbe1dc;
+  --color-rose-200: #f6c3bb;
+  --color-rose-300: #ee9e94;
+  --color-rose-400: #e2766b;
+  --color-rose-500: #d3574c;
+  --color-rose-600: #b34037;
+  --color-rose-700: #91342d;
+  --color-rose-800: #742e29;
+  --color-rose-900: #5f2a26;
+
+  /* blue -> lagoon (biru ke arah teal, menyatu dengan terracotta) */
+  --color-blue-50: #eef4f6;
+  --color-blue-100: #d9e8ec;
+  --color-blue-200: #b4d2db;
+  --color-blue-300: #84b3c2;
+  --color-blue-400: #5290a4;
+  --color-blue-500: #36758a;
+  --color-blue-600: #285f72;
+  --color-blue-700: #224e5e;
+  --color-blue-800: #1e4150;
+  --color-blue-900: #1b3743;
+
+  /* --- Depth: bayangan bertinta hangat, bukan hitam --- */
+  --shadow-card: 0 1px 2px rgba(60, 44, 30, 0.04),
+    0 8px 24px -14px rgba(60, 44, 30, 0.22);
+  --shadow-lift: 0 2px 4px rgba(60, 44, 30, 0.05),
+    0 20px 44px -20px rgba(60, 44, 30, 0.3);
+  --shadow-brand: 0 10px 30px -14px rgba(201, 111, 66, 0.55);
+  --shadow-inset-hair: inset 0 1px 0 rgba(255, 255, 255, 0.6);
+
+  /* --- Radius --- */
+  --radius-card: 1.125rem;
+
+  /* --- Typography ---
+     Font asli di-inject oleh next/font (lihat app/layout.jsx),
+     jadi token ini hanya merujuk CSS variable tersebut. */
+  --font-sans:
+    var(--font-jakarta), ui-sans-serif, system-ui, -apple-system,
+    BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-display: var(--font-grotesk), var(--font-jakarta), ui-sans-serif, sans-serif;
+  --font-mono:
+    var(--font-jetbrains), ui-monospace, SFMono-Regular, Menlo, Consolas,
+    monospace;
+}
+
+/* =========================================================
+ * GLOBAL BASE
+ * ========================================================= */
+
+html {
+  height: 100%;
+  scroll-behavior: smooth;
+  scroll-padding-top: 92px;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  min-height: 100%;
+  margin: 0;
+  color: var(--color-neutral-900);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+
+  /* Latar hangat berlapis: kertas hangat + kabut terracotta,
+     plum, dan oker. Empat sumber cahaya halus supaya bidang
+     besar tidak pernah terbaca sebagai satu blok warna datar. */
+  background-color: var(--color-canvas);
+  background-image:
+    radial-gradient(
+      64rem 44rem at 4% -14%,
+      color-mix(in oklab, var(--color-brand-200) 46%, transparent),
+      transparent 62%
+    ),
+    radial-gradient(
+      50rem 38rem at 104% -6%,
+      color-mix(in oklab, var(--color-amber-200) 38%, transparent),
+      transparent 58%
+    ),
+    radial-gradient(
+      46rem 40rem at 88% 104%,
+      color-mix(in oklab, var(--color-plum-100) 52%, transparent),
+      transparent 60%
+    ),
+    radial-gradient(
+      42rem 42rem at 46% 112%,
+      color-mix(in oklab, var(--color-lagoon-100) 40%, transparent),
+      transparent 62%
+    );
+  background-attachment: fixed;
+  background-repeat: no-repeat;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+h1,
+h2,
+h3,
+h4,
+p,
+figure {
+  margin: 0;
+}
+
+/* Judul & angka besar memakai Space Grotesk supaya ada
+   karakter tipografi, bukan sekadar teks sans generik. */
+h1,
+h2,
+h3 {
+  font-family: var(--font-display);
+  letter-spacing: -0.015em;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button {
+  border: 0;
+  cursor: pointer;
+}
+
+img,
+svg {
+  display: block;
+}
+
+/* Angka tabular (tabel, KPI, koordinat) pakai JetBrains Mono
+   supaya kolom angka rata dan terbaca. */
+.tabular-nums,
+table td,
+table th {
+  font-variant-numeric: tabular-nums;
+}
+
+::selection {
+  background: var(--color-brand-200);
+  color: var(--color-neutral-900);
+}
+
+/* Scrollbar diselaraskan dengan kertas — jangan terlihat
+   seperti sisipan dari template lain. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-neutral-300) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+*::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background-clip: content-box;
+  background-color: var(--color-neutral-300);
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background-color: var(--color-neutral-400);
+}
+
+/* =========================================================
+ * COMPONENT UTILITIES
+ * Pola warna berulang yang butuh lebih dari satu utility,
+ * ditulis sekali di sini supaya JSX tetap bersih.
+ * ========================================================= */
+
+@layer components {
+  /* Permukaan elevate: kartu dengan senti cahaya hangat di sudut
+     kiri atas, supaya bidang putih tidak terasa datar. */
+  .surface-elevate {
+    background-color: var(--color-paper);
+    background-image: linear-gradient(
+      150deg,
+      color-mix(in oklab, var(--color-brand-50) 55%, transparent) 0%,
+      transparent 42%
+    );
+    box-shadow: var(--shadow-card);
+  }
+
+  /* Garis aksen tipis di tepi atas — penanda "kartu ini punya nada". */
+  .accent-top {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .accent-top::before {
+    content: "";
+    position: absolute;
+    inset: 0 0 auto;
+    height: 3px;
+    background-image: linear-gradient(
+      90deg,
+      var(--accent-from, var(--color-brand-400)),
+      var(--accent-to, var(--color-brand-600))
+    );
+    opacity: 0.9;
+  }
+
+  /* Latar grid teknis — untuk panel peta & grafik agar tidak polos. */
+  .grid-paper {
+    background-image:
+      linear-gradient(
+        color-mix(in oklab, var(--color-neutral-300) 45%, transparent) 1px,
+        transparent 1px
+      ),
+      linear-gradient(
+        90deg,
+        color-mix(in oklab, var(--color-neutral-300) 45%, transparent) 1px,
+        transparent 1px
+      );
+    background-size: 34px 34px;
+  }
+
+  /* Angka besar berkarakter: gradasi tinta hangat. */
+  .text-ink-gradient {
+    background-image: linear-gradient(
+      120deg,
+      var(--color-neutral-900) 0%,
+      var(--color-brand-700) 78%
+    );
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+}

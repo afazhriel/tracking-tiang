@@ -123,10 +123,13 @@ code {
   flex-direction: column;
   padding: 22px 14px 16px;
   background:
-    linear-gradient(180deg, #11161d 0%, #0b0f14 100%);
-  border-right: 1px solid rgba(255, 255, 255, 0.07);
-  color: #e9edf2;
-  transition: width 220ms ease, transform 220ms ease;
+    linear-gradient(180deg, #0f141d 0%, #090d12 100%);
+  border-right: 1px solid rgba(255, 255, 255, 0.06);
+  color: #f3f5f7;
+  transition: width 220ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 220ms cubic-bezier(0.22, 1, 0.36, 1);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.02) inset,
+    0 24px 80px -30px rgba(0, 0, 0, 0.5);
 }
 
 .tracking-sidebar.is-collapsed {
