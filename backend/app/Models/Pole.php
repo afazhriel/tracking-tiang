@@ -14,6 +14,10 @@ class Pole extends Model
     protected $fillable = [
         'project_id',
         'region_id',
+        'province_id',
+        'regency_id',
+        'district_id',
+        'village_id',
         'pole_code',
         'address',
         'latitude',
