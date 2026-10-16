@@ -11,13 +11,14 @@ import {
   Gauge,
   Layers,
   RefreshCw,
+  Settings2,
   Square,
   X,
 } from 'lucide-react'
 
 import AppShell from '../../components/layout/AppShell'
 import { ActionButton, PageHeader } from '../../components/layout/PageHeader'
-import { useProject } from '../../components/layout/ProjectProvider'
+import { useProject } from '../../lib/project-context'
 import { Badge, StatusBadge } from '../../components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../components/ui/card'
 import { EmptyState } from '../../components/ui/empty-state'
@@ -26,15 +27,19 @@ import { StatCard, StatCardGrid } from '../../components/ui/stat-card'
 import { Table, TableWrap, Td, Th, Tr } from '../../components/ui/table'
 import { ErrorNotice, SkeletonRows, Spinner } from '../../components/ui/states'
 import { api, normalizePole, normalizeWorkItem, unwrapList } from '../../lib/api'
+import { useCurrentUser } from '../../lib/use-current-user'
 import { useProgressSync } from '../../lib/use-progress-sync'
 import { useResource } from '../../lib/use-api'
 import { statusFromProgress } from '../../lib/status'
 import { clampPercent, formatDays, formatNumber, formatPercent } from '../../lib/format'
 
 /**
- * Progress aktual per item pekerjaan dihitung dari endpoint yang
- * tersedia: /poles/{pole}/progress untuk tiap tiang pada halaman
- * poles yang sedang dimuat. Tidak ada angka yang diinventarisasi.
+ * Progres aktual per item.
+ *
+ * Sumber utama: `WorkItemController@index` kini mengirim `actual_progress`
+ * agregat dari seluruh tiang (penyebut sama dengan Kurva S). Bila backend
+ * belum mengirim agregat (production lama), halaman jatuh ke sinkronisasi
+ * per tiang seperti sebelumnya sehingga tidak ada angka yang dibuat-buat.
  */
 function useWorkItemProgress(projectId) {
   const polesLoader = useCallback(
@@ -59,8 +64,6 @@ function useWorkItemProgress(projectId) {
     () => poles.map((pole) => pole.id),
     [poles]
   )
-
-  const scopeCount = poles.length
 
   const progressByWorkItem = useMemo(() => {
     const buckets = {}
@@ -97,7 +100,6 @@ function useWorkItemProgress(projectId) {
   return {
     poles,
     poleIds,
-    scopeCount,
     error,
     loading,
     reload,
@@ -131,16 +133,22 @@ function SyncProgressControl({ onSync, onCancel, running, progressInfo }) {
 function PekerjaanContent() {
   const { projectId, error: projectError } = useProject()
 
-  const itemsLoader = useCallback(
-    async () =>
-      projectId
-        ? unwrapList(await api.listWorkItems(projectId)).map(normalizeWorkItem)
-        : [],
-    [projectId]
-  )
+  const currentUser = useCurrentUser()
+  const isAdmin = currentUser?.role === 'admin'
+
+  const itemsLoader = useCallback(async () => {
+    if (!projectId) return { items: [], meta: null }
+
+    const payload = await api.listWorkItems(projectId)
+
+    return {
+      items: unwrapList(payload).map(normalizeWorkItem),
+      meta: payload?.meta ?? null,
+    }
+  }, [projectId])
 
   const {
-    data: workItemsData,
+    data: itemsData,
     error: itemsError,
     loading: itemsLoading,
     reload: reloadItems,
@@ -149,11 +157,22 @@ function PekerjaanContent() {
   /* `useResource` mengembalikan `null` sebelum request selesai (dan
      selama projectId masih null), jadi work item selalu dinormalkan
      menjadi array agar tidak ada `.reduce/.filter` pada `null`. */
-  const workItems = useMemo(() => workItemsData ?? [], [workItemsData])
+  const workItems = useMemo(() => itemsData?.items ?? [], [itemsData])
+
+  const hasBackendAggregate = useMemo(
+    () => workItems.some((item) => item.actualProgress !== null),
+    [workItems]
+  )
+
+  /* Penyebut dari backend (target tiang, fallback jumlah tiang). */
+  const backendDenominator =
+    itemsData?.meta?.progress_denominator ??
+    itemsData?.meta?.total_target_poles ??
+    null
 
   const {
     poleIds,
-    scopeCount,
+    scopeCount: registeredPoleCount,
     error: polesError,
     loadMany,
     cancel,
@@ -163,18 +182,58 @@ function PekerjaanContent() {
     hasSynced,
   } = useWorkItemProgress(projectId)
 
+  const scopeCount = hasBackendAggregate && backendDenominator
+    ? backendDenominator
+    : registeredPoleCount
+
   const totalWeight = useMemo(
     () => workItems.reduce((total, item) => total + item.weight, 0),
     [workItems]
   )
 
   const progressValue = useCallback(
-    (workItemId) => progressByWorkItem[workItemId]?.value ?? null,
+    (item) => {
+      if (item?.actualProgress !== null && item?.actualProgress !== undefined) {
+        return item.actualProgress
+      }
+
+      return progressByWorkItem[item?.id]?.value ?? null
+    },
     [progressByWorkItem]
   )
 
+  const progressMeta = useCallback(
+    (item) => {
+      if (item?.actualProgress !== null && item?.actualProgress !== undefined) {
+        return {
+          polesWithData: item.polesWithProgress,
+          scopeCount: backendDenominator ?? registeredPoleCount,
+        }
+      }
+
+      const entry = progressByWorkItem[item?.id]
+
+      return entry
+        ? { polesWithData: entry.polesWithData, scopeCount: registeredPoleCount }
+        : null
+    },
+    [backendDenominator, progressByWorkItem, registeredPoleCount]
+  )
+
+  const hasProgressData = hasBackendAggregate || hasSynced
+
   const overallProgress = useMemo(() => {
-    if (!hasSynced) return null
+    if (!hasProgressData) return null
+
+    if (hasBackendAggregate) {
+      const total = workItems.reduce((sum, item) => {
+        return sum + item.weight * clampPercent(item.actualProgress ?? 0)
+      }, 0)
+
+      const weight = workItems.reduce((sum, item) => sum + item.weight, 0)
+
+      return weight ? total / weight : null
+    }
 
     const active = workItems.filter(
       (item) => progressByWorkItem[item.id] !== undefined
@@ -189,18 +248,16 @@ function PekerjaanContent() {
     const weight = active.reduce((sum, item) => sum + item.weight, 0)
 
     return weight ? total / weight : null
-  }, [hasSynced, progressByWorkItem, workItems])
+  }, [hasBackendAggregate, hasProgressData, progressByWorkItem, workItems])
 
-  const activeCount = workItems.filter(
-    (item) => {
-      const value = progressValue(item.id)
+  const activeCount = workItems.filter((item) => {
+    const value = progressValue(item)
 
-      return value !== null && value > 0 && value < 100
-    }
-  ).length
+    return value !== null && value > 0 && value < 100
+  }).length
 
   const doneCount = workItems.filter((item) => {
-    const value = progressValue(item.id)
+    const value = progressValue(item)
 
     return value !== null && value >= 100
   }).length
@@ -213,12 +270,15 @@ function PekerjaanContent() {
         subtitle="Pantau progres setiap item pekerjaan pada seluruh proyek."
         actions={
           <>
-            <ActionButton
-              href="/kurva-s"
-              icon={BarChart3}
-            >
+            <ActionButton href="/kurva-s" icon={BarChart3}>
               Kurva S
             </ActionButton>
+
+            {isAdmin && (
+              <ActionButton href="/pekerjaan/pengaturan" icon={Settings2}>
+                Pengaturan
+              </ActionButton>
+            )}
 
             <SyncProgressControl
               running={running}
@@ -240,11 +300,13 @@ function PekerjaanContent() {
 
         <StatCard
           label="Progress Keseluruhan"
-          value={hasSynced ? formatPercent(overallProgress) : '—'}
+          value={hasProgressData ? formatPercent(overallProgress) : '—'}
           hint={
-            hasSynced
-              ? `Dari ${formatNumber(scopeCount)} tiang tersinkron`
-              : 'Belum disinkronkan'
+            hasProgressData
+              ? hasBackendAggregate
+                ? `Dari ${formatNumber(scopeCount)} tiang (agregat server)`
+                : `Dari ${formatNumber(scopeCount)} tiang tersinkron`
+              : 'Belum tersedia'
           }
           Icon={Gauge}
           tone="blue"
@@ -252,16 +314,16 @@ function PekerjaanContent() {
 
         <StatCard
           label="Pekerjaan Aktif"
-          value={hasSynced ? formatNumber(activeCount) : '—'}
-          hint={hasSynced ? 'Progress 1% – 99%' : 'Belum disinkronkan'}
+          value={hasProgressData ? formatNumber(activeCount) : '—'}
+          hint={hasProgressData ? 'Progress 1% – 99%' : 'Belum tersedia'}
           Icon={Layers}
           tone="amber"
         />
 
         <StatCard
           label="Pekerjaan Selesai"
-          value={hasSynced ? formatNumber(doneCount) : '—'}
-          hint={hasSynced ? 'Progress 100%' : 'Belum disinkronkan'}
+          value={hasProgressData ? formatNumber(doneCount) : '—'}
+          hint={hasProgressData ? 'Progress 100%' : 'Belum tersedia'}
           Icon={Square}
           tone="emerald"
         />
@@ -317,9 +379,9 @@ function PekerjaanContent() {
               {/* Mobile: kartu */}
               <div className="space-y-3 lg:hidden">
                 {workItems.map((item, index) => {
-                  const value = progressValue(item.id)
+                  const value = progressValue(item)
                   const status = statusFromProgress(value)
-                  const meta = progressByWorkItem[item.id]
+                  const meta = progressMeta(item)
 
                   return (
                     <Link
@@ -344,10 +406,7 @@ function PekerjaanContent() {
                           </div>
                         </div>
 
-                        <StatusBadge
-                          size="sm"
-                          status={status}
-                        />
+                        <StatusBadge size="sm" status={status} />
                       </div>
 
                       <div className="mt-3">
@@ -361,7 +420,7 @@ function PekerjaanContent() {
 
                         <p className="mt-2 text-[11px] text-neutral-400">
                           {meta
-                            ? `${formatNumber(meta.polesWithData)} dari ${formatNumber(scopeCount)} tiang punya data`
+                            ? `${formatNumber(meta.polesWithData)} dari ${formatNumber(meta.scopeCount)} tiang punya data`
                             : 'Belum ada data progress aktual'}
                         </p>
                       </div>
@@ -389,9 +448,9 @@ function PekerjaanContent() {
 
                     <tbody>
                       {workItems.map((item, index) => {
-                        const value = progressValue(item.id)
+                        const value = progressValue(item)
                         const status = statusFromProgress(value)
-                        const meta = progressByWorkItem[item.id]
+                        const meta = progressMeta(item)
 
                         return (
                           <Tr key={item.id}>
@@ -409,7 +468,7 @@ function PekerjaanContent() {
 
                               <p className="mt-0.5 text-[11px] text-neutral-400">
                                 {meta
-                                  ? `${formatNumber(meta.polesWithData)} dari ${formatNumber(scopeCount)} tiang punya data`
+                                  ? `${formatNumber(meta.polesWithData)} dari ${formatNumber(meta.scopeCount)} tiang punya data`
                                   : 'Belum ada data progress aktual'}
                               </p>
                             </Td>
@@ -438,10 +497,7 @@ function PekerjaanContent() {
                             </Td>
 
                             <Td align="center">
-                              <StatusBadge
-                                size="sm"
-                                status={status}
-                              />
+                              <StatusBadge size="sm" status={status} />
                             </Td>
 
                             <Td align="right">
@@ -465,8 +521,14 @@ function PekerjaanContent() {
             <EmptyState
               icon={CircleAlert}
               title="Belum ada item pekerjaan"
-              description={`Endpoint /api/projects/${projectId ?? '{id}'}/work-items belum mengembalikan data work item.`}
-              hint="Ready for API integration"
+              description="Tambahkan item pekerjaan pada pengaturan agar progres berbobot bisa dihitung."
+              action={
+                isAdmin && (
+                  <ActionButton href="/pekerjaan/pengaturan" variant="primary" icon={Settings2}>
+                    Buka Pengaturan
+                  </ActionButton>
+                )
+              }
             />
           )}
         </CardContent>
@@ -478,27 +540,41 @@ function PekerjaanContent() {
         </CardHeader>
 
         <CardContent className="space-y-2 text-xs leading-6 text-neutral-500">
+          {hasBackendAggregate ? (
+            <p>
+              Progres aktual tiap item dihitung di server dari tabel{' '}
+              <code className="rounded bg-neutral-100 px-1.5 py-0.5 text-[11px] text-neutral-600">
+                pole_work_progress
+              </code>{' '}
+              dan dibagi dengan penyebut proyek yang sama dengan Kurva S
+              (target jumlah tiang, atau jumlah tiang terdaftar bila target
+              belum diatur).
+            </p>
+          ) : (
+            <p>
+              Backend belum mengirim progres agregat, sehingga halaman memakai
+              data dari{' '}
+              <code className="rounded bg-neutral-100 px-1.5 py-0.5 text-[11px] text-neutral-600">
+                GET /api/projects/{'{project}'}/poles/{'{pole}'}/progress
+              </code>
+              . Tekan <strong>Sinkronkan progress aktual</strong> untuk
+              memuatnya. Tidak ada data progress yang diestimasi.
+            </p>
+          )}
+
           <p>
-            Progress aktual per item pekerjaan dihitung dari endpoint yang
-            sudah tersedia, yaitu{' '}
+            Bobot, durasi, dan periode item pekerjaan diatur pada halaman{' '}
+            <Link
+              href="/pekerjaan/pengaturan"
+              className="font-medium text-brand-700 underline-offset-2 hover:underline"
+            >
+              Pengaturan Pekerjaan
+            </Link>{' '}
+            dan tersimpan di tabel{' '}
             <code className="rounded bg-neutral-100 px-1.5 py-0.5 text-[11px] text-neutral-600">
-              GET /api/projects/{'{project}'}/poles/{'{pole}'}/progress
-            </code>{' '}
-            untuk setiap tiang pada halaman{' '}
-            <code className="rounded bg-neutral-100 px-1.5 py-0.5 text-[11px] text-neutral-600">
-              GET /api/projects/{'{project}'}/poles
+              work_items
             </code>
-            . Nilai dirata-ratakan dari tiang yang memiliki data progress
-            untuk item tersebut.
-          </p>
-          <p>
-            Tekan <strong>Sinkronkan progress aktual</strong> untuk memuat data
-            tersebut. Tidak ada data progress yang diestimasi atau dibuat di
-            sisi frontend.
-          </p>
-          <p>
-            Bobot, durasi, dan periode item pekerjaan berasal langsung dari
-            tabel <code className="rounded bg-neutral-100 px-1.5 py-0.5 text-[11px] text-neutral-600">work_items</code>.
+            .
           </p>
         </CardContent>
       </Card>

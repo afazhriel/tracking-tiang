@@ -3,7 +3,6 @@ import {
   ArrowRight,
   BarChart3,
   CalendarDays,
-  CheckCircle2,
   ChevronRight,
   CircleDot,
   ClipboardCheck,

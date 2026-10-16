@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Tracking Tiang</string>
+    <string name="title_activity_main">Tracking Tiang</string>
+    <string name="package_name">com.trackingtiang.app</string>
+    <string name="custom_url_scheme">com.trackingtiang.app</string>
+</resources>

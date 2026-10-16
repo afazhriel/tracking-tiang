@@ -15,7 +15,7 @@ import {
 } from 'lucide-react'
 
 import AppShell from '../../../components/layout/AppShell'
-import { useProject } from '../../../components/layout/ProjectProvider'
+import { useProject } from '../../../lib/project-context'
 import { Badge, StatusBadge } from '../../../components/ui/badge'
 import { Breadcrumbs } from '../../../components/ui/breadcrumbs'
 import {

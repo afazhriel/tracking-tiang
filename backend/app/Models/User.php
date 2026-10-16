@@ -2,31 +2,236 @@
 
 namespace App\Models;
 
-// use Illuminate\Contracts\Auth\MustVerifyEmail;
-use Database\Factories\UserFactory;
-use Illuminate\Database\Eloquent\Attributes\Fillable;
-use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Facades\DB;
+use Laravel\Sanctum\HasApiTokens;
 
-#[Fillable(['name', 'email', 'password'])]
-#[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable
 {
-    /** @use HasFactory<UserFactory> */
-    use HasFactory, Notifiable;
+    use HasApiTokens;
+    use HasFactory;
+    use Notifiable;
+
+    public const ROLE_ADMIN = 'admin';
+    public const ROLE_SUPERVISOR = 'supervisor';
+    public const ROLE_PIC = 'pic';
+
+    public const STATUS_ACTIVE = 'active';
+    public const STATUS_SUSPENDED = 'suspended';
 
     /**
-     * Get the attributes that should be cast.
+     * `role` sengaja TIDAK ada default di sini.
      *
-     * @return array<string, string>
+     * Kalau diisi `'pic'`, user yang dibuat lewat jalur lain
+     * (seeder, tinker, script restore) diam-diam dapat role tanpa
+     * pernah ditunjuk admin. Plus kolom `role` di database nullable,
+     * jadi model harus mengeluarkan nilai yang sama supaya tidak
+     * ada dua sumber kebenaran.
      */
+    protected $fillable = [
+        'name',
+        'email',
+        'password',
+        'role',
+        'status',
+    ];
+
+    protected $hidden = [
+        'password',
+        'remember_token',
+    ];
+
     protected function casts(): array
     {
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+        ];
+    }
+
+    /*
+     * =========================================================
+     * ROLE
+     * =========================================================
+     */
+
+    public function isAdmin(): bool
+    {
+        return $this->role === self::ROLE_ADMIN;
+    }
+
+    public function isSupervisor(): bool
+    {
+        return $this->role === self::ROLE_SUPERVISOR;
+    }
+
+    public function isPic(): bool
+    {
+        return $this->role === self::ROLE_PIC;
+    }
+
+    /**
+     * Role yang diketahui aplikasi.
+     *
+     * Dikembalikan sebagai string, bukan enum, supaya nilai yang
+     * tidak dikenal (mis. ditambahkan manual di database) tidak
+     * memicu exception saat serialisasi — hanya dianggap tidak punya
+     * role, yang berarti tidak mendapat hak akses apa pun.
+     */
+    public static function roles(): array
+    {
+        return [self::ROLE_ADMIN, self::ROLE_SUPERVISOR, self::ROLE_PIC];
+    }
+
+    public static function statuses(): array
+    {
+        return [self::STATUS_ACTIVE, self::STATUS_SUSPENDED];
+    }
+
+    public static function roleLabel(?string $role): ?string
+    {
+        return match ($role) {
+            self::ROLE_ADMIN => 'Admin',
+            self::ROLE_SUPERVISOR => 'Supervisor',
+            self::ROLE_PIC => 'PIC Lapangan',
+            default => null,
+        };
+    }
+
+    public function isActive(): bool
+    {
+        return $this->status !== self::STATUS_SUSPENDED;
+    }
+
+    /*
+     * =========================================================
+     * RELASI
+     * =========================================================
+     */
+
+    public function teamMemberships(): HasMany
+    {
+        return $this->hasMany(TeamMember::class);
+    }
+
+    public function teams(): BelongsToMany
+    {
+        return $this->belongsToMany(Team::class, 'team_members')
+            ->withPivot('role')
+            ->withTimestamps();
+    }
+
+    public function projectMemberships(): HasMany
+    {
+        return $this->hasMany(ProjectUser::class);
+    }
+
+    public function projects(): BelongsToMany
+    {
+        return $this->belongsToMany(Project::class, 'project_user')
+            ->withPivot('role')
+            ->withTimestamps();
+    }
+
+    public function poleAssignments(): HasMany
+    {
+        return $this->hasMany(PoleAssignment::class);
+    }
+
+    public function invitations(): HasMany
+    {
+        return $this->hasMany(Invitation::class, 'invited_by');
+    }
+
+    /*
+     * =========================================================
+     * AUTHORIZATION HELPER
+     * =========================================================
+     */
+
+    /**
+     * ID project yang boleh diakses user ini.
+     *
+     * Admin dan Supervisor tidak dibatasi membership — mereka butuh
+     * tampilan seluruh project. PIC dibatasi ke `project_user`.
+     */
+    public function accessibleProjectIds(): ?array
+    {
+        if ($this->isAdmin() || $this->isSupervisor()) {
+            return null; // null = tidak ada pembatasan
+        }
+
+        return DB::table('project_user')
+            ->where('user_id', $this->getKey())
+            ->pluck('project_id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
+    }
+
+    public function canAccessProject(int $projectId): bool
+    {
+        $ids = $this->accessibleProjectIds();
+
+        if ($ids === null) {
+            return true;
+        }
+
+        return in_array($projectId, $ids, true);
+    }
+
+    /**
+     * ID tiang yang ditugaskan ke user ini.
+     *
+     * Termasuk penugasan lewat tim, karena tim anggota user tersebut
+     * memegang akses atas tiang yang ditugaskan ke tim-nya. Tanpa
+     * ini, PIC dalam tim tidak akan bisa apa-apa.
+     */
+    public function assignedPoleIds(): array
+    {
+        $direct = DB::table('pole_assignments')
+            ->where('status', PoleAssignment::STATUS_ACTIVE)
+            ->where('user_id', $this->getKey())
+            ->pluck('pole_id');
+
+        $viaTeam = DB::table('pole_assignments')
+            ->join('team_members', 'team_members.team_id', '=', 'pole_assignments.team_id')
+            ->where('pole_assignments.status', PoleAssignment::STATUS_ACTIVE)
+            ->where('team_members.user_id', $this->getKey())
+            ->pluck('pole_assignments.pole_id');
+
+        return $direct
+            ->merge($viaTeam)
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    public function isPoleAssignedTo(int $poleId): bool
+    {
+        return in_array($poleId, $this->assignedPoleIds(), true);
+    }
+
+    /**
+     * Bentuk user yang dikirim ke frontend.
+     *
+     * `role` dan `role_label` sengaja ditambahkan di sini: frontend
+     * (`normalizeUser`) sudah membaca kedua field itu, dan menambah
+     * key baru tidak mengubah bentuk response yang sudah dipakai.
+     */
+    public function toAuthPayload(): array
+    {
+        return [
+            'id' => $this->id,
+            'name' => $this->name,
+            'email' => $this->email,
+            'role' => $this->role,
+            'role_label' => self::roleLabel($this->role),
+            'status' => $this->status,
         ];
     }
 }

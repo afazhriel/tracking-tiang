@@ -14,7 +14,7 @@ import {
   X,
 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 
 const MENU = [
   {
@@ -87,17 +87,17 @@ function NavList({ activeSection, onNavigate }) {
 }
 
 function UserBlock({ collapsed, onLogout }) {
-  const [user, setUser] = useState(null)
-
-  useEffect(() => {
+  /* User dibaca sekali saat render (bukan lewat `useEffect`) supaya
+     tidak ada render susulan yang tidak perlu. */
+  const [user] = useState(() => {
     try {
       const raw = localStorage.getItem('tracking_tiang_user')
 
-      setUser(raw ? JSON.parse(raw) : null)
+      return raw ? JSON.parse(raw) : null
     } catch {
-      setUser(null)
+      return null
     }
-  }, [])
+  })
 
   const name = user?.name || user?.nama || 'Administrator'
   const role = user?.role?.name || user?.role || 'Project Control'

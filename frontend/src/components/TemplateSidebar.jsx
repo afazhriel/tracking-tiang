@@ -193,8 +193,13 @@ function PanelGlyph({ open }) {
  * tooltip `left-full` ikut terpotong dan tidak pernah terlihat.
  * Portal lepas dari clipping itu, lalu posisinya dihitung dari
  * bounding box elemen pemicunya.
+ *
+ * `label` sengaja diterima sebagai prop terpisah, bukan memakai
+ * `children`. `children` di sini adalah <Link> lengkap; kalau
+ * tooltip ikut merendernya, isi tooltip jadi tautan kedua yang
+ * bisa diklik dan isinya bukan nama menu.
  */
-function CollapsedHint({ children }) {
+function CollapsedHint({ label, children }) {
   const [position, setPosition] = useState(null)
   const anchorRef = useRef(null)
 
@@ -225,14 +230,12 @@ function CollapsedHint({ children }) {
         {children}
       </span>
 
-      {createPortal(
-        <AnimatePresence>
-          {position && (
+      {position
+        ? createPortal(
             <motion.span
               role="tooltip"
               initial={{ opacity: 0, x: -4 }}
               animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -4 }}
               transition={{ duration: 0.12, ease: 'easeOut' }}
               style={{
                 position: 'fixed',
@@ -241,12 +244,11 @@ function CollapsedHint({ children }) {
               }}
               className="pointer-events-none z-[200] -translate-y-1/2 whitespace-nowrap rounded-lg bg-neutral-900 px-2.5 py-1.5 text-xs font-medium text-white shadow-lift"
             >
-              {children}
-            </motion.span>
-          )}
-        </AnimatePresence>,
-        document.body
-      )}
+              {label}
+            </motion.span>,
+            document.body
+          )
+        : null}
     </>
   )
 }
@@ -478,7 +480,7 @@ export function SidebarLink({
      saat hover. Terbuka: label sudah cukup jelas, tanpa tooltip. */
   if (!expanded) {
     return (
-      <CollapsedHint>
+      <CollapsedHint label={link.label}>
         <Link
           href={link.href}
           aria-current={active ? 'page' : undefined}

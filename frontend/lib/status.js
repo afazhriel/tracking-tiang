@@ -17,7 +17,7 @@ const TONES = Object.fromEntries(
     return [
       key,
       {
-        badge: resolved.soft,
+        badge: key === 'active' ? 'bg-sky-100 text-sky-800 ring-2 ring-sky-600/40' : resolved.soft,
         dot: resolved.hex,
         bar: resolved.bar,
         hex: resolved.hex,
@@ -106,10 +106,10 @@ export const STATUS_FILTER_OPTIONS = [
 
 export const PROGRESS_FILTER_OPTIONS = [
   { value: 'all', label: 'Semua Progress' },
-  { value: '0-25', label: '0% – 25%' },
-  { value: '26-50', label: '26% – 50%' },
-  { value: '51-75', label: '51% – 75%' },
-  { value: '76-100', label: '76% – 100%' },
+  { value: '0-25', label: '0% â€“ 25%' },
+  { value: '26-50', label: '26% â€“ 50%' },
+  { value: '51-75', label: '51% â€“ 75%' },
+  { value: '76-100', label: '76% â€“ 100%' },
 ]
 
 export function matchProgressBucket(progress, bucket) {

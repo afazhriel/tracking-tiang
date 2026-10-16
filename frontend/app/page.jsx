@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import dynamic from 'next/dynamic'
@@ -20,8 +20,14 @@ import {
   X,
 } from 'lucide-react'
 
-import { normalizePole, unwrapList } from '../lib/api'
+import {
+  getToken,
+  normalizePole,
+  normalizeProject,
+  unwrapList,
+} from '../lib/api'
 import { formatNumber } from '../lib/format'
+import { resolveStatus } from '../lib/status'
 import './landing.css'
 
 /* Leaflet hanya jalan di browser. Di-import lewat `dynamic`
@@ -36,8 +42,26 @@ const LandingPoleMap = dynamic(() => import('../components/landing/LandingPoleMa
   ),
 })
 
-const API_URL = '/api/projects/1'
-const POLES_URL = '/api/projects/1/poles'
+/* Backend hanya mengekspos endpoint ini di belakang auth.sanctum, jadi
+   landing tidak boleh mengarang project id. Tryout: ambil daftar
+   project, pakai yang pertama, lalu baca tiang-nya.
+
+   Landing tetap public: tanpa token kita berhenti sebelum request apa
+   pun dan hanya bagian data yang jadi empty state. Kalau token ada, ia
+   harus ikut dikirim sebagai Bearer — kalau tidak, Sanctum membalas 401
+   dan peta kosong padahal user sudah login. */
+const PROJECTS_URL = '/api/projects'
+const POLES_URL = '/api/projects/{project}/poles'
+
+function authHeaders(token) {
+  const headers = { Accept: 'application/json' }
+
+  if (token) {
+    headers.Authorization = `Bearer ${token}`
+  }
+
+  return headers
+}
 
 const features = [
   {
@@ -70,50 +94,95 @@ export default function HomePage() {
   const [project, setProject] = useState(null)
   const [poles, setPoles] = useState([])
   const [loading, setLoading] = useState(true)
-  const [mapLoading, setMapLoading] = useState(true)
+  const [polesLoading, setPolesLoading] = useState(true)
   const [mapFailed, setMapFailed] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
 
+  /* Satu effect untuk project + tiang.
+     Alasannya: `poles` butuh `project.id`. Dua effect terpisah akan
+     menembak request tiang sebelum tahu project mana yang dipakai,
+     dan itu memaksa kita mengarang id secara hardcoded. */
   useEffect(() => {
     const controller = new AbortController()
 
-    fetch(API_URL, { signal: controller.signal })
-      .then((response) => {
-        if (!response.ok) throw new Error('Gagal mengambil data proyek')
+    async function load() {
+      /* Tanpa token, backend membalas 401 pada semua route di
+         `routes/api.php`. Landing tetap harus tampil utuh — hanya
+         bagian data yang diisi empty state. */
+      const token = getToken()
 
-        return response.json()
+      if (!token) {
+        setProject(null)
+        setPoles([])
+        setMapFailed(true)
+        setPolesLoading(false)
+        setLoading(false)
+
+        return
+      }
+
+      const headers = authHeaders(token)
+
+      const projectsResponse = await fetch(PROJECTS_URL, {
+        headers,
+        signal: controller.signal,
       })
-      .then((data) => setProject(data?.data ?? null))
+
+      if (!projectsResponse.ok) {
+        throw new Error('Daftar project tidak dapat diakses')
+      }
+
+      const projects = unwrapList(await projectsResponse.json())
+
+      if (!projects.length) {
+        setProject(null)
+        setPoles([])
+        setMapFailed(false)
+        setPolesLoading(false)
+        setLoading(false)
+
+        return
+      }
+
+      /* Project pertama yang tersedia — bukan id yang ditebak. */
+      const active = projects[0]
+
+      setProject(normalizeProject(active))
+
+      const detailResponse = await fetch(`/api/projects/${active.id}`, {
+        headers,
+        signal: controller.signal,
+      })
+
+      if (detailResponse.ok) {
+        const detail = await detailResponse.json()
+
+        if (detail?.data) setProject(normalizeProject(detail.data))
+      }
+
+      const polesResponse = await fetch(POLES_URL.replace('{project}', active.id), {
+        headers,
+        signal: controller.signal,
+      })
+
+      if (!polesResponse.ok) throw new Error('Data tiang tidak dapat diakses')
+
+      setPoles(unwrapList(await polesResponse.json()).map(normalizePole))
+      setMapFailed(false)
+    }
+
+    load()
       .catch((error) => {
         if (error?.name === 'AbortError') return
 
         setProject(null)
-      })
-      .finally(() => setLoading(false))
-
-    return () => controller.abort()
-  }, [])
-
-  /* Peta dibangun dari data tiang asli. Kalau endpoint tidak
-     tersedia atau gagal, komponen di bawah tetap tampil dengan
-     angka yang tersedia — tidak ada pin karangan. */
-  useEffect(() => {
-    const controller = new AbortController()
-
-    fetch(POLES_URL, { signal: controller.signal })
-      .then((response) => {
-        if (!response.ok) throw new Error('Gagal mengambil data tiang')
-
-        return response.json()
-      })
-      .then((payload) => setPoles(unwrapList(payload).map(normalizePole)))
-      .catch((error) => {
-        if (error?.name === 'AbortError') return
-
         setPoles([])
         setMapFailed(true)
       })
-      .finally(() => setMapLoading(false))
+      .finally(() => {
+        setLoading(false)
+        setPolesLoading(false)
+      })
 
     return () => controller.abort()
   }, [])
@@ -123,10 +192,11 @@ export default function HomePage() {
     [poles]
   )
 
-  const targetPoles = project?.total_target_poles ?? 0
+  const targetPoles = project?.totalTargetPoles ?? null
   const projectName = project?.name ?? 'Proyek Monitoring Tiang'
   const projectCode = project?.code ?? null
-  const isActive = project?.status === 'active'
+  const projectStatus = resolveStatus(project?.status)
+  const isActive = projectStatus.key === 'active' || projectStatus.key === 'done'
 
   const closeMenu = useCallback(() => setMenuOpen(false), [])
 
@@ -230,7 +300,7 @@ export default function HomePage() {
               </div>
 
               <div className="project-map">
-                {mapLoading ? (
+                {polesLoading ? (
                   <div className="map-skeleton">
                     <span className="map-skeleton-pulse" />
                     <span className="map-skeleton-label">Memuat peta lokasi...</span>
@@ -273,7 +343,7 @@ export default function HomePage() {
                 <div className="project-stat">
                   <span>Titik Terpetakan</span>
                   <strong>
-                    {mapLoading ? '—' : formatNumber(locatedCount)}
+                    {polesLoading ? '—' : formatNumber(locatedCount)}
                   </strong>
                   <small>punya koordinat</small>
                 </div>
@@ -309,7 +379,7 @@ export default function HomePage() {
             <MapPin size={20} />
           </div>
           <div>
-            <strong>{mapLoading ? '—' : formatNumber(locatedCount)}</strong>
+            <strong>{polesLoading ? '—' : formatNumber(locatedCount)}</strong>
             <span>Lokasi Terpetakan</span>
           </div>
         </div>
@@ -354,7 +424,7 @@ export default function HomePage() {
         </div>
 
         <div className="map-wide">
-          {mapLoading ? (
+          {polesLoading ? (
             <div className="map-skeleton">
               <span className="map-skeleton-pulse" />
               <span className="map-skeleton-label">Memuat peta lokasi...</span>

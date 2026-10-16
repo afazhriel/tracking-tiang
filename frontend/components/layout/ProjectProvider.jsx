@@ -1,35 +1,29 @@
 'use client'
 
-import { createContext, useContext, useMemo } from 'react'
+import { useCallback, useEffect, useMemo } from 'react'
 
-import { api, unwrapItem, unwrapList } from '../../lib/api'
+import { api, normalizeProject, unwrapItem, unwrapList } from '../../lib/api'
+import {
+  ProjectContext,
+  readStoredProjectId,
+  writeStoredProjectId,
+} from '../../lib/project-context'
 import { useResource } from '../../lib/use-api'
-
-const ProjectContext = createContext(null)
-
-const ACTIVE_PROJECT_KEY = 'tracking_tiang_project_id'
-
-function readStoredProjectId() {
-  try {
-    return window.localStorage.getItem(ACTIVE_PROJECT_KEY)
-  } catch {
-    return null
-  }
-}
 
 /**
  * Menentukan project aktif mengikuti endpoint yang sudah ada
  * (GET /api/projects) - tidak ada data project hardcoded.
  */
 async function loadProject() {
-  const projects = unwrapList(await api.listProjects())
+  const projects = unwrapList(await api.listProjects()).map(normalizeProject)
 
   if (!projects.length) {
     return { project: null, projectId: null, projects: [] }
   }
 
   const storedId = readStoredProjectId()
-  const active = projects.find((item) => String(item?.id) === storedId) ?? projects[0]
+  const active =
+    projects.find((item) => String(item.id) === storedId) ?? projects[0]
 
   let detail = null
 
@@ -39,15 +33,41 @@ async function loadProject() {
     /* detail opsional - daftar project sudah cukup untuk navigasi */
   }
 
+  const normalizedDetail = detail ? normalizeProject(detail) : null
+
   return {
-    project: detail ?? active,
+    /* `show` selalu memuat `regions` + `workItems`; kalau gagal,
+       tetap pakai data ringkas dari `index` supaya halaman tidak
+       ikut kosong. */
+    project: normalizedDetail ?? active,
     projectId: active.id,
     projects,
   }
 }
 
-export function ProjectProvider({ children }) {
+export default function ProjectProvider({ children }) {
   const { data, error, loading, reload } = useResource(loadProject, [])
+
+  /* Memilih project lain berarti semua angka, peta, dan progress di
+     bawahnya berubah. Pakai `location.reload()` supaya cache GET dan
+     state progress ikut bersih — efeknya sama seperti logout, jadi
+     tidak ada data project lama yang tertinggal di layar. */
+  const selectProject = useCallback((nextId) => {
+    if (nextId === null || nextId === undefined) return
+
+    const current = readStoredProjectId()
+
+    if (String(current) === String(nextId)) return
+
+    writeStoredProjectId(nextId)
+    window.location.reload()
+  }, [])
+
+  useEffect(() => {
+    if (data?.projectId !== null && data?.projectId !== undefined) {
+      writeStoredProjectId(data.projectId)
+    }
+  }, [data?.projectId])
 
   const value = useMemo(() => {
     const resolved = data ?? {
@@ -61,21 +81,14 @@ export function ProjectProvider({ children }) {
       loading,
       error,
       reload,
+      selectProject,
       regions: resolved.project?.regions ?? [],
-      workItems: resolved.project?.work_items ?? [],
-      polesCount: resolved.project?.poles_count ?? null,
+      workItems: resolved.project?.workItems ?? [],
+      polesCount: resolved.project?.polesCount ?? null,
     }
-  }, [data, error, loading, reload])
+  }, [data, error, loading, reload, selectProject])
 
-  return <ProjectContext.Provider value={value}>{children}</ProjectContext.Provider>
-}
-
-export function useProject() {
-  const context = useContext(ProjectContext)
-
-  if (!context) {
-    throw new Error('useProject harus dipakai di dalam ProjectProvider')
-  }
-
-  return context
+  return (
+    <ProjectContext.Provider value={value}>{children}</ProjectContext.Provider>
+  )
 }

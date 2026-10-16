@@ -13,6 +13,8 @@ class PoleController extends Controller
 {
     public function index(Project $project): JsonResponse
     {
+        $this->authorize('view', $project);
+
         $poles = $project->poles()
             ->with('region')
             ->orderBy('pole_code')
@@ -23,6 +25,9 @@ class PoleController extends Controller
 
     public function store(Request $request, Project $project): JsonResponse
     {
+        $this->authorize('create', Pole::class);
+        $this->authorize('view', $project);
+
         $validated = $request->validate([
             'region_id' => ['nullable', 'integer', 'exists:regions,id'],
             'province_id' => ['nullable', 'string', 'exists:provinces,id'],
@@ -119,7 +124,9 @@ class PoleController extends Controller
 
     public function show(Project $project, Pole $pole): JsonResponse
     {
-        abort_unless($pole->project_id === $project->id, 404);
+        abort_unless((int) $pole->project_id === (int) $project->id, 404);
+
+        $this->authorize('view', $pole);
 
         $pole->load([
             'region',

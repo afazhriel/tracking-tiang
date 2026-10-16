@@ -23,6 +23,7 @@ export class ApiError extends Error {
     this.status = status
     this.url = url
     this.cause = cause
+    this.fieldErrors = null
   }
 
   get isNetworkError() {
@@ -31,6 +32,10 @@ export class ApiError extends Error {
 
   get isNotFound() {
     return this.status === 404
+  }
+
+  get isUnprocessable() {
+    return this.status === 422
   }
 }
 
@@ -69,12 +74,36 @@ export function clearAuth() {
   window.dispatchEvent(new Event(AUTH_CHANGED_EVENT))
 }
 
-function buildUrl(path) {
-  if (/^https?:\/\//i.test(path)) return path
-  if (path.startsWith('/api')) return path
+function buildUrl(path, query) {
+  const base = (() => {
+    if (/^https?:\/\//i.test(path)) return path
+    if (path.startsWith('/api')) return path
 
-  return `/api/${path.replace(/^\/+/, '')}`
+    return `/api/${path.replace(/^\/+/, '')}`
+  })()
+
+  const entries = Object.entries(query ?? {}).filter(
+    ([, value]) => value !== undefined && value !== null && value !== ''
+  )
+
+  if (!entries.length) return base
+
+  const search = new URLSearchParams()
+
+  for (const [key, value] of entries) search.set(key, String(value))
+
+  return `${base}${base.includes('?') ? '&' : '?'}${search.toString()}`
 }
+
+/**
+ * Cache request GET yang sedang berjalan.
+ *
+ * Without this, several pages call the same endpoint at once
+ * (ProjectProvider + page loader, or a page rendered twice during
+ * Strict Mode). One in-flight promise per URL is enough and it does
+ * not cache results, so data is never stale.
+ */
+const inflight = new Map()
 
 /**
  * Request inti. Melempar ApiError agar setiap halaman bisa
@@ -82,7 +111,7 @@ function buildUrl(path) {
  */
 export async function apiRequest(
   path,
-  { method = 'GET', body, signal, headers = {}, auth = true } = {}
+  { method = 'GET', body, signal, headers = {}, auth = true, query } = {}
 ) {
   const requestHeaders = {
     Accept: 'application/json',
@@ -101,58 +130,95 @@ export async function apiRequest(
     }
   }
 
-  const url = buildUrl(path)
+  const url = buildUrl(path, query)
 
-  let response
+  const isShared = method === 'GET' && !signal && !body
+  const existing = isShared ? inflight.get(url) : null
 
-  try {
-    response = await fetch(url, {
-      method,
-      headers: requestHeaders,
-      signal,
-      body: body === undefined ? undefined : JSON.stringify(body),
-    })
-  } catch (error) {
-    if (error?.name === 'AbortError') throw error
+  if (existing) return existing
 
-    throw new ApiError(
-      'Tidak dapat terhubung ke server. Periksa koneksi Anda.',
-      { status: 0, url, cause: error }
-    )
-  }
+  const run = async () => {
+    let response
 
-  if (response.status === 204) return null
-
-  const text = await response.text()
-  let payload = null
-
-  if (text) {
     try {
-      payload = JSON.parse(text)
-    } catch {
-      payload = null
+      response = await fetch(url, {
+        method,
+        headers: requestHeaders,
+        signal,
+        body: body === undefined ? undefined : JSON.stringify(body),
+      })
+    } catch (error) {
+      if (error?.name === 'AbortError') throw error
+
+      throw new ApiError(
+        'Tidak dapat terhubung ke server. Periksa koneksi Anda.',
+        { status: 0, url, cause: error }
+      )
     }
+
+    if (response.status === 204) return null
+
+    const text = await response.text()
+    let payload = null
+
+    if (text) {
+      try {
+        payload = JSON.parse(text)
+      } catch {
+        payload = null
+      }
+    }
+
+    if (!response.ok) {
+      const error = new ApiError(
+        payload?.message || `Permintaan gagal (HTTP ${response.status}).`,
+        { status: response.status, url }
+      )
+
+      /* Laravel mengirim 422 dengan `errors` per-field saat validasi
+         gagal. Simpan apa adanya supaya form bisa menandai field
+         yang salah, bukan hanya menampilkan pesan generik. */
+      if (payload?.errors && typeof payload.errors === 'object') {
+        error.fieldErrors = payload.errors
+      }
+
+      throw error
+    }
+
+    return payload
   }
 
-  if (!response.ok) {
-    throw new ApiError(
-      payload?.message || `Permintaan gagal (HTTP ${response.status}).`,
-      { status: response.status, url }
-    )
-  }
+  if (!isShared) return run()
 
-  return payload
+  const promise = run().finally(() => {
+    inflight.delete(url)
+  })
+
+  inflight.set(url, promise)
+
+  return promise
 }
 
 /**
- * Coba beberapa endpoint secara berurutan. Dipakai untuk fitur
- * yang endpoint-nya belum tentu ada (aktivitas, notifikasi).
- * Mengembalikan `null` - BUKAN data palsu - jika tidak ada yang cocok.
+ * Cache probe negatif.
+ *
+ * Aktivitas dan notifikasi BELUM punya route di backend
+ * `routes/api.php`. Daftar path di bawah ini adalah kandidat yang
+ * masuk akal, bukan kontrak API — tidak ada response yang diasumsikan
+ * di sini. Kalau semuanya 404, hasilnya `null` dan halaman
+ * menampilkan empty state jujur.
+ *
+ * Angka kandidat yang gagal disimpan per sesi supaya halaman tidak
+ * menembak endpoint yang sama setiap kali di-remount.
  */
+const unavailablePaths = new Set()
+
 async function apiRequestFirstAvailable(paths, options = {}) {
   let lastError = null
 
   for (const path of paths) {
+    if (unavailablePaths.has(path)) continue
+
     try {
       return await apiRequest(path, options)
     } catch (error) {
@@ -160,13 +226,21 @@ async function apiRequestFirstAvailable(paths, options = {}) {
 
       lastError = error
 
-      const recoverable = error instanceof ApiError && [404, 405, 501].includes(error.status)
+      const recoverable =
+        error instanceof ApiError && [404, 405, 501].includes(error.status)
 
       if (!recoverable) throw error
+
+      unavailablePaths.add(path)
     }
   }
 
-  if (lastError instanceof ApiError && [404, 405, 501].includes(lastError.status)) {
+  /* Semua kandidat sudah 404 → endpoint memang belum ada.
+     `null` = "tidak tersedia", bukan error. */
+  if (
+    lastError === null ||
+    (lastError instanceof ApiError && [404, 405, 501].includes(lastError.status))
+  ) {
     return null
   }
 
@@ -175,35 +249,110 @@ async function apiRequestFirstAvailable(paths, options = {}) {
 
 /* =========================================================
  * RESOURCE
- * Hanya endpoint yang SUDAH ADA di routes/api.php backend.
+ * Hanya endpoint yang SUDAH ADA di backend `routes/api.php`.
+ *
+ * Selain POST, item pekerjaan kini juga punya PUT/PATCH/DELETE:
+ *   POST/PUT/PATCH/DELETE /projects/{project}/work-items[/{workItem}]
  * ========================================================= */
 
 export const api = {
+  /* --- Wilayah Indonesia --- */
+  listProvinces: (options) =>
+    apiRequest('/api/regions/provinces', options),
+  listRegencies: (provinceId, options) =>
+    apiRequest(`/api/regions/provinces/${provinceId}/regencies`, options),
+  listDistricts: (regencyId, options) =>
+    apiRequest(`/api/regions/regencies/${regencyId}/districts`, options),
+  listVillages: (districtId, options) =>
+    apiRequest(`/api/regions/districts/${districtId}/villages`, options),
   /* --- Project --- */
   listProjects: (options) => apiRequest('/api/projects', options),
   getProject: (projectId, options) =>
     apiRequest(`/api/projects/${projectId}`, options),
+  createProject: (payload, options) =>
+    apiRequest('/api/projects', { ...options, method: 'POST', body: payload }),
 
-  /* --- Tiang (Pole) --- */
-  listPoles: (projectId, options) =>
-    apiRequest(`/api/projects/${projectId}/poles`, options),
+  /* --- Tiang (Pole) ---
+     `PoleController@index` memakai `paginate(100)`. `per_page`
+     diteruskan sebagai query string karena Laravel membacanya
+     otomatis — ini yang membuat 1.500 titik bisa dijelajahi
+     halaman demi halaman, bukan dimuat sekaligus. */
+  listPoles: (projectId, { perPage, page, ...options } = {}) =>
+    apiRequest(`/api/projects/${projectId}/poles`, {
+      ...options,
+      query: { per_page: perPage, page },
+    }),
   getPole: (projectId, poleId, options) =>
     apiRequest(`/api/projects/${projectId}/poles/${poleId}`, options),
+  createPole: (projectId, payload, options) =>
+    apiRequest(`/api/projects/${projectId}/poles`, {
+      ...options,
+      method: 'POST',
+      body: payload,
+    }),
+
+  /* --- Progress ---
+     `ProgressController@store` memakai `updateOrCreate`, jadi
+     mengirim ulang work item yang sama memperbarui nilai yang ada
+     dan menambah satu baris `pole_progress_histories`. */
+  getPoleActivities: (projectId, poleId, options) =>
+    apiRequestFirstAvailable(
+      [
+        `/api/projects/${projectId}/activities?pole_id=${poleId}`,
+        `/api/projects/${projectId}/poles/${poleId}/activities`,
+      ],
+      options
+    ),
   getPoleProgress: (projectId, poleId, options) =>
     apiRequest(`/api/projects/${projectId}/poles/${poleId}/progress`, options),
+  savePoleProgress: (projectId, poleId, payload, options) =>
+    apiRequest(`/api/projects/${projectId}/poles/${poleId}/progress`, {
+      ...options,
+      method: 'POST',
+      body: payload,
+    }),
 
   /* --- Pekerjaan (Work Item) --- */
   listWorkItems: (projectId, options) =>
     apiRequest(`/api/projects/${projectId}/work-items`, options),
   getWorkItem: (projectId, workItemId, options) =>
     apiRequest(`/api/projects/${projectId}/work-items/${workItemId}`, options),
+  createWorkItem: (projectId, payload, options) =>
+    apiRequest(`/api/projects/${projectId}/work-items`, {
+      ...options,
+      method: 'POST',
+      body: payload,
+    }),
+  updateWorkItem: (projectId, workItemId, payload, options) =>
+    apiRequest(`/api/projects/${projectId}/work-items/${workItemId}`, {
+      ...options,
+      method: 'PUT',
+      body: payload,
+    }),
+  deleteWorkItem: (projectId, workItemId, options) =>
+    apiRequest(`/api/projects/${projectId}/work-items/${workItemId}`, {
+      ...options,
+      method: 'DELETE',
+    }),
 
   /* --- Kurva S --- */
   getCurve: (projectId, options) =>
     apiRequest(`/api/projects/${projectId}/curve`, options),
 
-  /* --- Belum tersedia di backend. Tetap dipanggil supaya UI
-         otomatis hidup begitu endpoint-nya ditambahkan. --- */
+  /* --- Auth ---
+     Kedua endpoint ini sudah diverifikasi ada di server:
+     `GET /api/me` membalas 401 `Unauthenticated.` dan
+     `POST /api/logout` membalas 405 "Supported methods: POST",
+     artinya keduanya terdaftar sebagai route Sanctum. Bentuk
+     response `me` belum diaudit — dipakai lewat `unwrapItem`. */
+  getMe: (options) => apiRequest('/api/me', options),
+  logout: (options) =>
+    apiRequest('/api/logout', { ...options, method: 'POST' }),
+
+  /* --- Belum ada di `routes/api.php` ---
+     Kandidat endpoint, bukan kontrak. `apiRequestFirstAvailable`
+     mengembalikan null kalau semuanya tidak tersedia, jadi UI
+     menampilkan empty state, bukan data buatan. */
   listActivities: (projectId, options) =>
     apiRequestFirstAvailable(
       [
@@ -266,6 +415,10 @@ export function normalizePole(pole) {
     hasCoordinate,
     status: pole?.status ?? null,
     regionId: pole?.region_id ?? null,
+    provinceId: pole?.province_id ?? null,
+    regencyId: pole?.regency_id ?? null,
+    districtId: pole?.district_id ?? null,
+    villageId: pole?.village_id ?? null,
     region: pole?.region
       ? {
           id: pole.region.id,
@@ -277,6 +430,10 @@ export function normalizePole(pole) {
 }
 
 export function normalizeWorkItem(workItem) {
+  const hasAggregate =
+    workItem?.actual_progress !== undefined &&
+    workItem?.actual_progress !== null
+
   return {
     id: workItem?.id ?? null,
     projectId: workItem?.project_id ?? null,
@@ -287,6 +444,19 @@ export function normalizeWorkItem(workItem) {
     isActive: workItem?.is_active ?? null,
     plannedStartMonth: workItem?.planned_start_month ?? null,
     plannedEndMonth: workItem?.planned_end_month ?? null,
+    /* Progres aktual agregat hanya ada di `WorkItemController@index`.
+       `null` berarti belum tersedia -> UI boleh jatuh ke perhitungan
+       sisi klien, bukan menganggap progresnya 0%. */
+    actualProgress: hasAggregate ? Number(workItem.actual_progress) : null,
+    polesWithProgress:
+      workItem?.poles_with_progress !== undefined
+        ? Number(workItem.poles_with_progress)
+        : null,
+    weightedContribution:
+      workItem?.weighted_contribution !== undefined &&
+      workItem?.weighted_contribution !== null
+        ? Number(workItem.weighted_contribution)
+        : null,
   }
 }
 
@@ -303,3 +473,70 @@ export function normalizeWorkProgress(entry) {
       : null,
   }
 }
+
+export function normalizeRegion(region) {
+  return {
+    id: region?.id ?? null,
+    projectId: region?.project_id ?? null,
+    name: region?.name ?? '—',
+    code: region?.code ?? null,
+  }
+}
+
+/**
+ * `ProjectController@index` mengirim `regions_count`, `poles_count`,
+ * `work_items_count`; `show` mengirim relasi `regions` + `workItems`.
+ * Kedua bentuk dinormalisasi ke satu bentuk supaya ProjectProvider
+ * tidak perlu tahu endpoint mana yang sedang dipakai.
+ */
+export function normalizeProject(project) {
+  return {
+    id: project?.id ?? null,
+    name: project?.name ?? '—',
+    code: project?.code ?? null,
+    status: project?.status ?? null,
+    startDate: project?.start_date ?? null,
+    endDate: project?.end_date ?? null,
+    totalTargetPoles: project?.total_target_poles ?? null,
+    polesCount: project?.poles_count ?? null,
+    regionsCount: project?.regions_count ?? null,
+    workItemsCount: project?.work_items_count ?? null,
+    regions: Array.isArray(project?.regions) ? project.regions.map(normalizeRegion) : [],
+    workItems: Array.isArray(project?.work_items)
+      ? project.work_items.map(normalizeWorkItem)
+      : Array.isArray(project?.workItems)
+        ? project.workItems.map(normalizeWorkItem)
+        : [],
+  }
+}
+
+/**
+ * User dari `POST /api/login`.
+ *
+ * Dipakai hanya untuk mengisi UI profil. `id`/nama/email yang
+ * tidak ada di response tidak ditebak — `role` yang tidak dikirim
+ * backend akan tampil sebagai "belum ditentukan", bukan "Admin".
+ */
+export function normalizeUser(user) {
+  const name = user?.name ?? user?.nama ?? null
+
+  const derivedInitial =
+    String(name ?? '')
+      .trim()
+      .charAt(0)
+      .toUpperCase() || null
+
+  return {
+    id: user?.id ?? null,
+    name,
+    email: user?.email ?? null,
+    role: user?.role ?? user?.role_name ?? null,
+    roleLabel: user?.role_label ?? user?.role_name ?? user?.role ?? null,
+    phone: user?.phone ?? user?.phone_number ?? user?.no_hp ?? null,
+    initials: user?.initials ?? derivedInitial,
+    raw: user ?? null,
+  }
+}
+
+
+

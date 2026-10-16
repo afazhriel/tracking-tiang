@@ -12,9 +12,18 @@ class CurveController extends Controller
 {
     public function show(Project $project): JsonResponse
     {
+        $this->authorize('view', $project);
+
         $workItems = $project->workItems()
             ->orderBy('sequence')
             ->get();
+
+        /*
+         * Penyebut yang sama dengan WorkItemController (target tiang,
+         * fallback jumlah tiang terdaftar) supaya progres proyek di
+         * Kurva S = penjumlahan kontribusi tiap item pekerjaan.
+         */
+        $denominator = $project->progressDenominator();
 
         /*
          * ==========================================
@@ -131,12 +140,10 @@ class CurveController extends Controller
                 }
             }
 
-            $targetPoles = (int) ($project->total_target_poles ?? 0);
-
             $actual[] = [
                 'date' => $date,
-                'progress_percent' => $targetPoles > 0
-                    ? round($totalPoleProgress / $targetPoles, 4)
+                'progress_percent' => $denominator > 0
+                    ? round($totalPoleProgress / $denominator, 4)
                     : 0,
             ];
         }
@@ -169,10 +176,8 @@ class CurveController extends Controller
             $totalPoleProgress += $poleProgress;
         }
 
-        $targetPoles = (int) ($project->total_target_poles ?? 0);
-
-        $currentPercent = $targetPoles > 0
-            ? round($totalPoleProgress / $targetPoles, 4)
+        $currentPercent = $denominator > 0
+            ? round($totalPoleProgress / $denominator, 4)
             : 0;
 
         return response()->json([
@@ -182,7 +187,8 @@ class CurveController extends Controller
                 'code' => $project->code,
                 'start_date' => $project->start_date,
                 'end_date' => $project->end_date,
-                'total_target_poles' => $targetPoles,
+                'total_target_poles' => $project->total_target_poles,
+                'progress_denominator' => $denominator,
             ],
 
             'registered_poles' => $registeredPoles,

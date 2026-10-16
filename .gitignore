@@ -17,3 +17,14 @@ backend/bootstrap/cache/
 
 database/*.sqlite
 database/*.sqlite3
+
+# Local build artifacts and backups
+/frontend/.next/
+/frontend/backup-ui/
+/frontend/**/*.backup
+/frontend/**/*.bak-*
+/backend-local-changes.patch
+/frontend-local-changes.patch
+/pole-controller-hierarchy.patch
+/tracking-tiang-local.zip
+/tiangImportPolesModal.jsx

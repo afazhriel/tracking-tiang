@@ -184,7 +184,7 @@ export function accentVars(name) {
   }
 }
 
-/** Warna hex tone — untuk recharts / leaflet / SVG. */
+/** Warna hex tone â€” untuk recharts / leaflet / SVG. */
 export function toneHex(name) {
   return tone(name).hex
 }
@@ -192,9 +192,12 @@ export function toneHex(name) {
 /** Nada status (dari lib/status.js) dipetakan ke ACCENT_TONES. */
 export const STATUS_TONE_MAP = {
   done: 'sage',
-  active: 'lagoon',
+  active: 'sage',
   delayed: 'ochre',
   issue: 'clay',
   idle: 'sand',
   unknown: 'sand',
 }
+
+
+

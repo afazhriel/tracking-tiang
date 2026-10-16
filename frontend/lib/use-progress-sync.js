@@ -14,14 +14,24 @@ import { api, normalizeWorkProgress, unwrapList } from './api'
  * Hook ini memuat endpoint tersebut secara bertahap (dengan batas
  * konkurensi) sehingga halaman tidak membanjiri server, dan hanya
  * menampilkan nilai yang benar-benar berasal dari API.
+ *
+ * Catatan performa: backend mem-paginate 100 tiang per halaman, jadi
+ * satu `loadMany` = 1 request daftar + maksimal 100 request progress.
+ * `maxPoles` menahan sinkronisasi supaya tidak pernah berubah jadi
+ * ribuan request tanpa sengaja.
  */
-export function useProgressSync(projectId, { concurrency = 8 } = {}) {
+export function useProgressSync(projectId, { concurrency = 8, maxPoles = 300 } = {}) {
   const [store, setStore] = useState({})
   const [running, setRunning] = useState(false)
   const [progressInfo, setProgressInfo] = useState({ done: 0, total: 0 })
 
   const controllerRef = useRef(null)
   const mountedRef = useRef(true)
+
+  /* Pole yang sedang di-fetch. Tanpa ini, `selectPole` dan effect
+     "muat progress tiang terpilih" bisa menembak endpoint yang sama
+     untuk tiang yang sama di frame yang sama. */
+  const pendingRef = useRef(new Set())
 
   const loadOne = useCallback(
     async (poleId, { signal } = {}) => {
@@ -46,9 +56,13 @@ export function useProgressSync(projectId, { concurrency = 8 } = {}) {
 
   const loadMany = useCallback(
     async (poleIds) => {
-      const ids = Array.from(new Set((poleIds ?? []).filter((id) => id !== null && id !== undefined)))
+      const ids = Array.from(
+        new Set((poleIds ?? []).filter((id) => id !== null && id !== undefined))
+      )
 
       if (!ids.length) return
+
+      const queue = ids.slice(0, maxPoles)
 
       controllerRef.current?.abort()
       const controller = new AbortController()
@@ -58,14 +72,20 @@ export function useProgressSync(projectId, { concurrency = 8 } = {}) {
       let cursor = 0
 
       setRunning(true)
-      setProgressInfo({ done: 0, total: ids.length })
+      setProgressInfo({ done: 0, total: queue.length })
 
       async function worker() {
-        while (cursor < ids.length) {
+        while (cursor < queue.length) {
           if (signal.aborted || !mountedRef.current) return
 
-          const poleId = ids[cursor]
+          const poleId = queue[cursor]
           cursor += 1
+
+          /* Lewati tiang yang sedang Jalan atau sudah punya data —
+             tidak ada gunanya request ulang. */
+          if (pendingRef.current.has(poleId)) continue
+
+          pendingRef.current.add(poleId)
 
           try {
             await loadOne(poleId, { signal })
@@ -76,6 +96,8 @@ export function useProgressSync(projectId, { concurrency = 8 } = {}) {
               ...previous,
               [poleId]: { weighted: null, items: [], error },
             }))
+          } finally {
+            pendingRef.current.delete(poleId)
           }
 
           if (!signal.aborted) {
@@ -88,7 +110,7 @@ export function useProgressSync(projectId, { concurrency = 8 } = {}) {
       }
 
       const workers = Array.from(
-        { length: Math.max(1, Math.min(concurrency, ids.length)) },
+        { length: Math.max(1, Math.min(concurrency, queue.length)) },
         () => worker()
       )
 
@@ -101,7 +123,7 @@ export function useProgressSync(projectId, { concurrency = 8 } = {}) {
         }
       }
     },
-    [concurrency, loadOne]
+    [concurrency, loadOne, maxPoles]
   )
 
   const cancel = useCallback(() => {
@@ -112,6 +134,7 @@ export function useProgressSync(projectId, { concurrency = 8 } = {}) {
 
   const reset = useCallback(() => {
     cancel()
+    pendingRef.current.clear()
     setStore({})
     setProgressInfo({ done: 0, total: 0 })
   }, [cancel])

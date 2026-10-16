@@ -11,6 +11,9 @@
     "start": "next start"
   },
   "dependencies": {
+    "@capacitor/android": "^8.5.2",
+    "@capacitor/cli": "^8.5.2",
+    "@capacitor/core": "^8.5.2",
     "@tailwindcss/postcss": "^4.3.3",
     "framer-motion": "^14.0.0",
     "leaflet": "^1.9.4",

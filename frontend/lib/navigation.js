@@ -5,6 +5,8 @@ import {
   ClipboardList,
   LayoutDashboard,
   MapPin,
+  User,
+  Users,
 } from 'lucide-react'
 
 /**
@@ -19,11 +21,19 @@ export const NAV_ITEMS = [
   { label: 'Aktivitas', href: '/aktivitas', icon: Activity },
 ]
 
-export const NAV_SECONDARY = {
-  label: 'Notifikasi',
-  href: '/notifikasi',
-  icon: Bell,
-}
+/**
+ * Navigasi sekunder: notifikasi, tim, dan profil.
+ *
+ * Dipisah dari `NAV_ITEMS` karena ketiganya bukan "monitoring
+ * harian" — dan `/tim` baru relevan kalau backend someday
+ * menyediakan endpoint user/team. Tetap ditampilkan supaya
+ * kebutuhan backend terlihat jelas, bukan disembunyikan.
+ */
+export const NAV_SECONDARY = [
+  { label: 'Notifikasi', href: '/notifikasi', icon: Bell },
+  { label: 'Tim', href: '/tim', icon: Users },
+  { label: 'Profil', href: '/profil', icon: User },
+]
 
 export function isActivePath(pathname, href) {
   if (!pathname) return false

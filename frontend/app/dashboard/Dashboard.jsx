@@ -16,7 +16,7 @@ import {
 } from 'lucide-react'
 
 import AppShell from '../../components/layout/AppShell'
-import { useProject } from '../../components/layout/ProjectProvider'
+import { useProject } from '../../lib/project-context'
 import {
   BentoCard,
   BentoGrid,
@@ -95,7 +95,7 @@ function DashboardContent() {
 
   const summary = curve ? summarizeCurve(curve) : null
 
-  const totalTargetPoles = project?.total_target_poles ?? null
+  const totalTargetPoles = project?.totalTargetPoles ?? null
   const registeredPoles = polesCount ?? null
 
   const periodIndex =
@@ -170,11 +170,11 @@ function DashboardContent() {
 
   const weightTotal = workItems.reduce((total, item) => total + Number(item.weight_percent || 0), 0)
   const durationMonths =
-    project?.start_date && project?.end_date
+    project?.startDate && project?.endDate
       ? Math.max(
           1,
           Math.round(
-            (new Date(project.end_date) - new Date(project.start_date)) /
+            (new Date(project.endDate) - new Date(project.startDate)) /
               (1000 * 60 * 60 * 24 * 30.44)
           )
         )
@@ -186,9 +186,9 @@ function DashboardContent() {
         <div>
           <p className="mb-3 flex items-center gap-2 text-xs font-medium text-neutral-500">
             <CalendarDays className="h-4 w-4 text-brand-600" />
-            {project?.start_date
-              ? `${formatDate(project.start_date)} — ${
-                  project.end_date ? formatDate(project.end_date) : '…'
+            {project?.startDate
+              ? `${formatDate(project.startDate)} — ${
+                  project.endDate ? formatDate(project.endDate) : '…'
                 }`
               : 'Periode proyek belum tersedia'}
           </p>
@@ -345,7 +345,7 @@ function DashboardContent() {
           </CardContent>
         </Card>
 
-        <div className="accent-top relative col-span-3 flex flex-col justify-between overflow-hidden rounded-card border border-espresso-800 bg-espresso-900 p-6 text-espresso-50 shadow-[0_18px_40px_-24px_rgba(43,32,24,.8)] [--accent-from:var(--color-lagoon-400)] [--accent-to:var(--color-brand-400)]">
+        <div className="accent-top relative col-span-3 lg:col-span-1 flex flex-col justify-between overflow-hidden rounded-card border border-espresso-800 bg-espresso-900 p-6 text-espresso-50 shadow-[0_18px_40px_-24px_rgba(43,32,24,.8)] [--accent-from:var(--color-lagoon-400)] [--accent-to:var(--color-brand-400)]">
           {/* Kabut lagoon: satu-satunya ungu/kolom dingin di halaman
               ini, dipakai untuk menandai panel "monitoring". */}
           <div

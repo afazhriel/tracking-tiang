@@ -56,14 +56,15 @@ export function StatusBadge({ status, className, size = 'md', showDot = true }) 
     <Badge
       size={size}
       dot={showDot}
-      className={cn(status?.badge, className)}
+      tone={status?.key}
+      className={className}
     >
       {status?.label ?? 'Tidak Diketahui'}
     </Badge>
   )
 }
 
-/** Badge nada statis — untuk label yang bukan status data. */
+/** Badge nada statis â€” untuk label yang bukan status data. */
 export function ToneBadge({ tone: toneName, children, className, ...props }) {
   return (
     <Badge
@@ -76,3 +77,4 @@ export function ToneBadge({ tone: toneName, children, className, ...props }) {
     </Badge>
   )
 }
+

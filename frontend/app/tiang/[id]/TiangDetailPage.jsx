@@ -1,6 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useMemo } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import {
@@ -14,8 +19,12 @@ import {
 } from "lucide-react";
 
 import AppShell from "../../../components/layout/AppShell";
-import { useProject } from "../../../components/layout/ProjectProvider";
+import { useProject } from "../../../lib/project-context";
 import MapPanel from "../../../components/tiang/MapPanel";
+import {
+  UpdateProgressButton,
+  UpdateProgressModal,
+} from "../../../components/tiang/UpdateProgressModal";
 import { Badge, StatusBadge } from "../../../components/ui/badge";
 import { Breadcrumbs } from "../../../components/ui/breadcrumbs";
 import {
@@ -73,6 +82,7 @@ function TiangDetailContent() {
   const params = useParams();
   const poleId = params?.id ?? null;
   const { projectId, project } = useProject();
+  const [progressOpen, setProgressOpen] = useState(false);
 
   const poleLoader = useCallback(async () => {
     if (!projectId || !poleId) return null;
@@ -88,6 +98,10 @@ function TiangDetailContent() {
     return await api.getPoleProgress(projectId, poleId);
   }, [poleId, projectId]);
 
+  const activityLoader = useCallback(async () => {
+    if (!projectId || !poleId) return null;
+    return await api.getPoleActivities(projectId, poleId);
+  }, [poleId, projectId]);
   const enabled = Boolean(projectId && poleId);
 
   const {
@@ -104,6 +118,12 @@ function TiangDetailContent() {
     reload: reloadProgress,
   } = useResource(progressLoader, [projectId, poleId], { enabled });
 
+  const {
+    data: activityPayload,
+    error: activityError,
+    loading: activityLoading,
+    reload: reloadActivities,
+  } = useResource(activityLoader, [projectId, poleId], { enabled });
   const pole = useMemo(
     () => (rawPole ? normalizePole(rawPole) : null),
     [rawPole],
@@ -119,6 +139,42 @@ function TiangDetailContent() {
     progressPayload?.pole_progress === undefined
       ? null
       : Number(progressPayload.pole_progress);
+
+  /* Gabungkan item pekerjaan yang dikonfigurasi pada project dengan
+     progress tersimpan. Tujuannya: setiap tahap pekerjaan tetap
+     terlihat meski belum ada realisasi (ditampilkan 0%), bukan hilang
+     dari daftar. */
+  const mergedStages = useMemo(() => {
+    const configured = project?.workItems ?? [];
+    const byId = new Map(
+      workProgress.map((entry) => [String(entry.workItemId), entry]),
+    );
+
+    const rows = configured.map((workItem) => {
+      const entry = byId.get(String(workItem.id));
+
+      return {
+        id: workItem.id,
+        workItemId: workItem.id,
+        workItem: entry?.workItem ?? workItem,
+        progress: entry ? entry.progress : 0,
+        startedAt: entry?.startedAt ?? null,
+        completedAt: entry?.completedAt ?? null,
+        notes: entry?.notes ?? null,
+        hasData: Boolean(entry),
+      };
+    });
+
+    const configuredIds = new Set(configured.map((item) => String(item.id)));
+
+    for (const entry of workProgress) {
+      if (configuredIds.has(String(entry.workItemId))) continue;
+
+      rows.push({ ...entry, hasData: true });
+    }
+
+    return rows;
+  }, [project, workProgress]);
 
   const status = resolveStatus(pole?.status, weightedProgress);
 
@@ -230,6 +286,15 @@ function TiangDetailContent() {
                 </Badge>
               )}
 
+              <UpdateProgressButton
+                onClick={() => setProgressOpen(true)}
+                disabled={
+                  poleLoading ||
+                  progressLoading ||
+                  !project?.workItems?.length
+                }
+              />
+
               <Link
                 href="/tiang"
                 className="inline-flex h-9 items-center gap-2 rounded-xl border border-neutral-200 bg-paper px-3 text-sm font-medium text-neutral-700 transition-colors hover:bg-canvas"
@@ -325,7 +390,7 @@ function TiangDetailContent() {
                     />
                   ) : progressLoading ? (
                     <SkeletonRows rows={4} />
-                  ) : workProgress.length ? (
+                  ) : mergedStages.length ? (
                     <div className="space-y-4">
                       <ProgressBar
                         value={weightedProgress}
@@ -335,7 +400,7 @@ function TiangDetailContent() {
                       />
 
                       <div className="space-y-3">
-                        {workProgress.map((item) => (
+                        {mergedStages.map((item) => (
                           <div
                             key={item.id ?? `${item.workItemId}`}
                             className="rounded-xl border border-neutral-100 p-3"
@@ -378,6 +443,10 @@ function TiangDetailContent() {
                                   {item.notes}
                                 </span>
                               )}
+
+                              {!item.hasData && (
+                                <span>Belum ada realisasi</span>
+                              )}
                             </div>
                           </div>
                         ))}
@@ -387,9 +456,8 @@ function TiangDetailContent() {
                     <EmptyState
                       icon={ClipboardList}
                       compact
-                      title="Belum ada progress"
-                      description={`Endpoint /api/projects/${projectId}/poles/${poleId}/progress belum mengembalikan data progress untuk tiang ini.`}
-                      hint="Ready for API integration"
+                      title="Belum ada item pekerjaan"
+                      description="Project ini belum memiliki item pekerjaan. Tambahkan item pada halaman Pengaturan Pekerjaan agar realisasi per tahap bisa dicatat."
                     />
                   )}
                 </CardContent>
@@ -412,13 +480,52 @@ function TiangDetailContent() {
                 </CardHeader>
 
                 <CardContent>
-                  <EmptyState
-                    icon={Clock}
-                    compact
-                    title="Riwayat aktivitas belum tersedia"
-                    description="Backend belum menyediakan endpoint timeline aktivitas per tiang. Struktur UI ini siap dihubungkan begitu endpoint tersedia."
-                    hint="Ready for API integration"
-                  />
+                  {activityLoading ? (
+                    <SkeletonRows />
+                  ) : activityError ? (
+                    <ErrorNotice
+                      error={activityError}
+                      onRetry={reloadActivities}
+                      title="Gagal memuat timeline"
+                    />
+                  ) : !Array.isArray(activityPayload?.data) || activityPayload.data.length === 0 ? (
+                    <EmptyState
+                      icon={Clock}
+                      compact
+                      title="Belum ada riwayat aktivitas"
+                      description="Riwayat akan muncul setelah progress pekerjaan diperbarui."
+                    />
+                  ) : (
+                    <div className="space-y-4">
+                      {activityPayload.data.map((activity) => (
+                        <div
+                          key={activity.id}
+                          className="relative border-l-2 border-neutral-200 pl-4 pb-3 last:pb-0"
+                        >
+                          <div className="absolute -left-[5px] top-1 h-2 w-2 rounded-full bg-primary" />
+                          <div className="flex flex-wrap items-start justify-between gap-2">
+                            <p className="text-sm font-semibold text-neutral-800">
+                              {activity.work_item_name || "Pekerjaan"}
+                            </p>
+                            <Badge>{formatPercent(activity.progress_percent)}</Badge>
+                          </div>
+                          {activity.notes && (
+                            <p className="mt-1 text-sm text-neutral-600">
+                              {activity.notes}
+                            </p>
+                          )}
+                          <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-neutral-400">
+                            {activity.recorded_at && (
+                              <span>{formatDateTime(activity.recorded_at)}</span>
+                            )}
+                            {activity.recorded_by && (
+                              <span>Dicatat oleh {activity.recorded_by}</span>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </div>
@@ -441,7 +548,14 @@ function TiangDetailContent() {
 
                   <dl className="space-y-2 text-xs">
                     <div className="flex items-center justify-between">
-                      <dt className="text-neutral-400">Item terdata</dt>
+                      <dt className="text-neutral-400">Item terkonfigurasi</dt>
+                      <dd className="font-medium text-neutral-700">
+                        {mergedStages.length}
+                      </dd>
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <dt className="text-neutral-400">Item punya realisasi</dt>
                       <dd className="font-medium text-neutral-700">
                         {workProgress.length}
                       </dd>
@@ -451,7 +565,7 @@ function TiangDetailContent() {
                       <dt className="text-neutral-400">Item selesai (100%)</dt>
                       <dd className="font-medium text-neutral-700">
                         {
-                          workProgress.filter(
+                          mergedStages.filter(
                             (item) => Number(item.progress) >= 100,
                           ).length
                         }
@@ -494,6 +608,18 @@ function TiangDetailContent() {
               </Card>
             </div>
           </div>
+
+          {progressOpen && (
+            <UpdateProgressModal
+              open={progressOpen}
+              onClose={() => setProgressOpen(false)}
+              projectId={projectId}
+              pole={pole}
+              workItems={project?.workItems ?? []}
+              currentProgress={workProgress}
+              onSaved={() => reloadProgress()}
+            />
+          )}
         </>
       )}
     </div>

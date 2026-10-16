@@ -28,7 +28,8 @@ import {
   isActivePath,
 } from '../../lib/navigation'
 
-import { ProjectProvider, useProject } from './ProjectProvider'
+import ProjectProvider from './ProjectProvider'
+import { useProject } from '../../lib/project-context'
 import { ErrorNotice } from '../ui/states'
 
 function AppSidebar({ title }) {
@@ -66,14 +67,17 @@ function AppSidebar({ title }) {
         {/* Kontrol tampilan dipisah dari navigasi: menu sekunder di
             atas, pemipit sidebar di bawah garis pemisah. */}
         <div className="mt-auto flex flex-col gap-3 border-t border-neutral-200/80 pt-3">
-          <SidebarLink
-            active={isActivePath(pathname, NAV_SECONDARY.href)}
-            link={{
-              label: NAV_SECONDARY.label,
-              href: NAV_SECONDARY.href,
-              icon: <NAV_SECONDARY.icon className="h-[18px] w-[18px]" />,
-            }}
-          />
+          {NAV_SECONDARY.map((item) => (
+            <SidebarLink
+              key={item.href}
+              active={isActivePath(pathname, item.href)}
+              link={{
+                label: item.label,
+                href: item.href,
+                icon: <item.icon className="h-[18px] w-[18px]" />,
+              }}
+            />
+          ))}
 
           <SidebarToggle />
         </div>
@@ -122,8 +126,8 @@ function SidebarHeader() {
 function UserMenu() {
   const [user] = useState(() => getStoredUser())
 
-  const name = user?.name || user?.nama || 'Admin'
-  const initial = String(name).trim().charAt(0).toUpperCase() || 'A'
+  const name = user?.name || user?.nama || 'Pengguna'
+  const initial = String(name).trim().charAt(0).toUpperCase() || 'U'
 
   function handleLogout() {
     clearAuth()
@@ -143,14 +147,21 @@ function UserMenu() {
         <span className="absolute right-2 top-2 h-1.5 w-1.5 rounded-full bg-brand-600 ring-2 ring-paper" />
       </Link>
 
-      <div className="hidden items-center gap-2.5 rounded-xl border border-neutral-200 bg-paper px-2.5 py-1.5 shadow-card sm:flex">
-        <div className="flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br from-plum-500 to-lagoon-600 text-xs font-medium text-white">
+      {/* Nama + inisial leading ke /profil. Di mobile disembunyikan
+          supaya header tidak melebar — profil tetap bisa dibuka lewat
+          sidebar dan drawer navigasi. */}
+      <Link
+        href="/profil"
+        aria-label="Buka profil"
+        className="hidden items-center gap-2.5 rounded-xl border border-neutral-200 bg-paper px-2.5 py-1.5 shadow-card transition-colors hover:border-brand-300 hover:bg-brand-50 sm:flex"
+      >
+        <span className="flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br from-plum-500 to-lagoon-600 text-xs font-medium text-white">
           {initial}
-        </div>
+        </span>
         <span className="max-w-[9rem] truncate text-sm font-medium text-neutral-800">
           {name}
         </span>
-      </div>
+      </Link>
 
       <button
         type="button"
@@ -165,25 +176,53 @@ function UserMenu() {
   )
 }
 
+/**
+ * Bar project di bawah header.
+ *
+ * Kalau backend punya lebih dari satu project, bar ini jadi
+ * selector. Pilih project lain = muat ulang halaman supaya tidak
+ * ada cache progress/peta dari project lama yang ikut tertinggal.
+ */
 function ProjectBar() {
-  const { project, projectId } = useProject()
+  const { project, projectId, projects, selectProject } = useProject()
 
   if (!project) return null
 
-  return (
-    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-neutral-200/70 bg-neutral-50/70 px-4 py-3 text-xs text-neutral-500 sm:px-6">
-      <span className="font-medium text-neutral-800">{project.name}</span>
+  const options = projects.length ? projects : []
 
-      {project.code && (
+  return (
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-neutral-200/70 bg-neutral-50/70 px-4 py-3 text-xs text-neutral-500 sm:px-6">
+      {options.length > 1 ? (
+        <label className="flex min-w-0 items-center gap-2">
+          <span className="shrink-0 font-medium text-neutral-700">Project</span>
+
+          <select
+            value={projectId ?? ''}
+            onChange={(event) => selectProject(event.target.value)}
+            aria-label="Pilih project aktif"
+            className="min-w-0 max-w-[16rem] truncate rounded-lg border border-neutral-200 bg-paper px-2 py-1 text-xs font-medium text-neutral-800 outline-none transition-colors focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
+          >
+            {options.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.code ? `${item.code} · ${item.name}` : item.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      ) : (
+        <span className="font-medium text-neutral-800">{project.name}</span>
+      )}
+
+      {project.code && options.length <= 1 && (
         <span className="rounded-full bg-paper px-2 py-0.5 font-medium text-neutral-600 ring-1 ring-inset ring-neutral-200">
           {project.code}
         </span>
       )}
 
-      {project.start_date && (
+      {project.startDate && (
         <span>
-          Periode: {formatDate(project.start_date)}
-          {project.end_date ? ` — ${formatDate(project.end_date)}` : ''}
+          Periode: {formatDate(project.startDate)}
+          {project.endDate ? ` — ${formatDate(project.endDate)}` : ''}
         </span>
       )}
 

@@ -64,6 +64,9 @@ export function ActionButton({
   variant = 'outline',
   tone: toneName,
   className,
+  disabled = false,
+  type = 'button',
+  ...props
 }) {
   const resolved = tone(toneName)
 
@@ -92,7 +95,12 @@ export function ActionButton({
 
   if (href) {
     return (
-      <Link href={href} className={classes}>
+      <Link
+        href={href}
+        aria-disabled={disabled || undefined}
+        className={classes}
+        {...props}
+      >
         {content}
       </Link>
     )
@@ -100,9 +108,12 @@ export function ActionButton({
 
   return (
     <button
-      type="button"
+      type={type}
       onClick={onClick}
+      disabled={disabled}
+      aria-disabled={disabled || undefined}
       className={classes}
+      {...props}
     >
       {content}
     </button>

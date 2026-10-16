@@ -1,0 +1,8 @@
+{
+  "appId": "com.trackingtiang.app",
+  "appName": "Tracking Tiang",
+  "server": {
+    "url": "http://pjl.ituiot.com",
+    "cleartext": true
+  }
+}

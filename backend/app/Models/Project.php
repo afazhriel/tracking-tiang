@@ -38,4 +38,28 @@ class Project extends Model
     {
         return $this->hasMany(WorkItem::class);
     }
+
+    /**
+     * Penyebut (denominator) untuk menghitung progres global proyek.
+     *
+     * Aturan ini dipakai bersama oleh WorkItemController dan
+     * CurveController supaya progres yang ditampilkan di semua
+     * halaman konsisten:
+     *
+     * - Utamakan `total_target_poles` bila diisi.
+     * - Bila belum diisi (0/null), pakai jumlah tiang yang terdaftar
+     *   supaya progres tidak selalu nol hanya karena target kosong.
+     *
+     * Tiang yang belum punya progres otomatis bernilai 0%.
+     */
+    public function progressDenominator(): int
+    {
+        $target = (int) ($this->total_target_poles ?? 0);
+
+        if ($target > 0) {
+            return $target;
+        }
+
+        return (int) $this->poles()->count();
+    }
 }

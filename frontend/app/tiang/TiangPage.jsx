@@ -10,11 +10,12 @@ import {
   Layers,
   MapPin,
   RefreshCw,
+  Upload,
 } from 'lucide-react'
 
 import AppShell from '../../components/layout/AppShell'
 import { ActionButton, PageHeader } from '../../components/layout/PageHeader'
-import { useProject } from '../../components/layout/ProjectProvider'
+import { useProject } from '../../lib/project-context'
 import MapPanel from '../../components/tiang/MapPanel'
 import { Badge, StatusBadge } from '../../components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card'
@@ -29,6 +30,7 @@ import { ProgressBar } from '../../components/ui/progress-bar'
 import { StatCard, StatCardGrid } from '../../components/ui/stat-card'
 import { ErrorNotice, SkeletonRows, Spinner } from '../../components/ui/states'
 import { api, normalizePole, unwrapList } from '../../lib/api'
+import { useCurrentUser } from '../../lib/use-current-user'
 import { useProgressSync } from '../../lib/use-progress-sync'
 import { useResource } from '../../lib/use-api'
 import {
@@ -43,6 +45,11 @@ import {
   formatPercent,
 } from '../../lib/format'
 import { cn } from '../../lib/utils'
+import { CreatePoleButton, CreatePoleModal } from '../../components/tiang/CreatePoleModal'
+import { ImportPolesModal } from '../../components/tiang/ImportPolesModal'
+
+/* Sama dengan `paginate(100)` di `PoleController@index`. */
+const PER_PAGE = 100
 
 function PoleListItem({ pole, isSelected, progress, loading, onSelect }) {
   const status = resolveStatus(pole.status, progress)
@@ -172,14 +179,14 @@ function PoleSelectionCard({ pole, progressEntry, loading, onReload }) {
           <div className="rounded-xl bg-canvas p-3">
             <p className="text-[11px] text-neutral-400">Wilayah</p>
             <p className="mt-0.5 text-sm font-medium">
-              {pole.region?.name ?? '—'}
+              {pole.region?.name ?? 'â€”'}
             </p>
           </div>
 
           <div className="rounded-xl bg-canvas p-3">
             <p className="text-[11px] text-neutral-400">Progress (bobot)</p>
             <p className="mt-0.5 text-sm font-medium tabular-nums">
-              {loading ? '…' : formatPercent(progress)}
+              {loading ? 'â€¦' : formatPercent(progress)}
             </p>
           </div>
         </div>
@@ -222,7 +229,10 @@ function PoleSelectionCard({ pole, progressEntry, loading, onReload }) {
 }
 
 function TiangContent() {
-  const { projectId, error: projectError } = useProject()
+  const { project, projectId, error: projectError } = useProject()
+
+  const currentUser = useCurrentUser()
+  const isAdmin = currentUser?.role === 'admin'
 
   const [page, setPage] = useState(1)
   const [search, setSearch] = useState('')
@@ -231,10 +241,22 @@ function TiangContent() {
   const [progressFilter, setProgressFilter] = useState('all')
   const [selectedId, setSelectedId] = useState(null)
 
+  const [createOpen, setCreateOpen] = useState(false)
+  const [importOpen, setImportOpen] = useState(false)
+
+  /* `per_page` mengikuti default backend (100). Mengirimnya eksplisit
+     membuat batas ini terlihat di satu tempat, dan mencegah server
+     diam-diam mengembalikan seluruh 1.500 titik sekaligus. */
   const polesLoader = useCallback(
     async () =>
-      projectId ? await api.listPoles(projectId, { cache: 'no-store' }) : null,
-    [projectId]
+      projectId
+        ? await api.listPoles(projectId, {
+            page,
+            perPage: PER_PAGE,
+            cache: 'no-store',
+          })
+        : null,
+    [projectId, page]
   )
 
   const {
@@ -251,15 +273,15 @@ function TiangContent() {
 
   const meta = polesPayload?.meta ?? null
 
+  /* Filter wilayah dibangun dari project detail, bukan dari tiang yang
+     kebetulan ada di halaman ini â€” supaya pilihan filter tidak berubah
+     saat pindah halaman. */
   const regions = useMemo(() => {
-    const map = new Map()
-
-    for (const pole of poles) {
-      if (pole.region?.id) map.set(pole.region.id, pole.region.name)
-    }
-
-    return Array.from(map.entries()).map(([value, label]) => ({ value, label }))
-  }, [poles])
+    return (project?.regions ?? []).map((region) => ({
+      value: String(region.id),
+      label: region.code ? `${region.code} Â· ${region.name}` : region.name,
+    }))
+  }, [project?.regions])
 
   const {
     store,
@@ -280,6 +302,12 @@ function TiangContent() {
     },
     [isLoaded, loadOne]
   )
+
+  /* Filter yang berubah tidak pernah meninggalkan halaman di luar
+     jangkauan â€” hasilnya akan kosong dan terlihat seperti bug. */
+  function resetToFirstPage() {
+    setPage(1)
+  }
 
   /* Selected pole diturunkan (tidak disimpan lewat effect) supaya
      selalu konsisten dengan daftar yang sedang tampil. */
@@ -363,8 +391,24 @@ function TiangContent() {
         eyebrow="Monitoring"
         title="Monitoring Tiang"
         subtitle="Pantau lokasi, identitas, dan progres setiap titik tiang."
-        actions={
+actions={
           <>
+            {isAdmin && (
+              <>
+                <CreatePoleButton
+                  onClick={() => setCreateOpen(true)}
+                  disabled={polesLoading || !projectId}
+                />
+
+                <ActionButton
+                  onClick={() => setImportOpen(true)}
+                  icon={Upload}
+                >
+                  Import CSV
+                </ActionButton>
+              </>
+            )}
+
             <ActionButton
               href="/kurva-s"
               icon={Layers}
@@ -388,14 +432,14 @@ function TiangContent() {
       <StatCardGrid>
         <StatCard
           label="Total Tiang"
-          value={polesLoading ? '…' : formatNumber(totalRegistered ?? counts.total)}
+          value={polesLoading ? 'â€¦' : formatNumber(totalRegistered ?? counts.total)}
           hint={scopeHint ?? 'Tiap yang terdaftar pada project'}
           Icon={MapPin}
         />
 
         <StatCard
           label="Tiang Aktif"
-          value={polesLoading ? '…' : formatNumber(counts.active)}
+          value={polesLoading ? 'â€¦' : formatNumber(counts.active)}
           hint={scopeHint ?? 'Sedang dikerjakan'}
           Icon={CircleDot}
           tone="blue"
@@ -403,7 +447,7 @@ function TiangContent() {
 
         <StatCard
           label="Tiang Selesai"
-          value={polesLoading ? '…' : formatNumber(counts.done)}
+          value={polesLoading ? 'â€¦' : formatNumber(counts.done)}
           hint={scopeHint ?? 'Progress 100%'}
           Icon={CircleCheck}
           tone="emerald"
@@ -411,7 +455,7 @@ function TiangContent() {
 
         <StatCard
           label="Tiang Bermasalah"
-          value={polesLoading ? '…' : formatNumber(counts.issue)}
+          value={polesLoading ? 'â€¦' : formatNumber(counts.issue)}
           hint={scopeHint ?? 'Perlu perhatian lapangan'}
           Icon={CircleAlert}
           tone="rose"
@@ -429,7 +473,10 @@ function TiangContent() {
       <FilterBar>
         <SearchInput
           value={search}
-          onChange={setSearch}
+          onChange={(value) => {
+            setSearch(value)
+            resetToFirstPage()
+          }}
           placeholder="Cari kode tiang atau alamat..."
         />
 
@@ -437,7 +484,10 @@ function TiangContent() {
           id="filter-status"
           label="Status"
           value={statusFilter}
-          onChange={setStatusFilter}
+          onChange={(value) => {
+            setStatusFilter(value)
+            resetToFirstPage()
+          }}
           options={STATUS_FILTER_OPTIONS.filter((option) => option.value !== 'all')}
         />
 
@@ -445,7 +495,10 @@ function TiangContent() {
           id="filter-region"
           label="Wilayah"
           value={regionFilter}
-          onChange={setRegionFilter}
+          onChange={(value) => {
+            setRegionFilter(value)
+            resetToFirstPage()
+          }}
           options={regions}
         />
 
@@ -453,7 +506,10 @@ function TiangContent() {
           id="filter-progress"
           label="Progress"
           value={progressFilter}
-          onChange={setProgressFilter}
+          onChange={(value) => {
+            setProgressFilter(value)
+            resetToFirstPage()
+          }}
           options={PROGRESS_FILTER_OPTIONS.filter((option) => option.value !== 'all')}
         />
       </FilterBar>
@@ -559,6 +615,28 @@ function TiangContent() {
           />
         </div>
       </div>
+
+      <CreatePoleModal
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
+        projectId={projectId}
+        regions={project?.regions ?? []}
+        onCreated={async (created) => {
+          setPage(1)
+
+          if (created?.id !== undefined) {
+            setSelectedId(created.id)
+          }
+
+          await reloadPoles()
+        }}
+      />
+
+      <ImportPolesModal
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        regions={project?.regions ?? []}
+      />
     </div>
   )
 }
@@ -570,3 +648,5 @@ export default function TiangPage() {
     </AppShell>
   )
 }
+
+

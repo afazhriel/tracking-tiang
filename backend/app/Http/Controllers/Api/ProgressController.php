@@ -10,12 +10,15 @@ use App\Models\Project;
 use App\Models\WorkItem;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class ProgressController extends Controller
 {
     public function index(Project $project, Pole $pole): JsonResponse
     {
-        abort_unless($pole->project_id === $project->id, 404);
+        abort_unless((int) $pole->project_id === (int) $project->id, 404);
+
+        $this->authorize('view', $pole);
 
         $progress = PoleWorkProgress::with('workItem')
             ->where('pole_id', $pole->id)
@@ -32,7 +35,9 @@ class ProgressController extends Controller
         Project $project,
         Pole $pole
     ): JsonResponse {
-        abort_unless($pole->project_id === $project->id, 404);
+        abort_unless((int) $pole->project_id === (int) $project->id, 404);
+
+        $this->authorize('updateProgress', $pole);
 
         $validated = $request->validate([
             'work_item_id' => ['required', 'integer', 'exists:work_items,id'],
@@ -46,26 +51,39 @@ class ProgressController extends Controller
             ->where('project_id', $project->id)
             ->firstOrFail();
 
-        $progress = PoleWorkProgress::updateOrCreate(
-            [
+        $userId = $request->user()?->id;
+
+        [$progress] = DB::transaction(function () use (
+            $pole,
+            $workItem,
+            $validated,
+            $userId
+        ) {
+            $progress = PoleWorkProgress::updateOrCreate(
+                [
+                    'pole_id' => $pole->id,
+                    'work_item_id' => $workItem->id,
+                ],
+                [
+                    'progress_percent' => $validated['progress_percent'],
+                    'started_at' => $validated['started_at'] ?? null,
+                    'completed_at' => $validated['completed_at'] ?? null,
+                    'notes' => $validated['notes'] ?? null,
+                    'updated_by' => $userId,
+                ]
+            );
+
+            PoleProgressHistory::create([
                 'pole_id' => $pole->id,
                 'work_item_id' => $workItem->id,
-            ],
-            [
                 'progress_percent' => $validated['progress_percent'],
-                'started_at' => $validated['started_at'] ?? null,
-                'completed_at' => $validated['completed_at'] ?? null,
+                'recorded_at' => now(),
+                'recorded_by' => $userId,
                 'notes' => $validated['notes'] ?? null,
-            ]
-        );
+            ]);
 
-        PoleProgressHistory::create([
-            'pole_id' => $pole->id,
-            'work_item_id' => $workItem->id,
-            'progress_percent' => $validated['progress_percent'],
-            'recorded_at' => now(),
-            'notes' => $validated['notes'] ?? null,
-        ]);
+            return [$progress];
+        });
 
         return response()->json([
             'message' => 'Progress berhasil disimpan.',

@@ -14,7 +14,7 @@ import {
 
 import AppShell from '../../components/layout/AppShell'
 import { ActionButton, PageHeader } from '../../components/layout/PageHeader'
-import { useProject } from '../../components/layout/ProjectProvider'
+import { useProject } from '../../lib/project-context'
 import { Badge } from '../../components/ui/badge'
 import {
   Card,
