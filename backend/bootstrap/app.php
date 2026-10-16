@@ -19,6 +19,14 @@ return Application::configure(basePath: dirname(__DIR__))
             'active' => EnsureUserIsActive::class,
             'role' => EnsureUserHasRole::class,
         ]);
+
+        /*
+         * Backend ini API-only dan tidak punya route `login`. Tanpa ini,
+         * `Authenticate` mencoba redirect ke route `login` lalu melempar
+         * RouteNotFoundException (500). Mengembalikan null membuatnya
+         * melempar AuthenticationException yang dirender jadi JSON 401.
+         */
+        $middleware->redirectGuestsTo(fn () => null);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(
