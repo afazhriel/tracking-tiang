@@ -30,7 +30,34 @@ class UserFactory extends Factory
             'email_verified_at' => now(),
             'password' => static::$password ??= Hash::make('password'),
             'remember_token' => Str::random(10),
+            'role' => User::ROLE_PIC,
+            'status' => User::STATUS_ACTIVE,
         ];
+    }
+
+    public function admin(): static
+    {
+        return $this->state(fn () => ['role' => User::ROLE_ADMIN]);
+    }
+
+    public function supervisor(): static
+    {
+        return $this->state(fn () => ['role' => User::ROLE_SUPERVISOR]);
+    }
+
+    public function pic(): static
+    {
+        return $this->state(fn () => ['role' => User::ROLE_PIC]);
+    }
+
+    public function pending(): static
+    {
+        return $this->state(fn () => ['status' => User::STATUS_PENDING]);
+    }
+
+    public function suspended(): static
+    {
+        return $this->state(fn () => ['status' => User::STATUS_SUSPENDED]);
     }
 
     /**

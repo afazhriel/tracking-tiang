@@ -7,6 +7,8 @@ use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
+use Illuminate\Validation\Rules\Password;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -29,6 +31,11 @@ class AuthController extends Controller
 {
     public function login(Request $request): JsonResponse
     {
+        /* Email disimpan lowercase (lihat `register`/invitation), jadi
+           input di-lowercase dulu supaya "Budi@x.com" tetap menemukan
+           akun yang tersimpan sebagai "budi@x.com". */
+        $request->merge(['email' => Str::lower((string) $request->input('email'))]);
+
         $credentials = $request->validate([
             'email' => ['required', 'string', 'email'],
             'password' => ['required', 'string'],
@@ -48,13 +55,18 @@ class AuthController extends Controller
             ]);
         }
 
-        /* User lama dibuat sebelum kolom `status` ada, jadi
-           `isActive()` yang dipakai: anything selain 'suspended'
-           dianggap aktif. Ini mencegah user existing terkunci oleh
-           migration baru. */
-        if (! $user->isActive()) {
+        /* Status dicek SETELAH password benar, supaya pesan "menunggu
+           persetujuan" / "dinonaktifkan" tidak bocor ke orang yang
+           belum membuktikan kepemilikan akun. */
+        if ($user->isSuspended()) {
             throw ValidationException::withMessages([
                 'email' => ['Akun ini sedang dinonaktifkan. Hubungi admin.'],
+            ]);
+        }
+
+        if ($user->isPending()) {
+            throw ValidationException::withMessages([
+                'email' => ['Akun Anda masih menunggu persetujuan admin.'],
             ]);
         }
 
@@ -68,6 +80,43 @@ class AuthController extends Controller
             'token_type' => 'Bearer',
             'user' => $user->toAuthPayload(),
         ]);
+    }
+
+    /**
+     * Pendaftaran mandiri (self sign-up).
+     *
+     * Berbeda dari `POST /api/invitations/{token}/accept` — di sana
+     * admin yang mengundang dan akun langsung aktif — pendaftar
+     * sendiri TIDAK langsung mendapat akses:
+     *
+     *   - role  : `User::DEFAULT_ROLE` (pic), paling rendah.
+     *   - status: `pending`, menunggu persetujuan admin.
+     *
+     * Tidak ada token yang dikembalikan: akun `pending` belum bisa
+     * login, jadi mengirim token di sini hanya menyesatkan.
+     */
+    public function register(Request $request): JsonResponse
+    {
+        $request->merge(['email' => Str::lower((string) $request->input('email'))]);
+
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'email' => ['required', 'string', 'email', 'max:255', 'unique:users,email'],
+            'password' => ['required', 'confirmed', Password::min(8)],
+        ]);
+
+        $user = User::create([
+            'name' => $validated['name'],
+            'email' => $validated['email'],
+            'password' => $validated['password'],
+            'role' => User::DEFAULT_ROLE,
+            'status' => User::STATUS_PENDING,
+        ]);
+
+        return response()->json([
+            'message' => 'Pendaftaran berhasil. Akun Anda menunggu persetujuan admin sebelum bisa masuk.',
+            'user' => $user->toAuthPayload(),
+        ], 201);
     }
 
     /**

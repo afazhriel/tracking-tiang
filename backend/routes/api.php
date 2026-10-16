@@ -24,6 +24,13 @@ use Illuminate\Support\Facades\Route;
 Route::post('/login', [AuthController::class, 'login']);
 
 /*
+ * Pendaftaran mandiri (self sign-up).
+ * Akun dibuat dengan status `pending` + role default (pic);
+ * admin menyetujui lewat `PATCH /api/users/{user}/status`.
+ */
+Route::post('/register', [AuthController::class, 'register']);
+
+/*
  * Invitation preview/accept.
  * Tidak membutuhkan login.
  */

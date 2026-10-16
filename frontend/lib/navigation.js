@@ -25,9 +25,9 @@ export const NAV_ITEMS = [
  * Navigasi sekunder: notifikasi, tim, dan profil.
  *
  * Dipisah dari `NAV_ITEMS` karena ketiganya bukan "monitoring
- * harian" — dan `/tim` baru relevan kalau backend someday
- * menyediakan endpoint user/team. Tetap ditampilkan supaya
- * kebutuhan backend terlihat jelas, bukan disembunyikan.
+ * harian". `/tim` kini terhubung ke endpoint user/team asli:
+ * admin melihat manajemen penuh, peran lain melihat referensi
+ * peran sesuai hak aksesnya.
  */
 export const NAV_SECONDARY = [
   { label: 'Notifikasi', href: '/notifikasi', icon: Bell },

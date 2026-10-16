@@ -64,10 +64,16 @@ return new class extends Migration
             $table->index(['pole_id', 'status']);
         });
 
-        DB::statement(
-            'ALTER TABLE pole_assignments ADD CONSTRAINT pole_assignments_target_check '
-            .'CHECK (user_id IS NOT NULL OR team_id IS NOT NULL)'
-        );
+        /* CHECK constraint ditambahkan lewat ALTER TABLE — didukung
+           PostgreSQL/MySQL, tapi TIDAK oleh SQLite (dipakai test suite).
+           Jadi hanya dijalankan pada driver yang mendukungnya; di
+           SQLite aturan ini tetap dijaga layer validasi controller. */
+        if (in_array(DB::connection()->getDriverName(), ['pgsql', 'mysql', 'mariadb'], true)) {
+            DB::statement(
+                'ALTER TABLE pole_assignments ADD CONSTRAINT pole_assignments_target_check '
+                .'CHECK (user_id IS NOT NULL OR team_id IS NOT NULL)'
+            );
+        }
     }
 
     public function down(): void

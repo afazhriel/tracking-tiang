@@ -348,6 +348,86 @@ export const api = {
   getMe: (options) => apiRequest('/api/me', options),
   logout: (options) =>
     apiRequest('/api/logout', { ...options, method: 'POST' }),
+  register: (payload, options) =>
+    apiRequest('/api/register', {
+      ...options,
+      method: 'POST',
+      body: payload,
+      auth: false,
+    }),
+
+  /* --- User management (admin-only di backend) ---
+     `GET /api/users` membalas `{ data: [...] }`. `PUT /api/users/{id}`
+     hanya menerima `name` + `role` (email sengaja tidak bisa diubah).
+     Status diubah lewat `PATCH /api/users/{id}/status`. */
+  listUsers: ({ role, status, search, ...options } = {}) =>
+    apiRequest('/api/users', { ...options, query: { role, status, search } }),
+  getUser: (userId, options) =>
+    apiRequest(`/api/users/${userId}`, options),
+  updateUser: (userId, payload, options) =>
+    apiRequest(`/api/users/${userId}`, {
+      ...options,
+      method: 'PUT',
+      body: payload,
+    }),
+  updateUserStatus: (userId, status, options) =>
+    apiRequest(`/api/users/${userId}/status`, {
+      ...options,
+      method: 'PATCH',
+      body: { status },
+    }),
+
+  /* --- Team management ---
+     `GET /api/teams` membalas array polos (bukan `{ data }`). */
+  listTeams: ({ projectId, status, ...options } = {}) =>
+    apiRequest('/api/teams', {
+      ...options,
+      query: { project_id: projectId, status },
+    }),
+  getTeam: (teamId, options) => apiRequest(`/api/teams/${teamId}`, options),
+  createTeam: (payload, options) =>
+    apiRequest('/api/teams', { ...options, method: 'POST', body: payload }),
+  updateTeam: (teamId, payload, options) =>
+    apiRequest(`/api/teams/${teamId}`, {
+      ...options,
+      method: 'PUT',
+      body: payload,
+    }),
+  addTeamMember: (teamId, userId, options) =>
+    apiRequest(`/api/teams/${teamId}/members`, {
+      ...options,
+      method: 'POST',
+      body: { user_id: userId },
+    }),
+  removeTeamMember: (teamId, userId, options) =>
+    apiRequest(`/api/teams/${teamId}/members/${userId}`, {
+      ...options,
+      method: 'DELETE',
+    }),
+
+  /* --- Invitation management (admin-only) ---
+     `GET /api/invitations` membalas `{ data: [...] }`. */
+  listInvitations: (options) => apiRequest('/api/invitations', options),
+  createInvitation: (payload, options) =>
+    apiRequest('/api/invitations', {
+      ...options,
+      method: 'POST',
+      body: payload,
+    }),
+  revokeInvitation: (invitationId, options) =>
+    apiRequest(`/api/invitations/${invitationId}`, {
+      ...options,
+      method: 'DELETE',
+    }),
+  getInvitation: (token, options) =>
+    apiRequest(`/api/invitations/${token}`, { ...options, auth: false }),
+  acceptInvitation: (token, payload, options) =>
+    apiRequest(`/api/invitations/${token}/accept`, {
+      ...options,
+      method: 'POST',
+      body: payload,
+      auth: false,
+    }),
 
   /* --- Belum ada di `routes/api.php` ---
      Kandidat endpoint, bukan kontrak. `apiRequestFirstAvailable`
@@ -517,6 +597,33 @@ export function normalizeProject(project) {
  * tidak ada di response tidak ditebak — `role` yang tidak dikirim
  * backend akan tampil sebagai "belum ditentukan", bukan "Admin".
  */
+export const USER_ROLES = [
+  { value: 'admin', label: 'Admin', tone: 'brand' },
+  { value: 'supervisor', label: 'Supervisor', tone: 'lagoon' },
+  { value: 'pic', label: 'PIC Lapangan', tone: 'sage' },
+]
+
+export const USER_STATUSES = [
+  { value: 'active', label: 'Aktif', tone: 'sage' },
+  { value: 'pending', label: 'Menunggu', tone: 'ochre' },
+  { value: 'suspended', label: 'Nonaktif', tone: 'clay' },
+]
+
+export function userStatusLabel(status) {
+  return USER_STATUSES.find((item) => item.value === status)?.label ?? 'Tidak diketahui'
+}
+
+export function userStatusTone(status) {
+  return USER_STATUSES.find((item) => item.value === status)?.tone ?? 'sand'
+}
+
+export function userRoleLabel(role) {
+  return (
+    USER_ROLES.find((item) => item.value === role)?.label ??
+    (role ? String(role) : 'Tanpa role')
+  )
+}
+
 export function normalizeUser(user) {
   const name = user?.name ?? user?.nama ?? null
 
@@ -531,10 +638,60 @@ export function normalizeUser(user) {
     name,
     email: user?.email ?? null,
     role: user?.role ?? user?.role_name ?? null,
-    roleLabel: user?.role_label ?? user?.role_name ?? user?.role ?? null,
+    roleLabel:
+      user?.role_label ??
+      userRoleLabel(user?.role ?? user?.role_name ?? null),
+    status: user?.status ?? null,
+    statusLabel: userStatusLabel(user?.status ?? null),
     phone: user?.phone ?? user?.phone_number ?? user?.no_hp ?? null,
     initials: user?.initials ?? derivedInitial,
+    teams: Array.isArray(user?.teams) ? user.teams.map(normalizeTeam) : [],
+    projects: Array.isArray(user?.projects)
+      ? user.projects.map((project) => ({
+          id: project?.id ?? null,
+          name: project?.name ?? '—',
+        }))
+      : [],
     raw: user ?? null,
+  }
+}
+
+export function normalizeTeam(team) {
+  const users = Array.isArray(team?.users) ? team.users : []
+
+  return {
+    id: team?.id ?? null,
+    name: team?.name ?? '—',
+    code: team?.code ?? null,
+    projectId: team?.project_id ?? null,
+    project: team?.project
+      ? { id: team.project.id ?? null, name: team.project.name ?? '—' }
+      : null,
+    status: team?.status ?? null,
+    usersCount: team?.users_count ?? (users.length || null),
+    users: users.map(normalizeUser),
+    raw: team ?? null,
+  }
+}
+
+export function normalizeInvitation(invitation) {
+  return {
+    id: invitation?.id ?? null,
+    email: invitation?.email ?? null,
+    name: invitation?.name ?? null,
+    role: invitation?.role ?? null,
+    roleLabel: invitation?.role_label ?? userRoleLabel(invitation?.role),
+    status: invitation?.status ?? null,
+    team: invitation?.team
+      ? { id: invitation.team.id ?? null, name: invitation.team.name ?? '—' }
+      : null,
+    project: invitation?.project
+      ? { id: invitation.project.id ?? null, name: invitation.project.name ?? '—' }
+      : null,
+    expiresAt: invitation?.expires_at ?? null,
+    acceptedAt: invitation?.accepted_at ?? null,
+    createdAt: invitation?.created_at ?? null,
+    raw: invitation ?? null,
   }
 }
 

@@ -20,7 +20,15 @@ class User extends Authenticatable
     public const ROLE_SUPERVISOR = 'supervisor';
     public const ROLE_PIC = 'pic';
 
+    /**
+     * Role untuk user yang mendaftar sendiri lewat `POST /api/register`.
+     * Paling rendah (PIC) supaya pendaftaran mandiri tidak langsung
+     * memberi akses kelola; admin menaikkan role bila perlu.
+     */
+    public const DEFAULT_ROLE = self::ROLE_PIC;
+
     public const STATUS_ACTIVE = 'active';
+    public const STATUS_PENDING = 'pending';
     public const STATUS_SUSPENDED = 'suspended';
 
     /**
@@ -89,7 +97,7 @@ class User extends Authenticatable
 
     public static function statuses(): array
     {
-        return [self::STATUS_ACTIVE, self::STATUS_SUSPENDED];
+        return [self::STATUS_ACTIVE, self::STATUS_PENDING, self::STATUS_SUSPENDED];
     }
 
     public static function roleLabel(?string $role): ?string
@@ -102,9 +110,25 @@ class User extends Authenticatable
         };
     }
 
+    public function isPending(): bool
+    {
+        return $this->status === self::STATUS_PENDING;
+    }
+
+    public function isSuspended(): bool
+    {
+        return $this->status === self::STATUS_SUSPENDED;
+    }
+
+    /**
+     * `status` NULL (baris lama sebelum migration role/status ada)
+     * tetap dianggap aktif supaya user existing tidak terkunci.
+     * Hanya `pending` (menunggu persetujuan admin) dan `suspended`
+     * yang bukan-aktif.
+     */
     public function isActive(): bool
     {
-        return $this->status !== self::STATUS_SUSPENDED;
+        return ! $this->isSuspended() && ! $this->isPending();
     }
 
     /*

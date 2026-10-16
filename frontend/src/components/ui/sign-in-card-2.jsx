@@ -209,6 +209,16 @@ export function Component() {
               )}
             </button>
           </form>
+
+          <p className="mt-5 text-center text-xs text-neutral-500">
+            Belum punya akun?{' '}
+            <Link
+              href="/register"
+              className="font-medium text-brand-700 underline-offset-4 hover:underline"
+            >
+              Daftar
+            </Link>
+          </p>
         </div>
 
         <p className="mt-5 text-center text-xs text-espresso-300/70">
