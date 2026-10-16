@@ -43,6 +43,7 @@ import {
 } from "../../../components/ui/states";
 import {
   api,
+  normalizePhoto,
   normalizePole,
   normalizeWorkProgress,
   unwrapList,
@@ -139,6 +140,15 @@ function TiangDetailContent() {
     progressPayload?.pole_progress === undefined
       ? null
       : Number(progressPayload.pole_progress);
+
+  /* Dokumentasi foto progress tiang (dilampirkan saat catat progress). */
+  const photos = useMemo(
+    () =>
+      Array.isArray(progressPayload?.photos)
+        ? progressPayload.photos.map(normalizePhoto)
+        : [],
+    [progressPayload],
+  );
 
   /* Gabungkan item pekerjaan yang dikonfigurasi pada project dengan
      progress tersimpan. Tujuannya: setiap tahap pekerjaan tetap
@@ -514,6 +524,28 @@ function TiangDetailContent() {
                               {activity.notes}
                             </p>
                           )}
+                          {Array.isArray(activity.photos) &&
+                            activity.photos.length > 0 && (
+                              <div className="mt-2 flex flex-wrap gap-2">
+                                {activity.photos.map((photo, index) => (
+                                  <a
+                                    key={photo.id ?? `${photo.url}-${index}`}
+                                    href={photo.url}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    title={photo.original_name ?? "Buka foto"}
+                                    className="block overflow-hidden rounded-lg border border-neutral-200"
+                                  >
+                                    <img
+                                      src={photo.url}
+                                      alt={photo.original_name ?? `Dokumentasi ${index + 1}`}
+                                      loading="lazy"
+                                      className="h-14 w-14 object-cover"
+                                    />
+                                  </a>
+                                ))}
+                              </div>
+                            )}
                           <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-neutral-400">
                             {activity.recorded_at && (
                               <span>{formatDateTime(activity.recorded_at)}</span>
@@ -597,13 +629,36 @@ function TiangDetailContent() {
                 </CardHeader>
 
                 <CardContent>
-                  <EmptyState
-                    icon={Camera}
-                    compact
-                    title="Belum ada dokumentasi"
-                    description="Backend belum menyediakan endpoint foto/dokumentasi per tiang."
-                    hint="Ready for API integration"
-                  />
+                  {progressLoading ? (
+                    <SkeletonRows rows={2} />
+                  ) : photos.length ? (
+                    <div className="grid grid-cols-2 gap-2">
+                      {photos.map((photo, index) => (
+                        <a
+                          key={photo.id ?? `${photo.url}-${index}`}
+                          href={photo.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          title={photo.originalName ?? "Buka foto"}
+                          className="group relative block overflow-hidden rounded-xl border border-neutral-200 bg-canvas"
+                        >
+                          <img
+                            src={photo.url}
+                            alt={photo.originalName ?? `Dokumentasi ${index + 1}`}
+                            loading="lazy"
+                            className="h-28 w-full object-cover transition-transform duration-200 group-hover:scale-105"
+                          />
+                        </a>
+                      ))}
+                    </div>
+                  ) : (
+                    <EmptyState
+                      icon={Camera}
+                      compact
+                      title="Belum ada dokumentasi"
+                      description="Foto akan muncul di sini setelah progres dicatat dengan lampiran foto."
+                    />
+                  )}
                 </CardContent>
               </Card>
             </div>

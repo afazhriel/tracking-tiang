@@ -1,7 +1,7 @@
 'use client'
 
-import { useState } from 'react'
-import { CircleAlert, Save } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { CircleAlert, ImagePlus, Save, X } from 'lucide-react'
 
 import { api } from '../../lib/api'
 import { clampPercent, formatPercent, todayIso } from '../../lib/format'
@@ -20,6 +20,11 @@ import {
 function toDateInput(value) {
   return value ? String(value).slice(0, 10) : ''
 }
+
+/* Foto dokumentasi progress — dikirim sebagai multipart bersama
+   payload progress (lihat `api.savePoleProgress`). */
+const MAX_PHOTOS = 5
+const MAX_PHOTO_BYTES = 5 * 1024 * 1024
 
 /**
  * Form update progress satu item pekerjaan pada satu tiang.
@@ -133,17 +138,74 @@ function ProgressForm({
     toDateInput(existing?.completedAt)
   )
   const [notes, setNotes] = useState(existing?.notes ?? '')
+  const [photos, setPhotos] = useState([])
+  const [photoError, setPhotoError] = useState(null)
   const [fieldErrors, setFieldErrors] = useState(null)
   const [formError, setFormError] = useState(null)
   const [saving, setSaving] = useState(false)
 
   const numericPercent = clampPercent(percent)
 
+  const photoPreviews = useMemo(
+    () => photos.map((file) => ({ file, url: URL.createObjectURL(file) })),
+    [photos]
+  )
+
+  /* Object URL harus dilepas supaya tidak menahan memori blob. */
+  useEffect(
+    () => () => {
+      photoPreviews.forEach((preview) => URL.revokeObjectURL(preview.url))
+    },
+    [photoPreviews]
+  )
+
+  function handlePhotoSelect(event) {
+    const files = Array.from(event.target.files ?? [])
+
+    /* Reset value supaya memilih file yang sama dua kali tetap terpicu. */
+    event.target.value = ''
+
+    if (!files.length) return
+
+    setPhotoError(null)
+
+    const next = [...photos]
+    let error = null
+
+    for (const file of files) {
+      if (next.length >= MAX_PHOTOS) {
+        error = `Maksimal ${MAX_PHOTOS} foto per pencatatan.`
+        break
+      }
+
+      if (!file.type.startsWith('image/')) {
+        error = 'Hanya berkas gambar (JPG, PNG, WEBP) yang dapat diunggah.'
+        continue
+      }
+
+      if (file.size > MAX_PHOTO_BYTES) {
+        error = 'Ukuran tiap foto maksimal 5 MB.'
+        continue
+      }
+
+      next.push(file)
+    }
+
+    setPhotos(next)
+    setPhotoError(error)
+  }
+
+  function removePhoto(index) {
+    setPhotos((previous) => previous.filter((_, i) => i !== index))
+    setPhotoError(null)
+  }
+
   const dirty =
     String(existing?.progress ?? 0) !== String(numericPercent) ||
     notes !== (existing?.notes ?? '') ||
     toDateInput(existing?.startedAt) !== startedAt ||
-    toDateInput(existing?.completedAt) !== completedAt
+    toDateInput(existing?.completedAt) !== completedAt ||
+    photos.length > 0
 
   function clearFieldError(field) {
     setFieldErrors((previous) => {
@@ -181,6 +243,7 @@ function ProgressForm({
     if (startedAt) payload.started_at = startedAt
     if (completedAt) payload.completed_at = completedAt
     if (notes.trim()) payload.notes = notes.trim()
+    if (photos.length) payload.photos = photos
 
     try {
       const response = await api.savePoleProgress(projectId, poleId, payload)
@@ -340,6 +403,68 @@ function ProgressForm({
           rows={3}
           placeholder="Contoh: pondasi selesai, menunggu approval engineer."
         />
+      </FormField>
+
+      <FormField
+        label="Foto Dokumentasi"
+        htmlFor="progress-photos"
+        error={photoError ?? fieldErrors?.photos?.[0]}
+        hint={`Opsional. Maksimal ${MAX_PHOTOS} foto (JPG, PNG, WEBP), maks 5 MB per foto. Di HP bisa langsung dari kamera.`}
+      >
+        <div className="space-y-3">
+          <input
+            id="progress-photos"
+            name="photos"
+            type="file"
+            accept="image/*"
+            multiple
+            capture="environment"
+            onChange={handlePhotoSelect}
+            disabled={photos.length >= MAX_PHOTOS}
+            className="sr-only"
+          />
+
+          <label
+            htmlFor="progress-photos"
+            className={cn(
+              'flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed px-4 py-3 text-sm font-medium transition-colors',
+              photos.length >= MAX_PHOTOS
+                ? 'cursor-not-allowed border-neutral-200 text-neutral-400'
+                : 'border-neutral-300 text-neutral-600 hover:border-brand-400 hover:bg-canvas'
+            )}
+          >
+            <ImagePlus className="h-4 w-4" />
+            {photos.length >= MAX_PHOTOS
+              ? `Batas ${MAX_PHOTOS} foto tercapai`
+              : 'Ambil foto / pilih dari galeri'}
+          </label>
+
+          {photoPreviews.length > 0 && (
+            <ul className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+              {photoPreviews.map((preview, index) => (
+                <li
+                  key={preview.url}
+                  className="group relative overflow-hidden rounded-xl border border-neutral-200 bg-canvas"
+                >
+                  <img
+                    src={preview.url}
+                    alt={`Foto ${index + 1}`}
+                    className="h-20 w-full object-cover"
+                  />
+
+                  <button
+                    type="button"
+                    onClick={() => removePhoto(index)}
+                    aria-label={`Hapus foto ${index + 1}`}
+                    className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-neutral-900/80 text-white transition-colors hover:bg-neutral-900"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       </FormField>
 
       <div

@@ -161,6 +161,12 @@ class User extends Authenticatable
             ->withTimestamps();
     }
 
+    public function provinces(): BelongsToMany
+    {
+        return $this->belongsToMany(Province::class, 'province_user')
+            ->withTimestamps();
+    }
+
     public function poleAssignments(): HasMany
     {
         return $this->hasMany(PoleAssignment::class);
@@ -241,11 +247,54 @@ class User extends Authenticatable
     }
 
     /**
+     * ID provinsi yang boleh dikelola user ini.
+     *
+     * Admin -> `null` (tidak dibatasi; seluruh provinsi).
+     * Selain admin -> daftar province_id dari `province_user`.
+     */
+    public function managedProvinceIds(): ?array
+    {
+        if ($this->isAdmin()) {
+            return null;
+        }
+
+        return DB::table('province_user')
+            ->where('user_id', $this->getKey())
+            ->pluck('province_id')
+            ->all();
+    }
+
+    /**
+     * Boleh menambah tiang / mencatat progress di provinsi ini?
+     *
+     * Admin selalu boleh. Selain admin, provinsi wajib diisi dan
+     * harus termasuk penugasan mereka.
+     */
+    public function canManageProvince(?string $provinceId): bool
+    {
+        if ($this->isAdmin()) {
+            return true;
+        }
+
+        if ($provinceId === null || $provinceId === '') {
+            return false;
+        }
+
+        return in_array($provinceId, $this->managedProvinceIds(), true);
+    }
+
+    /**
      * Bentuk user yang dikirim ke frontend.
      *
      * `role` dan `role_label` sengaja ditambahkan di sini: frontend
      * (`normalizeUser`) sudah membaca kedua field itu, dan menambah
      * key baru tidak mengubah bentuk response yang sudah dipakai.
+     *
+     * `provinces` dipakai frontend untuk memfilter pilihan wilayah
+     * saat menambah tiang (non-admin hanya boleh provinsi yang
+     * ditugaskan). Panggilan yang mengembalikan banyak user
+     * (mis. UserController@index) WAJIB eager-load `provinces`
+     * agar tidak N+1.
      */
     public function toAuthPayload(): array
     {
@@ -256,6 +305,12 @@ class User extends Authenticatable
             'role' => $this->role,
             'role_label' => self::roleLabel($this->role),
             'status' => $this->status,
+            'provinces' => $this->provinces
+                ->map(fn (Province $province) => [
+                    'id' => $province->id,
+                    'name' => $province->name,
+                ])
+                ->values(),
         ];
     }
 }

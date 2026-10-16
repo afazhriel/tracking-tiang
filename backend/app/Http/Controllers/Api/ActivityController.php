@@ -35,10 +35,12 @@ class ActivityController extends Controller
         $limit = $validated['limit'] ?? 100;
 
         $activities = PoleProgressHistory::with([
-                'pole:id,pole_code,address,region_id',
+                'pole:id,pole_code,address,region_id,province_id',
                 'pole.region:id,name,code',
+                'pole.province:id,name',
                 'workItem:id,name,sequence',
                 'recordedBy:id,name,email',
+                'photos',
             ])
             ->whereHas('pole', fn ($q) => $q->where('project_id', $project->id))
             ->when($validated['pole_id'] ?? null, fn ($q, $poleId) => $q->where('pole_id', $poleId))
@@ -77,7 +79,16 @@ class ActivityController extends Controller
                         'id'   => $history->pole->region->id,
                         'name' => $history->pole->region->name,
                     ] : null,
+                    'province'  => $history->pole->province ? [
+                        'id'   => $history->pole->province->id,
+                        'name' => $history->pole->province->name,
+                    ] : null,
                 ] : null,
+
+                /* Foto dokumentasi */
+                'photos' => $history->photos
+                    ->map(fn ($photo) => $photo->toPayload())
+                    ->values(),
 
                 /* Relasi item pekerjaan */
                 'work_item_name' => $history->workItem?->name,

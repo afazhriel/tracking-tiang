@@ -40,6 +40,16 @@ class Pole extends Model
         return $this->belongsTo(Region::class);
     }
 
+    public function province(): BelongsTo
+    {
+        return $this->belongsTo(Province::class, 'province_id');
+    }
+
+    public function photos(): HasMany
+    {
+        return $this->hasMany(ProgressPhoto::class);
+    }
+
     public function workProgress(): HasMany
     {
         return $this->hasMany(PoleWorkProgress::class);

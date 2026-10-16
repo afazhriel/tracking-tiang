@@ -29,7 +29,11 @@ class UserController extends Controller
         ]);
 
         $users = User::query()
-            ->with(['teams:id,name,code', 'projectMemberships.project:id,name'])
+            ->with([
+                'teams:id,name,code',
+                'projectMemberships.project:id,name',
+                'provinces:id,name',
+            ])
             ->when($validated['role'] ?? null, fn ($q, $role) => $q->where('role', $role))
             ->when($validated['status'] ?? null, fn ($q, $status) => $q->where('status', $status))
             ->when($validated['search'] ?? null, fn ($q, $search) => $q
@@ -121,6 +125,30 @@ class UserController extends Controller
                 ? 'Akun dinonaktifkan.'
                 : 'Akun diaktifkan kembali.',
             'data' => $user->fresh()->toAuthPayload(),
+        ]);
+    }
+
+    /**
+     * Tetapkan provinsi yang boleh dikelola user.
+     *
+     * Admin tidak perlu penugasan (bisa semua provinsi); endpoint ini
+     * dipakai untuk PIC/supervisor. `sync` mengganti seluruh daftar,
+     * jadi mengirim `[]` mencabut semua penugasan.
+     */
+    public function updateProvinces(Request $request, User $user): JsonResponse
+    {
+        $this->authorize('create', User::class);
+
+        $validated = $request->validate([
+            'province_ids' => ['present', 'array'],
+            'province_ids.*' => ['string', 'exists:provinces,id'],
+        ]);
+
+        $user->provinces()->sync($validated['province_ids']);
+
+        return response()->json([
+            'message' => 'Wilayah user berhasil diperbarui.',
+            'data' => $user->fresh(['provinces'])->toAuthPayload(),
         ]);
     }
 

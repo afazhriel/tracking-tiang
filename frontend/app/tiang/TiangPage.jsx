@@ -234,10 +234,18 @@ function TiangContent() {
   const currentUser = useCurrentUser()
   const isAdmin = currentUser?.role === 'admin'
 
+  /* Admin bebas; supervisor/PIC hanya boleh menambah tiang di
+     provinsi yang ditugaskan. `allowedProvinces === null` = tanpa
+     batas (admin). */
+  const assignedProvinces = currentUser?.provinces ?? []
+  const canManagePoles = isAdmin || assignedProvinces.length > 0
+  const allowedProvinces = isAdmin ? null : assignedProvinces
+
   const [page, setPage] = useState(1)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
   const [regionFilter, setRegionFilter] = useState('all')
+  const [provinceFilter, setProvinceFilter] = useState('all')
   const [progressFilter, setProgressFilter] = useState('all')
   const [selectedId, setSelectedId] = useState(null)
 
@@ -246,17 +254,21 @@ function TiangContent() {
 
   /* `per_page` mengikuti default backend (100). Mengirimnya eksplisit
      membuat batas ini terlihat di satu tempat, dan mencegah server
-     diam-diam mengembalikan seluruh 1.500 titik sekaligus. */
+     diam-diam mengembalikan seluruh 1.500 titik sekaligus.
+
+     `provinceId` difilter di server supaya penjelajahan per provinsi
+     tetap benar lintas halaman (bukan hanya pada halaman yang tampil). */
   const polesLoader = useCallback(
     async () =>
       projectId
         ? await api.listPoles(projectId, {
             page,
             perPage: PER_PAGE,
+            provinceId: provinceFilter === 'all' ? undefined : provinceFilter,
             cache: 'no-store',
           })
         : null,
-    [projectId, page]
+    [projectId, page, provinceFilter]
   )
 
   const {
@@ -272,6 +284,46 @@ function TiangContent() {
   )
 
   const meta = polesPayload?.meta ?? null
+
+  /* Ringkasan per provinsi (jumlah tiang + rata-rata progress) dipakai
+     untuk filter dan panel "Kelola per Provinsi". */
+  const summaryLoader = useCallback(
+    async () =>
+      projectId ? await api.getPoleSummary(projectId, { cache: 'no-store' }) : null,
+    [projectId]
+  )
+
+  const { data: summaryPayload, reload: reloadSummary } = useResource(
+    summaryLoader,
+    [projectId],
+    { enabled: Boolean(projectId) }
+  )
+
+  const provinceSummary = useMemo(
+    () => unwrapList(summaryPayload),
+    [summaryPayload]
+  )
+
+  const provinceNameById = useMemo(() => {
+    const map = new Map()
+
+    for (const row of provinceSummary) {
+      if (row?.province_id) map.set(String(row.province_id), row.province_name ?? row.province_id)
+    }
+
+    return map
+  }, [provinceSummary])
+
+  const provinceOptions = useMemo(
+    () =>
+      provinceSummary
+        .filter((row) => row?.province_id)
+        .map((row) => ({
+          value: String(row.province_id),
+          label: `${row.province_name ?? row.province_id} (${formatNumber(row.pole_count ?? 0)})`,
+        })),
+    [provinceSummary]
+  )
 
   /* Filter wilayah dibangun dari project detail, bukan dari tiang yang
      kebetulan ada di halaman ini â€” supaya pilihan filter tidak berubah
@@ -358,6 +410,43 @@ function TiangContent() {
     })
   }, [poles, progressFilter, regionFilter, search, statusFilter, weightedProgress])
 
+  /* Dikelompokkan per provinsi agar PIC/supervisor mudah menelusuri
+     banyak tiang. Saat satu provinsi difilter, tidak ada header grup. */
+  const poleGroups = useMemo(() => {
+    if (provinceFilter !== 'all') {
+      return [
+        {
+          key: provinceFilter,
+          name: provinceNameById.get(String(provinceFilter)) ?? 'Provinsi',
+          poles: filteredPoles,
+        },
+      ]
+    }
+
+    const groups = new Map()
+
+    for (const pole of filteredPoles) {
+      const key = pole.provinceId ? String(pole.provinceId) : '__none__'
+
+      if (!groups.has(key)) {
+        groups.set(key, {
+          key,
+          name:
+            provinceNameById.get(key) ??
+            pole.provinceName ??
+            'Tanpa Provinsi',
+          poles: [],
+        })
+      }
+
+      groups.get(key).poles.push(pole)
+    }
+
+    return [...groups.values()].sort((a, b) => b.poles.length - a.poles.length)
+  }, [filteredPoles, provinceFilter, provinceNameById])
+
+  const showGroupHeaders = provinceFilter === 'all' && poleGroups.length > 1
+
   const counts = useMemo(() => {
     const result = { total: 0, active: 0, done: 0, issue: 0 }
 
@@ -393,20 +482,20 @@ function TiangContent() {
         subtitle="Pantau lokasi, identitas, dan progres setiap titik tiang."
 actions={
           <>
-            {isAdmin && (
-              <>
-                <CreatePoleButton
-                  onClick={() => setCreateOpen(true)}
-                  disabled={polesLoading || !projectId}
-                />
+            {canManagePoles && (
+              <CreatePoleButton
+                onClick={() => setCreateOpen(true)}
+                disabled={polesLoading || !projectId}
+              />
+            )}
 
-                <ActionButton
-                  onClick={() => setImportOpen(true)}
-                  icon={Upload}
-                >
-                  Import CSV
-                </ActionButton>
-              </>
+            {isAdmin && (
+              <ActionButton
+                onClick={() => setImportOpen(true)}
+                icon={Upload}
+              >
+                Import CSV
+              </ActionButton>
             )}
 
             <ActionButton
@@ -418,6 +507,7 @@ actions={
             <ActionButton
               onClick={() => {
                 reloadPoles()
+                reloadSummary()
 
                 if (effectiveSelectedId !== null) loadOne(effectiveSelectedId).catch(() => {})
               }}
@@ -462,6 +552,86 @@ actions={
         />
       </StatCardGrid>
 
+      {provinceSummary.length > 0 && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-3">
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-neutral-100">
+                <Layers className="h-4 w-4" />
+              </div>
+
+              <div>
+                <CardTitle>Kelola per Provinsi</CardTitle>
+                <p className="text-xs text-neutral-500">
+                  Pilih provinsi untuk memfokuskan daftar tiang.
+                </p>
+              </div>
+            </div>
+
+            {provinceFilter !== 'all' && (
+              <button
+                type="button"
+                onClick={() => {
+                  setProvinceFilter('all')
+                  resetToFirstPage()
+                }}
+                className="text-xs font-medium text-neutral-500 transition-colors hover:text-neutral-800"
+              >
+                Tampilkan semua
+              </button>
+            )}
+          </CardHeader>
+
+          <CardContent>
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              {provinceSummary.map((row) => {
+                const id = row.province_id ? String(row.province_id) : null
+                const active = id !== null && provinceFilter === id
+
+                return (
+                  <button
+                    key={id ?? '__none__'}
+                    type="button"
+                    disabled={id === null}
+                    onClick={() => {
+                      if (id === null) return
+
+                      setProvinceFilter((previous) =>
+                        previous === id ? 'all' : id
+                      )
+                      resetToFirstPage()
+                    }}
+                    className={cn(
+                      'flex items-center justify-between gap-2 rounded-xl border px-3 py-2.5 text-left transition-colors',
+                      active
+                        ? 'border-neutral-900 bg-canvas'
+                        : 'border-neutral-200 bg-paper hover:border-neutral-300 hover:bg-canvas/70',
+                      id === null && 'cursor-default opacity-60'
+                    )}
+                  >
+                    <span className="min-w-0">
+                      <span className="block truncate text-sm font-medium text-neutral-900">
+                        {row.province_name ?? 'Tanpa Provinsi'}
+                      </span>
+                      <span className="text-[11px] text-neutral-400">
+                        {formatNumber(row.pole_count ?? 0)} tiang
+                      </span>
+                    </span>
+
+                    <Badge
+                      size="sm"
+                      className="bg-neutral-100 text-neutral-600 ring-neutral-500/20"
+                    >
+                      {formatPercent(row.avg_progress, 0)}
+                    </Badge>
+                  </button>
+                )
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {(projectError || polesError) && (
         <ErrorNotice
           error={projectError || polesError}
@@ -500,6 +670,17 @@ actions={
             resetToFirstPage()
           }}
           options={regions}
+        />
+
+        <SelectField
+          id="filter-province"
+          label="Provinsi"
+          value={provinceFilter}
+          onChange={(value) => {
+            setProvinceFilter(value)
+            resetToFirstPage()
+          }}
+          options={provinceOptions}
         />
 
         <SelectField
@@ -563,16 +744,43 @@ actions={
                   }
                 />
               ) : filteredPoles.length ? (
-                filteredPoles.map((pole) => (
-                  <PoleListItem
-                    key={pole.id}
-                    pole={pole}
-                    isSelected={effectiveSelectedId === pole.id}
-                    progress={weightedProgress(pole.id)}
-                    loading={store[pole.id] === undefined && effectiveSelectedId === pole.id}
-                    onSelect={selectPole}
-                  />
-                ))
+                <div className="space-y-4">
+                  {poleGroups.map((group) => (
+                    <div key={group.key} className="space-y-2">
+                      {showGroupHeaders && (
+                        <div className="flex items-center justify-between gap-2 px-1">
+                          <p className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-neutral-500">
+                            <MapPin className="h-3 w-3" />
+                            {group.name}
+                          </p>
+
+                          <Badge
+                            size="sm"
+                            className="bg-neutral-100 text-neutral-600 ring-neutral-500/20"
+                          >
+                            {formatNumber(group.poles.length)}
+                          </Badge>
+                        </div>
+                      )}
+
+                      <div className="space-y-3">
+                        {group.poles.map((pole) => (
+                          <PoleListItem
+                            key={pole.id}
+                            pole={pole}
+                            isSelected={effectiveSelectedId === pole.id}
+                            progress={weightedProgress(pole.id)}
+                            loading={
+                              store[pole.id] === undefined &&
+                              effectiveSelectedId === pole.id
+                            }
+                            onSelect={selectPole}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
               ) : (
                 <EmptyState
                   icon={MapPin}
@@ -621,6 +829,8 @@ actions={
         onClose={() => setCreateOpen(false)}
         projectId={projectId}
         regions={project?.regions ?? []}
+        allowedProvinces={allowedProvinces}
+        requireProvince={!isAdmin}
         onCreated={async (created) => {
           setPage(1)
 
@@ -628,7 +838,7 @@ actions={
             setSelectedId(created.id)
           }
 
-          await reloadPoles()
+          await Promise.all([reloadPoles(), reloadSummary()])
         }}
       />
 

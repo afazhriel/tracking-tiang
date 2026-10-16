@@ -118,7 +118,13 @@ export async function apiRequest(
     ...headers,
   }
 
-  if (body !== undefined) {
+  /* FormData untuk upload multipart (mis. foto progress). Browser
+     yang menyetel Content-Type beserta boundary-nya sendiri, jadi
+     jangan di-override. */
+  const isFormData =
+    typeof FormData !== 'undefined' && body instanceof FormData
+
+  if (body !== undefined && !isFormData) {
     requestHeaders['Content-Type'] = 'application/json'
   }
 
@@ -145,7 +151,12 @@ export async function apiRequest(
         method,
         headers: requestHeaders,
         signal,
-        body: body === undefined ? undefined : JSON.stringify(body),
+        body:
+          body === undefined
+            ? undefined
+            : isFormData
+              ? body
+              : JSON.stringify(body),
       })
     } catch (error) {
       if (error?.name === 'AbortError') throw error
@@ -276,12 +287,17 @@ export const api = {
      `PoleController@index` memakai `paginate(100)`. `per_page`
      diteruskan sebagai query string karena Laravel membacanya
      otomatis — ini yang membuat 1.500 titik bisa dijelajahi
-     halaman demi halaman, bukan dimuat sekaligus. */
-  listPoles: (projectId, { perPage, page, ...options } = {}) =>
+     halaman demi halaman, bukan dimuat sekaligus.
+
+     `provinceId` + `search` memfilter di server (dipakai grup/filter
+     per provinsi di halaman Tiang). */
+  listPoles: (projectId, { perPage, page, provinceId, search, ...options } = {}) =>
     apiRequest(`/api/projects/${projectId}/poles`, {
       ...options,
-      query: { per_page: perPage, page },
+      query: { per_page: perPage, page, province_id: provinceId, search },
     }),
+  getPoleSummary: (projectId, options) =>
+    apiRequest(`/api/projects/${projectId}/poles/summary`, options),
   getPole: (projectId, poleId, options) =>
     apiRequest(`/api/projects/${projectId}/poles/${poleId}`, options),
   createPole: (projectId, payload, options) =>
@@ -294,7 +310,11 @@ export const api = {
   /* --- Progress ---
      `ProgressController@store` memakai `updateOrCreate`, jadi
      mengirim ulang work item yang sama memperbarui nilai yang ada
-     dan menambah satu baris `pole_progress_histories`. */
+     dan menambah satu baris `pole_progress_histories`.
+
+     Kalau `payload.photos` berisi File, request dikirim sebagai
+     multipart (FormData) supaya backend bisa menyimpan fotonya
+     sekaligus. */
   getPoleActivities: (projectId, poleId, options) =>
     apiRequestFirstAvailable(
       [
@@ -305,12 +325,34 @@ export const api = {
     ),
   getPoleProgress: (projectId, poleId, options) =>
     apiRequest(`/api/projects/${projectId}/poles/${poleId}/progress`, options),
-  savePoleProgress: (projectId, poleId, payload, options) =>
-    apiRequest(`/api/projects/${projectId}/poles/${poleId}/progress`, {
+  savePoleProgress: (projectId, poleId, payload, options) => {
+    const { photos, ...fields } = payload ?? {}
+    const files = Array.isArray(photos) ? photos.filter(Boolean) : []
+
+    if (!files.length) {
+      return apiRequest(`/api/projects/${projectId}/poles/${poleId}/progress`, {
+        ...options,
+        method: 'POST',
+        body: fields,
+      })
+    }
+
+    const form = new FormData()
+
+    Object.entries(fields).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== '') {
+        form.append(key, value)
+      }
+    })
+
+    files.forEach((file) => form.append('photos[]', file))
+
+    return apiRequest(`/api/projects/${projectId}/poles/${poleId}/progress`, {
       ...options,
       method: 'POST',
-      body: payload,
-    }),
+      body: form,
+    })
+  },
 
   /* --- Pekerjaan (Work Item) --- */
   listWorkItems: (projectId, options) =>
@@ -375,6 +417,12 @@ export const api = {
       ...options,
       method: 'PATCH',
       body: { status },
+    }),
+  updateUserProvinces: (userId, provinceIds, options) =>
+    apiRequest(`/api/users/${userId}/provinces`, {
+      ...options,
+      method: 'PATCH',
+      body: { province_ids: provinceIds },
     }),
 
   /* --- Team management ---
@@ -506,6 +554,23 @@ export function normalizePole(pole) {
           code: pole.region.code ?? null,
         }
       : null,
+    province: pole?.province
+      ? {
+          id: pole.province.id ?? null,
+          name: pole.province.name ?? '—',
+        }
+      : null,
+    provinceName: pole?.province?.name ?? null,
+  }
+}
+
+export function normalizePhoto(photo) {
+  return {
+    id: photo?.id ?? null,
+    url: photo?.url ?? photo?.path ?? null,
+    originalName: photo?.original_name ?? null,
+    mimeType: photo?.mime_type ?? null,
+    size: photo?.size ?? null,
   }
 }
 
@@ -650,6 +715,15 @@ export function normalizeUser(user) {
       ? user.projects.map((project) => ({
           id: project?.id ?? null,
           name: project?.name ?? '—',
+        }))
+      : [],
+    /* Provinsi yang ditugaskan (non-admin). Admin tidak dibatasi,
+       jadi daftar kosong pada admin TIDAK berarti tanpa akses —
+       gunakan `isAdmin` untuk membedakan. */
+    provinces: Array.isArray(user?.provinces)
+      ? user.provinces.map((province) => ({
+          id: province?.id ?? null,
+          name: province?.name ?? '—',
         }))
       : [],
     raw: user ?? null,

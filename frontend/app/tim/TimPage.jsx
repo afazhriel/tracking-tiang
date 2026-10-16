@@ -8,6 +8,7 @@ import {
   Clock,
   KeyRound,
   Mail,
+  MapPin,
   Plus,
   RefreshCw,
   Send,
@@ -34,6 +35,7 @@ import { EmptyState } from '../../components/ui/empty-state'
 import { StatCard, StatCardGrid } from '../../components/ui/stat-card'
 import { Button } from '../../components/ui/button'
 import { SearchInput, SelectField } from '../../components/ui/form-controls'
+import { Modal, TextInput } from '../../components/ui/modal'
 import { Table, TableWrap, Td, Th, Tr } from '../../components/ui/table'
 import {
   api,
@@ -236,6 +238,149 @@ function StatusActions({ user, busy, onChangeStatus }) {
   )
 }
 
+/**
+ * Penugasan provinsi per user (admin). Supervisor/PIC hanya bisa
+ * menambah tiang & mencatat progress di provinsi yang ditugaskan,
+ * jadi kontrol ini menentukan cakupan kerja mereka.
+ */
+function ProvinceAssignModal({ user, provinces, busy, onClose, onSave }) {
+  const [selected, setSelected] = useState(
+    () => new Set((user.provinces ?? []).map((province) => String(province.id)))
+  )
+  const [search, setSearch] = useState('')
+
+  const filtered = useMemo(() => {
+    const keyword = search.trim().toLowerCase()
+
+    if (!keyword) return provinces
+
+    return provinces.filter((province) =>
+      `${province.name} ${province.id}`.toLowerCase().includes(keyword)
+    )
+  }, [provinces, search])
+
+  function toggle(id) {
+    setSelected((previous) => {
+      const next = new Set(previous)
+
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+
+      return next
+    })
+  }
+
+  const saving = busy === `province-${user.id}`
+
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title={`Wilayah untuk ${user.name || 'pengguna'}`}
+      description="Pilih provinsi yang boleh dikelola. Admin selalu punya akses ke semua provinsi."
+      footer={null}
+    >
+      <div className="space-y-4">
+        <TextInput
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+          placeholder="Cari provinsi..."
+          aria-label="Cari provinsi"
+        />
+
+        <div className="max-h-72 divide-y divide-neutral-100 overflow-y-auto rounded-xl border border-neutral-200">
+          {filtered.length === 0 ? (
+            <p className="px-3 py-4 text-xs text-neutral-400">
+              Tidak ada provinsi yang cocok.
+            </p>
+          ) : (
+            filtered.map((province) => {
+              const checked = selected.has(province.id)
+
+              return (
+                <label
+                  key={province.id}
+                  className="flex cursor-pointer items-center gap-3 px-3 py-2.5 transition-colors hover:bg-canvas"
+                >
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={() => toggle(province.id)}
+                    className="h-4 w-4 rounded border-neutral-300 text-brand-600 focus:ring-2 focus:ring-brand-100"
+                  />
+
+                  <span className="min-w-0 flex-1 truncate text-sm text-neutral-700">
+                    {province.name}
+                  </span>
+                </label>
+              )
+            })
+          )}
+        </div>
+
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p className="text-xs text-neutral-500">
+            {formatNumber(selected.size)} provinsi dipilih
+          </p>
+
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" onClick={onClose}>
+              Batal
+            </Button>
+
+            <Button
+              variant="primary"
+              disabled={saving}
+              onClick={() => onSave(user, [...selected])}
+            >
+              {saving ? 'Menyimpan...' : 'Simpan Wilayah'}
+            </Button>
+          </div>
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
+function ProvinceCell({ user, disabled, onManage }) {
+  if (user.role === 'admin') {
+    return (
+      <span className="text-xs text-neutral-400">Semua provinsi (admin)</span>
+    )
+  }
+
+  const provinces = user.provinces ?? []
+
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      {provinces.slice(0, 2).map((province) => (
+        <Badge key={province.id ?? province.name} variant="outline">
+          {province.name}
+        </Badge>
+      ))}
+
+      {provinces.length > 2 && (
+        <Badge variant="outline">+{provinces.length - 2}</Badge>
+      )}
+
+      {provinces.length === 0 && (
+        <span className="text-xs text-neutral-400">Belum ditugaskan</span>
+      )}
+
+      <Button
+        variant="ghost"
+        size="sm"
+        disabled={disabled}
+        onClick={onManage}
+        title="Atur provinsi"
+      >
+        <MapPin className="h-3.5 w-3.5" />
+        Atur
+      </Button>
+    </div>
+  )
+}
+
 function AdminTimContent({ currentUser }) {
   const [search, setSearch] = useState('')
   const [roleFilter, setRoleFilter] = useState('all')
@@ -243,6 +388,8 @@ function AdminTimContent({ currentUser }) {
 
   const [busy, setBusy] = useState(null)
   const [notice, setNotice] = useState(null)
+
+  const [provinceTarget, setProvinceTarget] = useState(null)
 
   const [newTeam, setNewTeam] = useState({ name: '', code: '' })
   const [openTeam, setOpenTeam] = useState(null)
@@ -277,11 +424,28 @@ function AdminTimContent({ currentUser }) {
     []
   )
 
+  const provincesResource = useResource(
+    () =>
+      api
+        .listProvinces()
+        .then((response) =>
+          unwrapList(response).map((province) => ({
+            id: String(province.id),
+            name: province.name ?? String(province.id),
+          }))
+        ),
+    []
+  )
+
   const users = useMemo(() => usersResource.data ?? [], [usersResource.data])
   const teams = useMemo(() => teamsResource.data ?? [], [teamsResource.data])
   const invitations = useMemo(
     () => invitationsResource.data ?? [],
     [invitationsResource.data]
+  )
+  const allProvinces = useMemo(
+    () => provincesResource.data ?? [],
+    [provincesResource.data]
   )
 
   const pendingCount = useMemo(
@@ -345,6 +509,19 @@ function AdminTimContent({ currentUser }) {
     )
 
     if (ok) usersResource.reload()
+  }
+
+  async function saveProvinces(user, provinceIds) {
+    const ok = await run(
+      `province-${user.id}`,
+      () => api.updateUserProvinces(user.id, provinceIds),
+      `Wilayah ${user.name} diperbarui.`
+    )
+
+    if (ok) {
+      usersResource.reload()
+      setProvinceTarget(null)
+    }
   }
 
   async function createTeam() {
@@ -597,6 +774,7 @@ function AdminTimContent({ currentUser }) {
                     <Th>Role</Th>
                     <Th>Status</Th>
                     <Th>Tim</Th>
+                    <Th>Provinsi</Th>
                     <Th align="right">Aksi</Th>
                   </tr>
                 </thead>
@@ -647,6 +825,14 @@ function AdminTimContent({ currentUser }) {
                         ) : (
                           <span className="text-xs text-neutral-400">—</span>
                         )}
+                      </Td>
+
+                      <Td>
+                        <ProvinceCell
+                          user={user}
+                          disabled={provincesResource.loading}
+                          onManage={() => setProvinceTarget(user)}
+                        />
                       </Td>
 
                       <Td align="right">
@@ -1024,6 +1210,17 @@ function AdminTimContent({ currentUser }) {
           )}
         </CardContent>
       </Card>
+
+      {provinceTarget && (
+        <ProvinceAssignModal
+          key={provinceTarget.id}
+          user={provinceTarget}
+          provinces={allProvinces}
+          busy={busy}
+          onClose={() => setProvinceTarget(null)}
+          onSave={saveProvinces}
+        />
+      )}
     </div>
   )
 }

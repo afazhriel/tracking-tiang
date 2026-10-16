@@ -6,11 +6,13 @@ use App\Http\Controllers\Controller;
 use App\Models\Pole;
 use App\Models\PoleProgressHistory;
 use App\Models\PoleWorkProgress;
+use App\Models\ProgressPhoto;
 use App\Models\Project;
 use App\Models\WorkItem;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 class ProgressController extends Controller
 {
@@ -24,8 +26,14 @@ class ProgressController extends Controller
             ->where('pole_id', $pole->id)
             ->get();
 
+        $photos = ProgressPhoto::where('pole_id', $pole->id)
+            ->orderByDesc('id')
+            ->get()
+            ->map(fn (ProgressPhoto $photo) => $photo->toPayload());
+
         return response()->json([
             'data' => $progress,
+            'photos' => $photos,
             'pole_progress' => $this->calculatePoleProgress($pole),
         ]);
     }
@@ -45,6 +53,8 @@ class ProgressController extends Controller
             'started_at' => ['nullable', 'date'],
             'completed_at' => ['nullable', 'date'],
             'notes' => ['nullable', 'string'],
+            'photos' => ['nullable', 'array', 'max:5'],
+            'photos.*' => ['file', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
         ]);
 
         $workItem = WorkItem::where('id', $validated['work_item_id'])
@@ -52,8 +62,9 @@ class ProgressController extends Controller
             ->firstOrFail();
 
         $userId = $request->user()?->id;
+        $files = $request->file('photos') ?? [];
 
-        [$progress] = DB::transaction(function () use (
+        [$progress, $history] = DB::transaction(function () use (
             $pole,
             $workItem,
             $validated,
@@ -73,7 +84,7 @@ class ProgressController extends Controller
                 ]
             );
 
-            PoleProgressHistory::create([
+            $history = PoleProgressHistory::create([
                 'pole_id' => $pole->id,
                 'work_item_id' => $workItem->id,
                 'progress_percent' => $validated['progress_percent'],
@@ -82,12 +93,38 @@ class ProgressController extends Controller
                 'notes' => $validated['notes'] ?? null,
             ]);
 
-            return [$progress];
+            return [$progress, $history];
         });
+
+        /* Simpan foto SETELAH transaksi selesai, supaya kegagalan
+           storage tidak membatalkan catatan progress-nya. */
+        $photos = collect();
+
+        foreach ($files as $file) {
+            if (! $file || ! $file->isValid()) {
+                continue;
+            }
+
+            $path = $file->store('progress-photos', 'public');
+
+            $photos->push(ProgressPhoto::create([
+                'ulid' => (string) Str::ulid(),
+                'pole_id' => $pole->id,
+                'work_item_id' => $workItem->id,
+                'progress_history_id' => $history->id,
+                'disk' => 'public',
+                'path' => $path,
+                'original_name' => $file->getClientOriginalName(),
+                'mime_type' => $file->getClientMimeType(),
+                'size' => $file->getSize(),
+                'uploaded_by' => $userId,
+            ]));
+        }
 
         return response()->json([
             'message' => 'Progress berhasil disimpan.',
             'data' => $progress->load('workItem'),
+            'photos' => $photos->map(fn (ProgressPhoto $photo) => $photo->toPayload()),
             'pole_progress' => $this->calculatePoleProgress($pole),
         ]);
     }

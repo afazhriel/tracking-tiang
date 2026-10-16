@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\CurveController;
 use App\Http\Controllers\Api\InvitationController;
 use App\Http\Controllers\Api\NotificationController;
+use App\Http\Controllers\Api\PhotoController;
 use App\Http\Controllers\Api\PoleController;
 use App\Http\Controllers\Api\ProgressController;
 use App\Http\Controllers\Api\ProjectController;
@@ -59,6 +60,13 @@ Route::get('/regions/regencies/{regency}/districts', [RegionController::class, '
 Route::get('/regions/districts/{district}/villages', [RegionController::class, 'villages']);
 
 /*
+ * Foto progress.
+ * Public dengan ULID acak (img di browser tidak bisa kirim header
+ * Authorization). Lihat PhotoController.
+ */
+Route::get('/photos/{ulid}', [PhotoController::class, 'show']);
+
+/*
 |--------------------------------------------------------------------------
 | Protected routes
 |--------------------------------------------------------------------------
@@ -77,6 +85,7 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
 
     /* Tiang / Pole */
     Route::get('/projects/{project}/poles', [PoleController::class, 'index']);
+    Route::get('/projects/{project}/poles/summary', [PoleController::class, 'summary']);
     Route::post('/projects/{project}/poles', [PoleController::class, 'store']);
     Route::get('/projects/{project}/poles/{pole}', [PoleController::class, 'show']);
 
@@ -129,6 +138,7 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
     Route::get('/users/{user}', [UserController::class, 'show']);
     Route::put('/users/{user}', [UserController::class, 'update']);
     Route::patch('/users/{user}/status', [UserController::class, 'updateStatus']);
+    Route::patch('/users/{user}/provinces', [UserController::class, 'updateProvinces']);
 
     /*
      * Invitation management.

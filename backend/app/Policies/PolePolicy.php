@@ -19,11 +19,16 @@ use App\Models\User;
 class PolePolicy
 {
     /**
-     * Boleh membuat tiang baru? Hanya admin.
+     * Boleh membuat tiang baru?
+     *
+     * Semua user aktif boleh mencoba; pembatasan wilayah dilakukan di
+     * `PoleController@store` karena policy ini tidak menerima tiang
+     * (dan karenanya tidak tahu provinsinya). Non-admin wajib mengisi
+     * provinsi yang ditugaskan ke mereka.
      */
     public function create(User $user): bool
     {
-        return $user->isAdmin();
+        return $user->isActive();
     }
 
     public function viewAny(User $user): bool
@@ -36,8 +41,8 @@ class PolePolicy
      *
      * Admin: project mana pun.
      * Supervisor: project yang punya akses.
-     * PIC: HANYA tiang yang ditugaskan — langsung ke dia atau lewat
-     *      timnya. Kalau tidak, ini jadi celah IDOR.
+     * PIC: provinsi yang ditugaskan, atau tiang yang ditugaskan
+     *      langsung/lewat timnya. Kalau tidak, ini jadi celah IDOR.
      */
     public function view(User $user, Pole $pole): bool
     {
@@ -53,7 +58,8 @@ class PolePolicy
             return true;
         }
 
-        return $user->isPoleAssignedTo((int) $pole->id);
+        return $user->canManageProvince($pole->province_id)
+            || $user->isPoleAssignedTo((int) $pole->id);
     }
 
     /**
@@ -70,10 +76,21 @@ class PolePolicy
     /**
      * Boleh menulis progress?
      *
-     * Sama dengan `view`: PIC hanya untuk tiang yang ditugaskan.
+     * Admin: selalu.
+     * Selain admin: harus punya akses project DAN tiang berada di
+     * provinsi yang ditugaskan (atau ditugaskan langsung/lewat tim).
      */
     public function updateProgress(User $user, Pole $pole): bool
     {
-        return $this->view($user, $pole);
+        if ($user->isAdmin()) {
+            return true;
+        }
+
+        if (! $user->canAccessProject((int) $pole->project_id)) {
+            return false;
+        }
+
+        return $user->canManageProvince($pole->province_id)
+            || $user->isPoleAssignedTo((int) $pole->id);
     }
 }

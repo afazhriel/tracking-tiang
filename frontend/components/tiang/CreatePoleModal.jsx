@@ -60,6 +60,8 @@ export function CreatePoleModal({
   onCreated,
   projectId,
   regions,
+  allowedProvinces = null,
+  requireProvince = false,
 }) {
   const [form, setForm] = useState(EMPTY_FORM)
 
@@ -76,6 +78,23 @@ export function CreatePoleModal({
   const [fieldErrors, setFieldErrors] = useState(null)
   const [formError, setFormError] = useState(null)
   const [saving, setSaving] = useState(false)
+
+  /* Non-admin hanya boleh memilih provinsi yang ditugaskan. Admin
+     (`allowedProvinces === null`) melihat seluruh provinsi. */
+  const allowedIds = Array.isArray(allowedProvinces)
+    ? allowedProvinces.map((province) => String(province.id))
+    : null
+
+  const provinceOptions = allowedIds
+    ? provinces.filter((province) => allowedIds.includes(String(province.id)))
+    : provinces
+
+  /* Kalau user hanya ditugaskan ke satu provinsi, pakai nilai itu tanpa
+     perlu memaksa user memilih lagi (dihitung, bukan disimpan di effect). */
+  const defaultProvinceId =
+    allowedIds && allowedIds.length === 1 ? allowedIds[0] : ''
+
+  const effectiveProvinceId = form.province_id || defaultProvinceId
 
   useEffect(() => {
     if (!open) return
@@ -110,7 +129,7 @@ export function CreatePoleModal({
   }, [open])
 
   useEffect(() => {
-    if (!form.province_id) return
+    if (!effectiveProvinceId) return
 
     let cancelled = false
 
@@ -119,7 +138,7 @@ export function CreatePoleModal({
 
       try {
         const payload = await api.listRegencies(
-          form.province_id,
+          effectiveProvinceId,
           { cache: 'no-store' }
         )
 
@@ -142,7 +161,7 @@ export function CreatePoleModal({
     return () => {
       cancelled = true
     }
-  }, [form.province_id])
+  }, [effectiveProvinceId])
 
   useEffect(() => {
     if (!form.regency_id) return
@@ -281,6 +300,18 @@ export function CreatePoleModal({
 
     if (saving) return
 
+    if (requireProvince && !effectiveProvinceId) {
+      setFieldErrors({
+        province_id: [
+          allowedIds && !allowedIds.length
+            ? 'Anda belum ditugaskan ke provinsi mana pun. Hubungi admin.'
+            : 'Pilih provinsi yang ditugaskan kepada Anda.',
+        ],
+      })
+      setFormError(null)
+      return
+    }
+
     setSaving(true)
     setFieldErrors(null)
     setFormError(null)
@@ -290,7 +321,7 @@ export function CreatePoleModal({
     }
 
     if (form.region_id) payload.region_id = Number(form.region_id)
-    if (form.province_id) payload.province_id = form.province_id
+    if (effectiveProvinceId) payload.province_id = effectiveProvinceId
     if (form.regency_id) payload.regency_id = form.regency_id
     if (form.district_id) payload.district_id = form.district_id
     if (form.village_id) payload.village_id = form.village_id
@@ -428,23 +459,31 @@ export function CreatePoleModal({
             <FormField
               label="Provinsi"
               htmlFor="pole-province"
+              required={requireProvince}
               error={fieldErrors?.province_id?.[0]}
+              hint={
+                allowedIds && !allowedIds.length
+                  ? 'Anda belum ditugaskan ke provinsi mana pun.'
+                  : undefined
+              }
             >
               <SelectInput
                 id="pole-province"
                 name="province_id"
-                value={form.province_id}
+                value={effectiveProvinceId}
                 onChange={update('province_id')}
                 invalid={Boolean(fieldErrors?.province_id)}
-                disabled={loadingProvinces}
+                disabled={loadingProvinces || (allowedIds !== null && !allowedIds.length)}
               >
                 <option value="">
                   {loadingProvinces
                     ? 'Memuat provinsi...'
-                    : 'Pilih provinsi'}
+                    : provinceOptions.length === 0
+                      ? 'Tidak ada provinsi yang bisa dipilih'
+                      : 'Pilih provinsi'}
                 </option>
 
-                {provinces.map((province) => (
+                {provinceOptions.map((province) => (
                   <option key={province.id} value={province.id}>
                     {province.name}
                   </option>
