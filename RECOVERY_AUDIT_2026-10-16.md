@@ -323,6 +323,44 @@ Analisis diff membuktikan cabang lokal adalah **desain yang lebih baru dan mengg
 - **Backend TIDAK diubah** — tetap live di `/opt/tracking-tiang/backend` (docker volume). Deploy hanya menyentuh repo `frontend-next` (subdir `frontend/`).
 - **Rollback:** `cd /opt/tracking-tiang/frontend-next && git checkout -f migration/nextjs-frontend` lalu restore tarball bila perlu, dan `systemctl restart tracking-tiang-next`.
 
+## 17. Fitur Auth & Manajemen Role (dikerjakan 2026-10-16)
+
+Kebutuhan: sistem role + registrasi akun yang rapi di area auth. Keputusan user: **pendaftaran mandiri (self sign-up)** + **UI manajemen role penuh**.
+
+**Backend (commit `55218de`):**
+- `POST /api/register` (`AuthController@register`): buat user dengan status `pending` + role default `pic` (`User::DEFAULT_ROLE`); TIDAK mengembalikan token.
+- `login`: normalisasi email ke lowercase + pesan status eksplisit — `suspended` → "dinonaktifkan", `pending` → "menunggu persetujuan admin". Pengecekan status SETELAH verifikasi password (agar tidak bocor ke penebak akun).
+- Model `User`: `STATUS_PENDING`, `DEFAULT_ROLE`, `statuses()` (+pending), `isPending()`, `isSuspended()`; `isActive()` = `!suspended && !pending` (status NULL tetap aktif).
+- Migrasi `2026_10_03_000004_create_pole_assignments_table.php`: CHECK constraint via `ALTER TABLE` kini dikunci ke driver `pgsql/mysql/mariadb` (SQLite tak mendukung → test suite aman).
+- `UserFactory`: default `role=pic` + `status=active`, state `admin()/supervisor()/pic()/pending()/suspended()`.
+- Tes: `tests/Feature/AuthRoleRegistrationTest.php` (11 kasus: register pending/no-token, duplikat email, konfirmasi password, pending/suspended tak bisa login, email case-insensitive, admin approve → login, non-admin 403, admin list, last-admin guard, middleware `active`). **Suite dijalankan di container (sqlite `:memory:`): 13 lolos.**
+
+**Frontend (commit `55218de`):**
+- `lib/api.js`: endpoint `register`, `listUsers/getUser/updateUser/updateUserStatus`, `listTeams/getTeam/createTeam/updateTeam/addTeamMember/removeTeamMember`, `listInvitations/createInvitation/revokeInvitation/getInvitation/acceptInvitation`; normalizer `normalizeUser` (+`status`/`teams`/`projects`), baru `normalizeTeam` + `normalizeInvitation`; konstanta `USER_ROLES`/`USER_STATUSES` + helper label/tone.
+- Halaman `/register` + `src/components/ui/sign-up-card-2.jsx` (pesan "menunggu persetujuan", bukan redirect); tautan "Daftar" di `sign-in-card-2.jsx`.
+- `app/tim/TimPage.jsx` di-rewrite: admin → kelola user (role inline + setujui/nonaktifkan/aktifkan), tim (buat, kelola anggota), undangan (buat, cabut); non-admin → tampilan referensi peran. (Menggantikan halaman lama yang menyatakan backend belum punya endpoint user/team.)
+- Hapus file junk `backend/nano.36198.save`.
+- Commit `55218de` (`main`, fast-forward dari branch `feat/self-registration-role-management`).
+
+## 18. Deploy Backend + Frontend ke Produksi (dilakukan 2026-10-16)
+
+**Prasyarat — DB sudah siap:** kolom `users.role`/`users.status` dan tabel `personal_access_tokens` sudah ada (semua migrasi batch 1). Tidak ada migrasi baru yang perlu dijalankan.
+
+**Backend (`/opt/tracking-tiang`, worktree @ `564517c`, 42 file beda dari `main`):**
+- **Backup:** `/opt/tracking-tiang/backups/deploy-20261016_041724/` — `backend-live.tar.gz` (4.2 MB, tanpa vendor/node_modules), `HEAD.txt`, `status.txt`.
+- **Sinkron:** `git fetch origin --prune` + `git checkout -f origin/main -- backend/`. Route `register`/`users`/`teams`/`invitations` kini aktif; `bootstrap/app.php` alias middleware `active`/`role` benar. (File lama tak dirujuk, mis. `PoleActivityController.php`, dibiarkan di disk tanpa efek.)
+- **Composer:** `composer update laravel/sanctum` menambahkan `laravel/sanctum v4.3.3` ke `composer.lock` (sebelumnya lock TIDAK sinkron dengan `composer.json` → `composer install` gagal). Lock hasil diperbaiki lalu di-pull ke lokal → commit **`36ebc90`**.
+- **Cache & restart:** `php artisan optimize:clear` → `php artisan config:cache` → `docker compose restart backend`.
+- **Verifikasi API (via nginx, Host `pjl.ituiot.com`):** `POST /api/register {}` → **422**; payload valid → **201** (`role=pic`, `status=pending`); login probe dengan email HURUF BESAR (password benar) → **422** "menunggu persetujuan" (membuktikan normalisasi email + gerbang pending); `/api/users` `/api/me` `/api/projects` `/api/teams` tanpa auth → **401**; `/api/login` kredensial salah → **422**. User probe dihapus — tersisa hanya `admin@trackingtiang.local`.
+- **Rollback:** restore `backups/deploy-20261016_041724/backend-live.tar.gz` ke `/opt/tracking-tiang/backend` lalu `docker compose restart backend`.
+
+**Frontend (`/opt/tracking-tiang/frontend-next`, `main` @ `1d6c856` → `55218de`):**
+- **Backup:** `/opt/tracking-tiang/backups/deploy-fe-20261016_041905/` — `frontend-src.tar.gz` (8.9 MB), `HEAD.txt`.
+- **Switch + build:** `git fetch origin --prune` + `git checkout -f -B main origin/main` → HEAD `55218de`; `npm install` + `npm run build` (Next.js 16.3.8) → **sukses**, **14 rute** (termasuk `/register`).
+- **Restart:** `systemctl restart tracking-tiang-next` → **active**.
+- **Verifikasi rute (via nginx):** `/` `/login` `/register` `/dashboard` `/tiang` `/pekerjaan` `/pekerjaan/pengaturan` `/profil` `/tim` `/notifikasi` `/aktivitas` `/kurva-s` → semua **200**; `/register` merender "Buat akun baru"; proxy `POST /api/register {}` → **422**.
+- **Rollback:** restore `backups/deploy-fe-20261016_041905/frontend-src.tar.gz` + `git checkout -f <branch-lama>` + `systemctl restart tracking-tiang-next`.
+
 ---
 
-*Dokumen ini dihasilkan otomatis sebagai bagian dari sesi pemulihan & rekonsiliasi. Pemulihan data, hardening, higiene produksi, rekonsiliasi (branch review → `main`), dan deploy frontend ke produksi SUDAH dilakukan. Ringkasan commit: `5c4cfba` (snapshot WIP), `5614b76` (migrasi Sanctum), `6ba76b4` (docs), `181de40` + `1d6c856` (rapikan repo). HEAD produksi: `1d6c856`.*
+*Dokumen ini dihasilkan sebagai bagian dari sesi pemulihan, rekonsiliasi, dan pengembangan. Pemulihan data, hardening, higiene produksi, rekonsiliasi (branch → `main`), deploy frontend + backend ke produksi, serta fitur auth (pendaftaran mandiri + manajemen role) SUDAH dilakukan. Ringkasan commit `main`: `5c4cfba` (snapshot WIP), `5614b76` (migrasi Sanctum), `6ba76b4` (docs), `181de40` + `1d6c856` (rapikan repo), `55218de` (fitur auth/role), `36ebc90` (selaraskan composer.lock). `main` = `36ebc90`; frontend produksi = `55218de`; backend produksi disinkronkan dari `origin/main` (worktree).*
