@@ -363,4 +363,47 @@ Kebutuhan: sistem role + registrasi akun yang rapi di area auth. Keputusan user:
 
 ---
 
-*Dokumen ini dihasilkan sebagai bagian dari sesi pemulihan, rekonsiliasi, dan pengembangan. Pemulihan data, hardening, higiene produksi, rekonsiliasi (branch → `main`), deploy frontend + backend ke produksi, serta fitur auth (pendaftaran mandiri + manajemen role) SUDAH dilakukan. Ringkasan commit `main`: `5c4cfba` (snapshot WIP), `5614b76` (migrasi Sanctum), `6ba76b4` (docs), `181de40` + `1d6c856` (rapikan repo), `55218de` (fitur auth/role), `36ebc90` (selaraskan composer.lock). `main` = `36ebc90`; frontend produksi = `55218de`; backend produksi disinkronkan dari `origin/main` (worktree).*
+## 19. Fitur Kelola per Provinsi + Upload Foto Progress (dikerjakan & di-deploy 2026-10-16)
+
+**Tujuan:** supervisor & PIC dapat menambah tiang dan mencatat progress, progress mendukung unggah foto, wilayah project dikelompokkan/ ditugaskan per provinsi sehingga PIC/supervisor mengelola seperti admin — dibatasi ke provinsi yang ditugaskan.
+
+**Model izin (backend):**
+- Tabel pivot `province_user` (`user_id`, `province_id`) menetapkan provinsi per user.
+- `User::managedProvinceIds()` → `null` untuk admin (tanpa batas), selain itu array id provinsi; `User::canManageProvince($id)`; provinsi ikut di `toAuthPayload`.
+- `PolePolicy`: `create` = user aktif (controller menegakkan provinsi); `view`/`updateProgress` = admin ATAU (akses project DAN (provinsi ditugaskan ATAU tiang ditugaskan)). Tiang tanpa provinsi jatuh ke penugasan tiang.
+
+**Backend (commit `2b0356a`):**
+- Migrasi: `2026_10_16_120000_create_province_user_table`, `2026_10_16_120100_create_progress_photos_table`.
+- Model baru: `Province`, `ProgressPhoto`; relasi `Pole::province()/photos()`, `PoleProgressHistory::photos()`.
+- `PoleController`: `index` mendukung `province_id`/`search`/`per_page`; endpoint `GET .../poles/summary` (agregat jumlah + rata-rata progress per provinsi, satu query); `store` menegakkan provinsi untuk non-admin (422).
+- `ProgressController@store`: unggah multi-foto (maks 5, `image`, jpg/jpeg/png/webp, ≤5 MB) ke disk `public` → `ProgressPhoto`; `index` mengembalikan `photos`.
+- `PhotoController@show(string $ulid)`: menyajikan foto via URL publik `GET /api/photos/{ulid}` (ULID sebagai capability; tanpa `storage:link`).
+- `UserController`: eager-load `provinces` + `PATCH /api/users/{user}/provinces`.
+- `ActivityController`: menyertakan `photos` + `pole.province`.
+- Uji: `tests/Feature/ProvinceProgressTest.php` (13 kasus, lulus); `AuthRoleRegistrationTest` tetap 11 lulus (dijalankan di sandbox `backend-test`).
+
+**Frontend (commit `2b0356a`):**
+- `lib/api.js`: dukungan `FormData`, `updateUserProvinces`, `getPoleSummary`, `listPoles(provinceId/search)`, `savePoleProgress(photos)` multipart, `normalizePhoto`, `normalizePole`/`normalizeUser` (+provinsi).
+- `CreatePoleModal`: batasi daftar provinsi & wajibkan provinsi untuk non-admin; auto-pilih bila hanya satu provinsi.
+- `TiangPage`: filter + panel "Kelola per Provinsi", pengelompokan daftar per provinsi, tombol tambah untuk user berprovinsi (Import CSV tetap admin).
+- `UpdateProgressModal`: unggah foto (kamera/galeri) dengan pratinjau & tombol hapus.
+- `TiangDetailPage`: kartu "Dokumentasi" + thumbnail di timeline aktivitas.
+- `TimPage`: admin menetapkan provinsi per user (kolom + modal multi-select).
+- Verifikasi: `npm run lint` bersih; `npm run build` (Next.js 16.3.8) sukses, 14 rute.
+
+**Perbaikan tambahan (commit `f23e329`):**
+- `bootstrap/app.php`: `redirectGuestsTo(fn () => null)`. Backend API-only tidak punya route `login`, sehingga request tanpa token sebelumnya melempar `RouteNotFoundException` → **500**. Kini guest melempar `AuthenticationException` yang dirender jadi JSON **401** (perilaku yang diharapkan frontend saat token kedaluwarsa).
+
+**Deploy produksi (2026-10-16):**
+- **Backend:** `git fetch` + `git checkout -f origin/main -- backend/` (worktree server kini @ `f23e329`); `php artisan migrate --force` → `province_user` & `progress_photos` **DONE**; `optimize:clear` + `config:cache` + `route:cache`; `docker compose restart backend`.
+- **Frontend:** `frontend-next/frontend` @ `f23e329`; `npm ci` + `npm run build` sukses; `systemctl restart tracking-tiang-next` → **active**.
+- **Smoke test (via nginx `pjl.ituiot.com`):** `/` 200; `/api/regions/provinces` 200; `/api/projects`, `/api/me`, `/api/projects/1/poles/summary` tanpa token → **401** (bukan 500); `/api/photos/<tidak ada>` → **404**. Dengan token admin sementara: `/api/me` & `/api/users` menyertakan `provinces`; `.../poles/summary` → data per provinsi (`avg_progress` skala 0–100); `PATCH /api/users/3/provinces` set & kosongkan kembali (round-trip) OK; `POST .../progress` multipart dengan foto → foto tersimpan, `GET /api/photos/{ulid}` → **200 image/png**. Semua artefak uji (foto, riwayat, pole_work_progress, token) **dihapus** — DB & storage kembali bersih.
+
+**Catatan:**
+- `progress_photos` disajikan sebagai URL relatif (`/api/photos/{ulid}`) agar mengikuti origin proxy Next.
+- User yang sudah login sebelum penugasan provinsi perlu **login ulang** agar `provinces` di localStorage ter-refresh (login menyimpan `data.user` termasuk `provinces`).
+- Server repo `backend/` di-sinkron via `git checkout -f origin/main -- backend/` (HEAD worktree server tetap snapshot lama `564517c`; yang penting isi direktori backend). 
+
+---
+
+*Dokumen ini dihasilkan sebagai bagian dari sesi pemulihan, rekonsiliasi, dan pengembangan. Pemulihan data, hardening, higiene produksi, rekonsiliasi (branch → `main`), deploy frontend + backend ke produksi, fitur auth (pendaftaran mandiri + manajemen role), serta fitur kelola per provinsi + upload foto progress SUDAH dilakukan. Ringkasan commit `main`: `5c4cfba` (snapshot WIP), `5614b76` (migrasi Sanctum), `6ba76b4` (docs), `181de40` + `1d6c856` (rapikan repo), `55218de` (fitur auth/role), `36ebc90` (selaraskan composer.lock), `2b0356a` (fitur provinsi + foto), `f23e329` (fix 401 JSON). `main` = `f23e329`; frontend produksi = `f23e329`; backend produksi disinkronkan dari `origin/main` (worktree).*
