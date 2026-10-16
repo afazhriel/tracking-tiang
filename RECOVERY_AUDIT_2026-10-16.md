@@ -231,10 +231,13 @@ Langkah aman (non-destruktif, di branch terpisah):
    ```
 6. Deploy frontend dari repo lokal ke `/opt/tracking-tiang/frontend-next/frontend`, lalu `systemctl restart tracking-tiang-next`.
 
-**Opsional — higiene produksi (butuh persetujuan):**
+**Higiene produksi (SUDAH dilakukan atas persetujuan):**
 - Hapus `/opt/tracking-tiang/frontend` (Vite lama, 228 MB) dan `staging/` (25 MB).
-- Tambahkan `.next/` ke `.gitignore` repo `frontend-next`; `git rm -r --cached frontend/.next`.
 - Hapus `backend/public/test-fpm.php`.
+- Tambahkan `.next/` ke `.gitignore` repo `frontend-next` (untracked turun dari 615 → 69).
+- Pindahkan sisa `.bak` ke `backups/code-bak-final/`.
+- Perbaiki korupsi byte `k<?php` pada `backend/database/migrations/2026_10_02_181142_create_work_items_table.php` (backup: `backups/code-bak-final/...k-corrupt`). `php -l` bersih.
+- Diverifikasi aman: vhost aktif `tracking-tiang` TIDAK merujuk direktori yang dihapus (`/` → Next :3000, `/api/` → FPM); `nginx -t` OK; `GET /` → 200.
 
 ---
 
@@ -261,4 +264,55 @@ curl -s -o /dev/null -w "%{http_code}\n" -H "Host: pjl.ituiot.com" -k https://12
 
 ---
 
-*Dokumen ini dihasilkan otomatis sebagai bagian dari sesi pemulihan. Perubahan destruktif (commit/push, penghapusan direktori produksi) sengaja BELUM dilakukan dan menunggu keputusan pemilik repo.*
+## 12. Eksekusi Rekonsiliasi (dilakukan 2026-10-16)
+
+- **Branch:** `reconcile/2026-10-16` (dibuat dari `migration/nextjs-frontend` @ `ceddcbd`).
+- **Commit:** `5c4cfba` — `chore(reconcile): snapshot WIP lokal 2026-10-16` (135 file: backend + frontend + proyek Capacitor `frontend/android`).
+- **Commit tambahan:** `5614b76` — `feat(auth): tambahkan migrasi create_personal_access_tokens_table (Sanctum)` (menutup gap migrasi Sanctum yang hilang di lokal).
+- **Push:** `origin/reconcile/2026-10-16` (**berhasil**). PR: https://github.com/afazhriel/tracking-tiang/pull/new/reconcile/2026-10-16
+- **Dikecualikan dari commit** (sengaja, tetap untracked):
+  - `backend/wilayah_indonesia.sql` (data 5 MB)
+  - `frontend/FRONTEND-COLLECT.txt` (dump tool)
+  - `package.json` di root (junk: hanya `framer-motion`)
+  - `frontend/android/.idea/` (IDE)
+- **Perbaikan ikut di-commit:** hapus UTF-8 BOM pada 12 file.
+- **File sampah dihapus:** `"--others --exclude-standard'"` dan `"-files --others --exclude-standard"`.
+
+## 13. Temuan Penting — Lokal MENDAHULUI Server (bukan sebaliknya)
+
+Analisis diff membuktikan cabang lokal adalah **desain yang lebih baru dan menggantikan (supersede)** kode server di produksi:
+
+| Aspek | Server (produksi) | Lokal (lebih baru) |
+|---|---|---|
+| Snapshot bobot progres | `weight_percent_snapshot` + `is_active_snapshot` (kolom, model, controller) | **Dihapus**; diganti `Project::progressDenominator()` |
+| Aktivitas | `PoleActivityController` | Diganti `ActivityController` + `NotificationController` |
+| Wilayah hierarki | tidak ada | `province_id/regency_id/district_id/village_id` di `Pole` + validasi konsistensi |
+| Item pekerjaan | hanya `store` | **CRUD lengkap** (`update`/`destroy`) + validasi total budget bobot ≤ 100% |
+
+**Konsekuensi:** menimpa lokal dengan server akan **memundurkan** fitur. Rekomendasi: jadikan cabang lokal sebagai sumber kebenaran dan deploy ke produksi (opsi "Jadikan lokal kanonik & deploy ke server"), bukan menarik server → lokal.
+
+**Artefak server-only yang perlu keputusan:**
+- `database/migrations/2026_10_15_120000_create_personal_access_tokens_table.php` — **lokal belum punya**, dibutuhkan Sanctum pada setup DB baru → **SUDAH ditambahkan ke lokal** (commit `5614b76`). Dikonfirmasi lokal memakai Sanctum: `laravel/sanctum:^4.0`, `HasApiTokens`, `createToken()`, `auth:sanctum` (`routes/api.php:60`).
+- `database/migrations/2026_10_14_092909_add_weight_snapshot_...` — **sengaja dihapus** lokal → jangan diambil.
+- `app/Http/Controllers/Api/PoleActivityController.php` — superseded oleh `ActivityController` → jangan diambil.
+- `tests/Feature/ProgressCalculationTest.php`, `WorkItemNormalizationTest.php` — uji tambahan; perlu diperiksa kompatibilitasnya dengan desain lokal sebelum diambil.
+
+## 14. Temuan BOM & Korupsi
+
+- **12 file lokal ber-BOM UTF-8** (`EF BB BF`) — **sudah distrip**:
+  `PoleAssignmentController.php`, `TeamController.php`, `TeamPolicy.php`, `frontend/app/login/page.jsx`, `frontend/app/tiang/TiangPage.jsx`, `frontend/app/page.jsx`, `frontend/components/ui/badge.jsx`, `frontend/components/ui/modal.jsx`, `frontend/lib/status.js`, `frontend/lib/theme.js`, `frontend/src/components/ui/sign-in-card-2.jsx`, `frontend/src/lib/utils.js`.
+  (BOM sebelum `<?php` dapat menyebabkan output sebelum header → mengganggu API.)
+- **1 file server korup:** `database/migrations/2026_10_02_181142_create_work_items_table.php` diawali byte `k` (`k<?php`) — **sudah diperbaiki**.
+- Bukan korupsi (abaikan): `resources/views/welcome.blade.php` dan `storage/framework/views/*.php` (template/kompilasi, memang diawali HTML).
+
+## 15. Rekomendasi Lanjutan
+
+1. **Deploy frontend lokal** ke `/opt/tracking-tiang/frontend-next/frontend` lalu `systemctl restart tracking-tiang-next` (agar fitur tim/profil/pengaturan ikut terpasang). *(Belum — butuh persetujuan.)*
+2. ~~Tambahkan migrasi `personal_access_tokens` ke repo lokal~~ — **selesai** (commit `5614b76`).
+3. Perbaiki `.gitignore` repo: `.next/`, `.idea/`, `*.sql`.
+4. Hapus file junk: `frontend/FRONTEND-COLLECT.txt`, `package.json` (root).
+5. Jalankan `php artisan test` pada desain lokal (uji `ProgressCalculationTest`/`WorkItemNormalizationTest` perlu disesuaikan bila diambil dari server).
+
+---
+
+*Dokumen ini dihasilkan otomatis sebagai bagian dari sesi pemulihan & rekonsiliasi. Pemulihan data, hardening, higiene produksi, dan rekonsiliasi ke branch review SUDAH dilakukan. Langkah destruktif berikutnya (deploy ke produksi / merge ke branch utama) menunggu keputusan pemilik repo.*
