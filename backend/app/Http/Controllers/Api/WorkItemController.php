@@ -10,7 +10,6 @@ use App\Models\WorkItem;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
-use Illuminate\Validation\ValidationException;
 
 class WorkItemController extends Controller
 {
@@ -71,6 +70,7 @@ class WorkItemController extends Controller
             'data' => $data,
             'meta' => [
                 'total_weight' => round((float) $workItems->sum('weight_percent'), 2),
+                'is_balanced' => $this->isWeightBalanced($workItems->sum('weight_percent')),
                 'progress_denominator' => $denominator,
                 'total_target_poles' => $project->total_target_poles,
             ],
@@ -83,13 +83,14 @@ class WorkItemController extends Controller
 
         $validated = $this->validated($request, $project);
 
-        $this->assertWeightWithinBudget($project, (float) $validated['weight_percent']);
-
         $workItem = $project->workItems()->create($validated);
 
+        $this->normalizeWorkItemWeights($project);
+
         return response()->json([
-            'message' => 'Item pekerjaan berhasil dibuat.',
-            'data' => $workItem,
+            'message' => 'Item pekerjaan berhasil dibuat. Bobot seluruh item disesuaikan otomatis agar total 100%.',
+            'data' => $workItem->fresh(),
+            'meta' => $this->weightMeta($project),
         ], 201);
     }
 
@@ -104,17 +105,33 @@ class WorkItemController extends Controller
 
         $validated = $this->validated($request, $project, $workItem);
 
-        $this->assertWeightWithinBudget(
-            $project,
-            (float) $validated['weight_percent'],
-            $workItem->id
-        );
-
         $workItem->update($validated);
 
+        $this->normalizeWorkItemWeights($project);
+
         return response()->json([
-            'message' => 'Item pekerjaan berhasil diperbarui.',
+            'message' => 'Item pekerjaan berhasil diperbarui. Bobot seluruh item disesuaikan otomatis agar total 100%.',
             'data' => $workItem->fresh(),
+            'meta' => $this->weightMeta($project),
+        ]);
+    }
+
+    /**
+     * Rapikan bobot seluruh item pekerjaan agar totalnya tepat 100%.
+     *
+     * Dipakai untuk data lama yang bobotnya belum seimbang (mis. setelah
+     * item dihapus, atau data yang diinput sebelum normalisasi otomatis
+     * berlaku). Bobot tiap item dipertahankan proporsinya.
+     */
+    public function normalize(Project $project): JsonResponse
+    {
+        $this->authorize('update', $project);
+
+        $this->normalizeWorkItemWeights($project);
+
+        return response()->json([
+            'message' => 'Bobot seluruh item pekerjaan telah dirapikan menjadi 100%.',
+            'meta' => $this->weightMeta($project),
         ]);
     }
 
@@ -155,34 +172,73 @@ class WorkItemController extends Controller
     }
 
     /**
-     * Pastikan penjumlahan bobot seluruh item tidak melebihi 100%.
+     * Normalisasi bobot seluruh item pekerjaan agar totalnya tepat 100%.
      *
-     * Validasi per-item (`min:0`, `max:100`) tidak cukup: total bobot
-     * beberapa item bisa melampaui 100% sehingga progres berbobot dan
-     * Kurva S kehilangan makna. Saat update, bobot item yang sedang
-     * diedit dihitung ulang terhadap sisa item lainnya.
+     * Bobot yang diisi pengguna dibaca sebagai bobot *relatif* terhadap
+     * kondisi saat ini, bukan angka mati. Contoh: total item lama 100%,
+     * pengguna menambah item berbobot 50% -> total sementara 150% ->
+     * seluruh item diskalakan dengan faktor 100/150 sehingga total kembali
+     * 100% (item lama 66,67%, item baru 33,33%). Input di atas 100% tidak
+     * lagi ditolak, cukup dihitung ulang.
+     *
+     * Pembulatan dilakukan per item ke 2 desimal (presisi kolom
+     * `weight_percent`). Sisa pembulatan diserap item dengan bobot terbesar
+     * supaya penjumlahannya benar-benar 100,00% dan tidak pernah negatif.
+     * Karena semua halaman progres dan Kurva S memakai `weight_percent`,
+     * penyesuaian ini otomatis konsisten di seluruh aplikasi.
      */
-    private function assertWeightWithinBudget(
-        Project $project,
-        float $weight,
-        ?int $ignoreWorkItemId = null
-    ): void {
-        $otherTotal = (float) $project->workItems()
-            ->when(
-                $ignoreWorkItemId !== null,
-                fn ($query) => $query->whereKeyNot($ignoreWorkItemId)
-            )
-            ->sum('weight_percent');
+    private function normalizeWorkItemWeights(Project $project): void
+    {
+        $items = $project->workItems()
+            ->orderBy('sequence')
+            ->orderBy('id')
+            ->get();
 
-        if (($otherTotal + $weight) > 100.0001) {
-            throw ValidationException::withMessages([
-                'weight_percent' => [
-                    'Total bobot seluruh item melebihi 100% (saat ini '.
-                    round($otherTotal + $weight, 2).
-                    '%). Kurangi bobot item lain terlebih dahulu.',
-                ],
-            ]);
+        if ($items->isEmpty()) {
+            return;
         }
+
+        $count = $items->count();
+        $total = (float) $items->sum('weight_percent');
+
+        $scaled = $items->map(function (WorkItem $item) use ($total, $count) {
+            if ($total > 0) {
+                return round(((float) $item->weight_percent / $total) * 100, 2);
+            }
+
+            /* Semua bobot nol -> bagi rata supaya total tetap 100%. */
+            return round(100 / $count, 2);
+        })->all();
+
+        $diff = round(100 - array_sum($scaled), 2);
+
+        if (abs($diff) >= 0.01) {
+            $maxIndex = array_search(max($scaled), $scaled, true);
+
+            $scaled[$maxIndex] = round($scaled[$maxIndex] + $diff, 2);
+        }
+
+        foreach ($items as $index => $item) {
+            $item->update(['weight_percent' => max(0.0, $scaled[$index])]);
+        }
+    }
+
+    /**
+     * Ringkasan bobot untuk respons API.
+     */
+    private function weightMeta(Project $project): array
+    {
+        $total = (float) $project->workItems()->sum('weight_percent');
+
+        return [
+            'total_weight' => round($total, 2),
+            'is_balanced' => $this->isWeightBalanced($total),
+        ];
+    }
+
+    private function isWeightBalanced(float|int|string $total): bool
+    {
+        return abs((float) $total - 100) < 0.01;
     }
 
     /**

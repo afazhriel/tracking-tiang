@@ -51,10 +51,12 @@ const EMPTY_FORM = {
 /**
  * Bobot sebuah item pekerjaan terhadap total proyek.
  *
- * Backend memvalidasi tiap item 0..100, tetapi penjumlahan seluruh
- * item tidak boleh melewati 100% supaya progres berbobot tetap
- * bermakna. Halaman ini menegakkan aturan itu di sisi klien sebelum
- * request dikirim, dan menandai item yang belum membuat total = 100%.
+ * Backend memvalidasi tiap item 0..100 dan otomatis menormalisasi bobot
+ * seluruh item agar totalnya tepat 100% setiap kali item ditambah/diubah.
+ * Bobot yang diisi dibaca sebagai bobot relatif: menambah item berbobot
+ * 50% saat total sudah 100% membuat total sementara 150%, lalu seluruh
+ * item diskalakan (x100/150) supaya kembali 100%. Halaman ini hanya
+ * mempratinjau penyesuaian tersebut, bukan memblokir input.
  */
 function toFormValue(value) {
   return value === null || value === undefined ? '' : String(value)
@@ -106,7 +108,14 @@ function WorkItemFormModal({
     return otherTotal + (weightValue ?? 0)
   }, [editingId, existingItems, weightValue])
 
-  const weightExceeded = totalAfterSave > 100.0001
+  const balanced = Math.abs(totalAfterSave - 100) < 0.0001
+
+  const scaleFactor = totalAfterSave > 0 ? 100 / totalAfterSave : null
+
+  const normalizedWeight =
+    scaleFactor !== null && weightValue !== null
+      ? weightValue * scaleFactor
+      : null
 
   function update(field) {
     return (event) => {
@@ -168,16 +177,6 @@ function WorkItemFormModal({
       return
     }
 
-    if (weightExceeded) {
-      setFormError({
-        message: `Total bobot setelah disimpan menjadi ${formatPercent(
-          totalAfterSave
-        )}, melebihi 100%. Kurangi bobot item lain terlebih dahulu.`,
-      })
-
-      return
-    }
-
     setSaving(true)
     setFieldErrors(null)
     setFormError(null)
@@ -226,7 +225,6 @@ function WorkItemFormModal({
             form="work-item-form"
             loading={saving}
             loadingLabel="Menyimpan..."
-            disabled={weightExceeded}
           >
             {editingId ? 'Simpan Perubahan' : 'Tambah Item'}
           </SubmitButton>
@@ -283,7 +281,7 @@ function WorkItemFormModal({
             htmlFor="work-item-weight"
             required
             error={fieldErrors?.weight_percent?.[0]}
-            hint="0 – 100. Total seluruh item sebaiknya 100%."
+            hint="0 – 100. Total seluruh item otomatis dinormalisasi ke 100%."
           >
             <TextInput
               id="work-item-weight"
@@ -400,20 +398,37 @@ function WorkItemFormModal({
 
         <div
           className={`rounded-xl border px-4 py-3 text-xs leading-5 ${
-            weightExceeded
-              ? 'border-clay-300/70 bg-clay-50 text-clay-700'
-              : 'border-neutral-200 bg-canvas text-neutral-500'
+            balanced
+              ? 'border-neutral-200 bg-canvas text-neutral-500'
+              : 'border-amber-300/70 bg-amber-50 text-amber-800'
           }`}
         >
-          Total bobot bila disimpan:{' '}
+          Total bobot sementara:{' '}
           <strong className="font-semibold tabular-nums">
             {formatPercent(totalAfterSave)}
           </strong>
-          {weightExceeded
-            ? ' — melebihi 100%, penyimpanan diblokir.'
-            : totalAfterSave !== 100
-              ? ' — belum tepat 100%.'
-              : ' — sudah tepat 100%.'}
+
+          {balanced ? (
+            ' — sudah tepat 100%.'
+          ) : scaleFactor !== null ? (
+            <>
+              {' — saat disimpan, seluruh item dinormalisasi otomatis ke 100% '}
+              <span className="tabular-nums">
+                (faktor ×{scaleFactor.toFixed(3)})
+              </span>
+              {normalizedWeight !== null && (
+                <>
+                  {'. Bobot item ini menjadi '}
+                  <strong className="font-semibold tabular-nums">
+                    {formatPercent(normalizedWeight)}
+                  </strong>
+                  {' ±0,01%.'}
+                </>
+              )}
+            </>
+          ) : (
+            ' — akan dibagi rata otomatis agar total 100%.'
+          )}
         </div>
       </form>
     </Modal>
@@ -430,6 +445,7 @@ function PekerjaanSettingsContent() {
   const [editing, setEditing] = useState(null)
   const [deletingId, setDeletingId] = useState(null)
   const [deleteError, setDeleteError] = useState(null)
+  const [normalizing, setNormalizing] = useState(false)
 
   const itemsLoader = useCallback(async () => {
     if (!projectId) return { items: [], meta: null }
@@ -482,6 +498,23 @@ function PekerjaanSettingsContent() {
     }
   }
 
+  async function handleNormalize() {
+    if (!projectId || normalizing) return
+
+    setNormalizing(true)
+    setDeleteError(null)
+
+    try {
+      await api.normalizeWorkItems(projectId)
+
+      setNormalizing(false)
+      refresh()
+    } catch (err) {
+      setDeleteError(err)
+      setNormalizing(false)
+    }
+  }
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -530,7 +563,7 @@ function PekerjaanSettingsContent() {
           hint={
             weightBalanced
               ? 'Sudah tepat 100%'
-              : 'Belum tepat 100% — sesuaikan bobot'
+              : 'Belum 100% — rapikan otomatis'
           }
           Icon={Scale}
           tone={weightBalanced ? 'sage' : 'ochre'}
@@ -554,15 +587,29 @@ function PekerjaanSettingsContent() {
       {!weightBalanced && workItems.length > 0 && (
         <div
           role="status"
-          className="flex items-start gap-3 rounded-card border border-amber-300/70 bg-amber-50/80 px-4 py-3"
+          className="flex flex-wrap items-center justify-between gap-3 rounded-card border border-amber-300/70 bg-amber-50/80 px-4 py-3"
         >
-          <CircleAlert className="mt-0.5 h-4 w-4 shrink-0 text-amber-700" />
+          <div className="flex items-start gap-3">
+            <CircleAlert className="mt-0.5 h-4 w-4 shrink-0 text-amber-700" />
 
-          <p className="text-xs leading-5 text-amber-800">
-            Total bobot saat ini {formatPercent(totalWeight)}. Sesuaikan
-            hingga tepat 100% agar progres proyek dan Kurva S merepresentasikan
-            seluruh pekerjaan.
-          </p>
+            <p className="text-xs leading-5 text-amber-800">
+              Total bobot saat ini {formatPercent(totalWeight)}. Setiap item
+              yang disimpan otomatis dinormalisasi ke 100%; rapikan sekarang
+              agar progres proyek dan Kurva S langsung merepresentasikan
+              seluruh pekerjaan.
+            </p>
+          </div>
+
+          {isAdmin && (
+            <ActionButton
+              variant="subtle"
+              icon={Scale}
+              onClick={handleNormalize}
+              disabled={normalizing || loading}
+            >
+              {normalizing ? 'Merapikan...' : 'Rapikan ke 100%'}
+            </ActionButton>
+          )}
         </div>
       )}
 
@@ -570,7 +617,9 @@ function PekerjaanSettingsContent() {
         <ErrorNotice
           error={error || deleteError}
           onRetry={error ? reloadItems : undefined}
-          title="Data pekerjaan belum dapat dimuat"
+          title={
+            error ? 'Data pekerjaan belum dapat dimuat' : 'Permintaan gagal'
+          }
         />
       )}
 

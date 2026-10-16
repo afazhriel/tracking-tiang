@@ -376,6 +376,11 @@ export const api = {
       ...options,
       method: 'DELETE',
     }),
+  normalizeWorkItems: (projectId, options) =>
+    apiRequest(`/api/projects/${projectId}/work-items/normalize`, {
+      ...options,
+      method: 'POST',
+    }),
 
   /* --- Kurva S --- */
   getCurve: (projectId, options) =>

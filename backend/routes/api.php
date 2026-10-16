@@ -92,6 +92,7 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
     /* Work Item */
     Route::get('/projects/{project}/work-items', [WorkItemController::class, 'index']);
     Route::post('/projects/{project}/work-items', [WorkItemController::class, 'store']);
+    Route::post('/projects/{project}/work-items/normalize', [WorkItemController::class, 'normalize']);
     Route::get('/projects/{project}/work-items/{workItem}', [WorkItemController::class, 'show']);
     Route::put('/projects/{project}/work-items/{workItem}', [WorkItemController::class, 'update']);
     Route::patch('/projects/{project}/work-items/{workItem}', [WorkItemController::class, 'update']);
