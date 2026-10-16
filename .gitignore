@@ -18,6 +18,9 @@ backend/bootstrap/cache/
 database/*.sqlite
 database/*.sqlite3
 
+# Data dumps (jangan di-commit)
+*.sql
+
 # Local build artifacts and backups
 /frontend/.next/
 /frontend/backup-ui/
