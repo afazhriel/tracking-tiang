@@ -307,12 +307,22 @@ Analisis diff membuktikan cabang lokal adalah **desain yang lebih baru dan mengg
 
 ## 15. Rekomendasi Lanjutan
 
-1. **Deploy frontend lokal** ke `/opt/tracking-tiang/frontend-next/frontend` lalu `systemctl restart tracking-tiang-next` (agar fitur tim/profil/pengaturan ikut terpasang). *(Belum — butuh persetujuan.)*
+1. ~~Deploy frontend lokal ke produksi~~ — **selesai** (lihat §16).
 2. ~~Tambahkan migrasi `personal_access_tokens` ke repo lokal~~ — **selesai** (commit `5614b76`).
 3. Perbaiki `.gitignore` repo: `.next/`, `.idea/`, `*.sql`.
 4. Hapus file junk: `frontend/FRONTEND-COLLECT.txt`, `package.json` (root).
 5. Jalankan `php artisan test` pada desain lokal (uji `ProgressCalculationTest`/`WorkItemNormalizationTest` perlu disesuaikan bila diambil dari server).
 
+## 16. Deploy Frontend ke Produksi (dilakukan 2026-10-16)
+
+- **Backup live:** `/opt/tracking-tiang/backups/deploy-20261016_035426/` — tarball source `frontend-source-20261016_035426.tar.gz` (9.4 MB, tanpa `node_modules`/`.next`), `wip-tracked.patch` (717 KB), `status.txt`, `HEAD.txt` (HEAD lama `92d90b5`, branch `migration/nextjs-frontend`).
+- **Switch repo** `/opt/tracking-tiang/frontend-next`: `git fetch origin --prune` + `git checkout -f -B main origin/main` → HEAD `1d6c856`. Perubahan WIP server (56 entri) tertimpa; sudah tersimpan di backup & `wip-tracked.patch`. Junk `frontend/FRONTEND-COLLECT.txt` dihapus.
+- **Build:** `npm install` (+85 paket) + `npm run build` (Next.js 16.3.8, Turbopack) → **sukses**, 13 rute ter-generate (termasuk `/tim`, `/profil`, `/pekerjaan/pengaturan`, `/notifikasi`, `/aktivitas`).
+- **Restart:** `systemctl restart tracking-tiang-next` → **active (running)**, `next-server v16.3.8` di :3000.
+- **Verifikasi (via nginx, Host `pjl.ituiot.com`):** `/` `/login` `/dashboard` `/tiang` `/pekerjaan` `/pekerjaan/pengaturan` `/profil` `/tim` `/notifikasi` `/aktivitas` `/kurva-s` → semua **200**; `/api/projects` → **401** (butuh auth, sesuai). Tidak ada error pada journal.
+- **Backend TIDAK diubah** — tetap live di `/opt/tracking-tiang/backend` (docker volume). Deploy hanya menyentuh repo `frontend-next` (subdir `frontend/`).
+- **Rollback:** `cd /opt/tracking-tiang/frontend-next && git checkout -f migration/nextjs-frontend` lalu restore tarball bila perlu, dan `systemctl restart tracking-tiang-next`.
+
 ---
 
-*Dokumen ini dihasilkan otomatis sebagai bagian dari sesi pemulihan & rekonsiliasi. Pemulihan data, hardening, higiene produksi, dan rekonsiliasi ke branch review SUDAH dilakukan. Langkah destruktif berikutnya (deploy ke produksi / merge ke branch utama) menunggu keputusan pemilik repo.*
+*Dokumen ini dihasilkan otomatis sebagai bagian dari sesi pemulihan & rekonsiliasi. Pemulihan data, hardening, higiene produksi, rekonsiliasi (branch review → `main`), dan deploy frontend ke produksi SUDAH dilakukan. Ringkasan commit: `5c4cfba` (snapshot WIP), `5614b76` (migrasi Sanctum), `6ba76b4` (docs), `181de40` + `1d6c856` (rapikan repo). HEAD produksi: `1d6c856`.*
