@@ -1,6 +1,6 @@
 /**
  * =========================================================
- * API CLIENT - TRACKING TIANG
+ * API CLIENT - TRACKING PROYEK
  * ------------------------------------------------------------
  * Satu-satunya tempat frontend melakukan request ke backend.
  *
@@ -354,9 +354,14 @@ export const api = {
     })
   },
 
-  /* --- Pekerjaan (Work Item) --- */
+  /* --- Pekerjaan (Work Item) ---
+     `listWorkItems` mengembalikan item TEMPLATE project (pole_id null).
+     `listWorkItemsAggregate` mengembalikan satu baris per template dengan
+     progres agregat dari seluruh tiang (dipakai halaman Pekerjaan). */
   listWorkItems: (projectId, options) =>
-    apiRequest(`/api/projects/${projectId}/work-items`, options),
+    apiRequest(`/api/projects/${projectId}/work-items?scope=project`, options),
+  listWorkItemsAggregate: (projectId, options) =>
+    apiRequest(`/api/projects/${projectId}/work-items?scope=aggregate`, options),
   getWorkItem: (projectId, workItemId, options) =>
     apiRequest(`/api/projects/${projectId}/work-items/${workItemId}`, options),
   createWorkItem: (projectId, payload, options) =>
@@ -382,9 +387,36 @@ export const api = {
       method: 'POST',
     }),
 
+  /* --- Item pekerjaan per tiang (independen per tiang) --- */
+  listPoleWorkItems: (projectId, poleId, options) =>
+    apiRequest(`/api/projects/${projectId}/poles/${poleId}/work-items`, options),
+  createPoleWorkItem: (projectId, poleId, payload, options) =>
+    apiRequest(`/api/projects/${projectId}/poles/${poleId}/work-items`, {
+      ...options,
+      method: 'POST',
+      body: payload,
+    }),
+  updatePoleWorkItem: (projectId, poleId, workItemId, payload, options) =>
+    apiRequest(
+      `/api/projects/${projectId}/poles/${poleId}/work-items/${workItemId}`,
+      { ...options, method: 'PUT', body: payload }
+    ),
+  deletePoleWorkItem: (projectId, poleId, workItemId, options) =>
+    apiRequest(
+      `/api/projects/${projectId}/poles/${poleId}/work-items/${workItemId}`,
+      { ...options, method: 'DELETE' }
+    ),
+  applyPoleTemplate: (projectId, poleId, options) =>
+    apiRequest(
+      `/api/projects/${projectId}/poles/${poleId}/work-items/apply-template`,
+      { ...options, method: 'POST' }
+    ),
+
   /* --- Kurva S --- */
   getCurve: (projectId, options) =>
     apiRequest(`/api/projects/${projectId}/curve`, options),
+  getPoleCurve: (projectId, poleId, options) =>
+    apiRequest(`/api/projects/${projectId}/poles/${poleId}/curve`, options),
 
   /* --- Auth ---
      Kedua endpoint ini sudah diverifikasi ada di server:
@@ -496,14 +528,19 @@ export const api = {
       options
     ),
   listNotifications: (projectId, options) =>
-    apiRequestFirstAvailable(
-      [
-        `/api/notifications`,
-        `/api/notifications/unread`,
-        `/api/projects/${projectId}/notifications`,
-      ],
-      options
-    ),
+    apiRequest('/api/notifications', options),
+  getUnreadNotificationCount: (options) =>
+    apiRequest('/api/notifications/unread-count', options),
+  markNotificationRead: (notificationId, options) =>
+    apiRequest(`/api/notifications/${notificationId}/read`, {
+      ...options,
+      method: 'POST',
+    }),
+  markAllNotificationsRead: (options) =>
+    apiRequest('/api/notifications/read-all', {
+      ...options,
+      method: 'POST',
+    }),
 }
 
 /* =========================================================
@@ -587,6 +624,8 @@ export function normalizeWorkItem(workItem) {
   return {
     id: workItem?.id ?? null,
     projectId: workItem?.project_id ?? null,
+    poleId: workItem?.pole_id ?? null,
+    sourceItemId: workItem?.source_item_id ?? null,
     name: workItem?.name ?? '—',
     weight: Number(workItem?.weight_percent ?? 0),
     sequence: workItem?.sequence ?? null,

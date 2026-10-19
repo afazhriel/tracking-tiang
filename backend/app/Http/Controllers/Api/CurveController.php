@@ -84,10 +84,28 @@ class CurveController extends Controller
         /*
          * ==========================================
          * KURVA S RENCANA
-         * B1-B9 = bulan ke-1 sampai ke-9 proyek
+         * B1..Bn = bulan ke-1 sampai bulan rencana terakhir
          * ==========================================
+         *
+         * Panjang array mengikuti bulan rencana terjauh pada item
+         * (minimal 9 bulan), supaya item dengan planned_end_month > 9
+         * tidak memicu "Undefined array key".
          */
-        $monthly = array_fill(1, 9, 0);
+        $maxMonth = 9;
+
+        foreach ($workItems as $item) {
+            if (!$item->planned_start_month || !$item->planned_end_month) {
+                continue;
+            }
+
+            $end = (int) $item->planned_end_month;
+
+            if ($end > $maxMonth) {
+                $maxMonth = $end;
+            }
+        }
+
+        $monthly = array_fill(1, $maxMonth, 0);
 
         foreach ($workItems as $item) {
             $start = $item->planned_start_month;
