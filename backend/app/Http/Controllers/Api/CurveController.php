@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\Pole;
 use App\Models\PoleProgressHistory;
 use App\Models\Project;
 use Illuminate\Http\JsonResponse;
@@ -14,16 +15,71 @@ class CurveController extends Controller
     {
         $this->authorize('view', $project);
 
-        $workItems = $project->workItems()
+        return $this->buildCurveResponse($project, null);
+    }
+
+    public function poleCurve(Project $project, Pole $pole): JsonResponse
+    {
+        $this->authorize('view', $project);
+
+        // Ensure pole belongs to project
+        abort_unless((int) $pole->project_id === (int) $project->id, 404);
+
+        return $this->buildCurveResponse($project, $pole);
+    }
+
+    /**
+     * Sumber item untuk kurva rencana.
+     *
+     * - Proyek : seluruh item template (`pole_id` NULL).
+     * - Tiang  : item milik tiang itu; bila tidak ada yang punya bulan
+     *            rencana, jatuh kembali ke template project.
+     */
+    private function planWorkItems(Project $project, ?Pole $pole = null)
+    {
+        if ($pole !== null) {
+            $poleItems = $pole->workItems()
+                ->whereNotNull('planned_start_month')
+                ->whereNotNull('planned_end_month')
+                ->orderBy('sequence')
+                ->orderBy('id')
+                ->get();
+
+            if ($poleItems->isNotEmpty()) {
+                return $poleItems;
+            }
+        }
+
+        return $project->workItems()
+            ->whereNull('pole_id')
+            ->whereNotNull('planned_start_month')
+            ->whereNotNull('planned_end_month')
             ->orderBy('sequence')
+            ->orderBy('id')
             ->get();
+    }
+
+    private function buildCurveResponse(Project $project, ?Pole $pole = null): JsonResponse
+    {
+        /*
+         * Rencana untuk kurva proyek memakai item TEMPLATE (`pole_id`
+         * NULL) supaya rencana tidak berlipat sejumlah tiang. Rencana
+         * untuk satu tiang memakai item milik tiang itu sendiri; bila
+         * tiang belum punya item berbulan rencana, jatuh kembali ke
+         * template project.
+         */
+        $workItems = $this->planWorkItems($project, $pole);
 
         /*
          * Penyebut yang sama dengan WorkItemController (target tiang,
          * fallback jumlah tiang terdaftar) supaya progres proyek di
          * Kurva S = penjumlahan kontribusi tiap item pekerjaan.
+         *
+         * Khusus SATU tiang penyebutnya 1: progress berbobot tiang sudah
+         * bernilai 0-100, jadi tidak boleh dibagi jumlah tiang project.
          */
         $denominator = $project->progressDenominator();
+        $scale = $pole !== null ? 1 : $denominator;
 
         /*
          * ==========================================
@@ -82,10 +138,17 @@ class CurveController extends Controller
          * HISTORI ACTUAL
          * ==========================================
          */
-        $histories = PoleProgressHistory::with('workItem')
+        $historiesQuery = PoleProgressHistory::with('workItem')
             ->whereHas('pole', function ($query) use ($project) {
                 $query->where('project_id', $project->id);
-            })
+            });
+
+        // If pole is specified, filter histories to only this pole
+        if ($pole !== null) {
+            $historiesQuery->where('pole_id', $pole->id);
+        }
+
+        $histories = $historiesQuery
             ->orderBy('recorded_at')
             ->get();
 
@@ -109,78 +172,73 @@ class CurveController extends Controller
                 $currentState[$history->pole_id][$history->work_item_id] = [
                     'progress_percent' => (float) $history->progress_percent,
                     'work_item_id' => $history->work_item_id,
+                    'weight_percent' => (float) ($history->workItem->weight_percent ?? 0),
                 ];
             }
 
-            /*
-             * Hitung progress global terhadap target seluruh proyek.
-             *
-             * Tiang yang belum mempunyai progress otomatis
-             * bernilai 0%. Jadi denominator selalu target
-             * jumlah tiang proyek, bukan jumlah tiang yang
-             * sudah mempunyai history.
-             */
             $totalPoleProgress = 0;
 
             foreach ($currentState as $poleProgress) {
                 foreach ($poleProgress as $state) {
-                    $workItem = $workItems->firstWhere(
-                        'id',
-                        $state['work_item_id']
-                    );
-
-                    if (!$workItem) {
-                        continue;
-                    }
-
                     $totalPoleProgress += (
-                        (float) $workItem->weight_percent
-                        * $state['progress_percent']
+                        (float) $state['weight_percent']
+                        * (float) $state['progress_percent']
                     ) / 100;
                 }
             }
 
             $actual[] = [
                 'date' => $date,
-                'progress_percent' => $denominator > 0
-                    ? round($totalPoleProgress / $denominator, 4)
+                'progress_percent' => $scale > 0
+                    ? round($totalPoleProgress / $scale, 4)
                     : 0,
             ];
         }
 
         /*
          * ==========================================
-         * PROGRESS GLOBAL TERKINI
-         *
-         * Progress seluruh tiang dibagi terhadap
-         * target jumlah tiang proyek.
-         *
-         * Tiang yang belum mempunyai progress
-         * otomatis bernilai 0%.
+         * PROGRESS TERKINI
          * ==========================================
          */
-        $registeredPoles = $project->poles()->count();
-
-        $totalPoleProgress = 0;
-
-        foreach ($project->poles as $pole) {
+        if ($pole !== null) {
+            // Single pole progress
             $pole->loadMissing('workProgress.workItem');
 
-            $poleProgress = $pole->workProgress->sum(function ($item) {
+            $currentPercent = $pole->workProgress->sum(function ($item) {
                 return (
                     (float) $item->workItem->weight_percent
                     * (float) $item->progress_percent
                 ) / 100;
             });
 
-            $totalPoleProgress += $poleProgress;
+            $currentPercent = $scale > 0
+                ? round($currentPercent / $scale, 4)
+                : 0;
+        } else {
+            // All poles progress (project level)
+            $registeredPoles = $project->poles()->count();
+
+            $totalPoleProgress = 0;
+
+            foreach ($project->poles as $p) {
+                $p->loadMissing('workProgress.workItem');
+
+                $poleProgress = $p->workProgress->sum(function ($item) {
+                    return (
+                        (float) $item->workItem->weight_percent
+                        * (float) $item->progress_percent
+                    ) / 100;
+                });
+
+                $totalPoleProgress += $poleProgress;
+            }
+
+            $currentPercent = $scale > 0
+                ? round($totalPoleProgress / $scale, 4)
+                : 0;
         }
 
-        $currentPercent = $denominator > 0
-            ? round($totalPoleProgress / $denominator, 4)
-            : 0;
-
-        return response()->json([
+        $response = [
             'project' => [
                 'id' => $project->id,
                 'name' => $project->name,
@@ -191,13 +249,23 @@ class CurveController extends Controller
                 'progress_denominator' => $denominator,
             ],
 
-            'registered_poles' => $registeredPoles,
-
             'planned_curve' => $planned,
-
             'actual_curve' => $actual,
-
             'actual_current_percent' => $currentPercent,
-        ]);
+        ];
+
+        if ($pole !== null) {
+            $response['pole'] = [
+                'id' => $pole->id,
+                'pole_code' => $pole->pole_code,
+                'address' => $pole->address,
+                'progress' => $currentPercent,
+            ];
+            $response['registered_poles'] = 1;
+        } else {
+            $response['registered_poles'] = $project->poles()->count();
+        }
+
+        return response()->json($response);
     }
 }

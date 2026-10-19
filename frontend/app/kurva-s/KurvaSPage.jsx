@@ -1,13 +1,16 @@
 'use client'
 
 import { useCallback, useMemo } from 'react'
+import Link from 'next/link'
 import {
   ArrowDownRight,
+  ArrowRight,
   ArrowUpRight,
   BarChart3,
   CalendarDays,
   CircleAlert,
   Gauge,
+  MapPin,
   Minus,
   RefreshCw,
   Target,
@@ -17,6 +20,7 @@ import AppShell from '../../components/layout/AppShell'
 import { ActionButton, PageHeader } from '../../components/layout/PageHeader'
 import { useProject } from '../../lib/project-context'
 import SCurveChart from '../../components/kurva-s/SCurveChart'
+import CurveVarianceTable from '../../components/kurva-s/CurveVarianceTable'
 import { Badge } from '../../components/ui/badge'
 import {
   Card,
@@ -28,7 +32,6 @@ import {
 import { EmptyState } from '../../components/ui/empty-state'
 import { StatCard, StatCardGrid } from '../../components/ui/stat-card'
 import { ProgressBar } from '../../components/ui/progress-bar'
-import { Table, TableWrap, Td, Th, Tr } from '../../components/ui/table'
 import { ErrorNotice, Skeleton } from '../../components/ui/states'
 import { api } from '../../lib/api'
 import { useResource } from '../../lib/use-api'
@@ -70,6 +73,11 @@ function KurvaSContent() {
     [projectId]
   )
 
+  const polesLoader = useCallback(
+    async () => (projectId ? await api.listPoles(projectId) : null),
+    [projectId]
+  )
+
   const {
     data: curve,
     error,
@@ -77,7 +85,23 @@ function KurvaSContent() {
     reload,
   } = useResource(curveLoader, [projectId], { enabled: Boolean(projectId) })
 
+  const {
+    data: polesPayload,
+    loading: polesLoading,
+  } = useResource(polesLoader, [projectId], { enabled: Boolean(projectId) })
+
   const summary = useMemo(() => (curve ? summarizeCurve(curve) : null), [curve])
+
+  const poles = useMemo(
+    () => polesPayload?.data ? polesPayload.data.map((p) => ({
+      id: p.id,
+      poleCode: p.pole_code,
+      address: p.address,
+      regionName: p.region?.name,
+      hasCoordinate: p.latitude !== null && p.longitude !== null,
+    })) : [],
+    [polesPayload]
+  )
 
   const variance = summary?.variance ?? null
   const varianceToneClass = varianceTone(variance)
@@ -255,6 +279,78 @@ function KurvaSContent() {
         </CardContent>
       </Card>
 
+      {/* Kurva S per Tiang - Clickable Cards */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-neutral-100">
+              <MapPin className="h-4 w-4" />
+            </div>
+
+            <div>
+              <CardTitle>Kurva S per Tiang</CardTitle>
+              <CardDescription>
+                Klik tiang untuk melihat detail dan kurva S individual
+              </CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+
+        <CardContent>
+          {polesLoading ? (
+            <div className="animate-pulse space-y-3">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="h-20 w-full rounded-xl bg-neutral-100" />
+              ))}
+            </div>
+          ) : poles.length > 0 ? (
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              {poles.map((pole) => (
+                <Link
+                  key={pole.id}
+                  href={`/tiang/${pole.id}`}
+                  className="group rounded-xl border border-neutral-200 bg-paper p-4 transition-all hover:border-brand-300 hover:bg-brand-50 hover:shadow-md"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-neutral-900 truncate">
+                        {pole.poleCode}
+                      </p>
+                      <p className="mt-1 text-xs text-neutral-500 truncate">
+                        {pole.address ?? 'Alamat belum diisi'}
+                      </p>
+                      {pole.regionName && (
+                        <p className="mt-1 text-xs text-neutral-400">
+                          <MapPin className="inline h-3 w-3" />
+                          {pole.regionName}
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="flex flex-col items-end gap-1">
+                      <span className="text-xs font-medium text-neutral-500">
+                        {pole.hasCoordinate ? 'Berkoordinat' : 'Tanpa koordinat'}
+                      </span>
+                      <span className="inline-flex items-center gap-1 text-xs font-medium text-brand-600">
+                        <ArrowRight className="h-3 w-3 group-hover:translate-x-0.5 transition-transform" />
+                        Detail
+                      </span>
+                    </div>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          ) : (
+            <EmptyState
+              icon={MapPin}
+              compact
+              title="Belum ada data tiang"
+              description="Tiang akan muncul di sini setelah ditambahkan ke project."
+            />
+          )}
+        </CardContent>
+      </Card>
+
       <Card>
         <CardHeader>
           <div className="flex items-center gap-3">
@@ -272,140 +368,10 @@ function KurvaSContent() {
         </CardHeader>
 
         <CardContent>
-          {loading ? (
-            <Skeleton className="h-64 w-full" />
-          ) : summary?.series?.length ? (
-            <>
-              {/* Mobile */}
-              <div className="space-y-2 lg:hidden">
-                {summary.series.map((point) => (
-                  <div
-                    key={point.date}
-                    className="rounded-xl border border-neutral-100 p-3"
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium text-neutral-900">
-                        {point.label}
-                      </span>
-                      {point.month && (
-                        <Badge
-                          size="sm"
-                          className="bg-neutral-100 text-neutral-500 ring-neutral-500/20"
-                        >
-                          Bulan {point.month}
-                        </Badge>
-                      )}
-                    </div>
-
-                    <dl className="mt-2 grid grid-cols-3 gap-2 text-center">
-                      <div className="rounded-lg bg-canvas py-2">
-                        <dt className="text-[10px] text-neutral-400">Planned</dt>
-                        <dd className="text-xs font-medium tabular-nums text-neutral-800">
-                          {formatPercent(point.planned)}
-                        </dd>
-                      </div>
-
-                      <div className="rounded-lg bg-canvas py-2">
-                        <dt className="text-[10px] text-neutral-400">Actual</dt>
-                        <dd className="text-xs font-medium tabular-nums text-neutral-800">
-                          {formatPercent(point.actual)}
-                        </dd>
-                      </div>
-
-                      <div className="rounded-lg bg-canvas py-2">
-                        <dt className="text-[10px] text-neutral-400">Variance</dt>
-                        <dd
-                          className={`text-xs font-medium tabular-nums ${
-                            point.variance === null
-                              ? 'text-neutral-400'
-                              : point.variance >= 0
-                                ? 'text-emerald-600'
-                                : 'text-rose-600'
-                          }`}
-                        >
-                          {formatSignedPercent(point.variance)}
-                        </dd>
-                      </div>
-                    </dl>
-                  </div>
-                ))}
-              </div>
-
-              {/* Desktop */}
-              <div className="hidden lg:block">
-                <TableWrap>
-                  <Table>
-                    <thead>
-                      <tr>
-                        <Th>Periode</Th>
-                        <Th align="right">Planned</Th>
-                        <Th align="right">Actual</Th>
-                        <Th align="right">Variance</Th>
-                        <Th align="right">Rencana Bulan Ini</Th>
-                      </tr>
-                    </thead>
-
-                    <tbody>
-                      {summary.series.map((point) => (
-                        <Tr key={point.date}>
-                          <Td>
-                            <div className="flex items-center gap-2">
-                              <span className="font-medium text-neutral-900">
-                                {point.label}
-                              </span>
-                              {point.month && (
-                                <Badge
-                                  size="sm"
-                                  className="bg-neutral-100 text-neutral-500 ring-neutral-500/20"
-                                >
-                                  B{point.month}
-                                </Badge>
-                              )}
-                            </div>
-                            <p className="mt-0.5 text-[11px] text-neutral-400">
-                              {point.date}
-                            </p>
-                          </Td>
-
-                          <Td align="right" className="tabular-nums">
-                            {formatPercent(point.planned)}
-                          </Td>
-
-                          <Td align="right" className="tabular-nums">
-                            {formatPercent(point.actual)}
-                          </Td>
-
-                          <Td
-                            align="right"
-                            className={`tabular-nums ${
-                              point.variance === null
-                                ? 'text-neutral-400'
-                                : point.variance >= 0
-                                  ? 'text-emerald-600'
-                                  : 'text-rose-600'
-                            }`}
-                          >
-                            {formatSignedPercent(point.variance)}
-                          </Td>
-
-                          <Td align="right" className="tabular-nums text-neutral-500">
-                            {formatPercent(point.monthlyPlanned)}
-                          </Td>
-                        </Tr>
-                      ))}
-                    </tbody>
-                  </Table>
-                </TableWrap>
-              </div>
-            </>
-          ) : (
-            <EmptyState
-              icon={BarChart3}
-              compact
-              title="Tabel kurva kosong"
-              description="Belum ada periode rencana maupun realisasi yang dapat ditampilkan."
-            />
-          )}
+          <CurveVarianceTable
+            series={summary?.series ?? []}
+            loading={loading}
+          />
         </CardContent>
       </Card>
     </div>

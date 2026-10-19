@@ -10,17 +10,21 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import {
   ArrowLeft,
+  BarChart3,
   Camera,
   CircleAlert,
   ClipboardList,
   Clock,
   History,
+  ListChecks,
   MapPin,
 } from "lucide-react";
 
 import AppShell from "../../../components/layout/AppShell";
 import { useProject } from "../../../lib/project-context";
 import MapPanel from "../../../components/tiang/MapPanel";
+import SCurveChart from "../../../components/kurva-s/SCurveChart";
+import CurveVarianceTable from "../../../components/kurva-s/CurveVarianceTable";
 import {
   UpdateProgressButton,
   UpdateProgressModal,
@@ -45,16 +49,19 @@ import {
   api,
   normalizePhoto,
   normalizePole,
+  normalizeWorkItem,
   normalizeWorkProgress,
   unwrapList,
 } from "../../../lib/api";
 import { useResource } from "../../../lib/use-api";
 import { resolveStatus } from "../../../lib/status";
+import { summarizeCurve } from "../../../lib/curve";
 import {
   formatCoordinate,
   formatDate,
   formatDateTime,
   formatPercent,
+  formatSignedPercent,
 } from "../../../lib/format";
 
 function DetailRow({ label, value, mono = false }) {
@@ -68,6 +75,17 @@ function DetailRow({ label, value, mono = false }) {
       </p>
     </div>
   );
+}
+
+function varianceTone(variance) {
+  if (variance === null || variance === undefined) {
+    return "bg-neutral-100 text-neutral-500 ring-neutral-500/20";
+  }
+
+  if (variance > 0) return "bg-emerald-50 text-emerald-700 ring-emerald-600/20";
+  if (variance < 0) return "bg-rose-50 text-rose-700 ring-rose-600/20";
+
+  return "bg-neutral-100 text-neutral-600 ring-neutral-500/20";
 }
 
 /**
@@ -102,8 +120,24 @@ function TiangDetailContent() {
   const activityLoader = useCallback(async () => {
     if (!projectId || !poleId) return null;
     return await api.getPoleActivities(projectId, poleId);
-  }, [poleId, projectId]);
+  }, [projectId, poleId]);
+
+  /* Item pekerjaan milik tiang ini (independen per tiang). Item ini yang
+     menjadi sumber realisasi/progress, bukan template project. */
+  const workItemsLoader = useCallback(async () => {
+    if (!projectId || !poleId) return null;
+
+    const payload = await api.listPoleWorkItems(projectId, poleId);
+
+    return unwrapList(payload).map(normalizeWorkItem);
+  }, [projectId, poleId]);
   const enabled = Boolean(projectId && poleId);
+
+  const curveLoader = useCallback(async () => {
+    if (!projectId || !poleId) return null;
+
+    return await api.getPoleCurve(projectId, poleId);
+  }, [projectId, poleId]);
 
   const {
     data: rawPole,
@@ -125,6 +159,21 @@ function TiangDetailContent() {
     loading: activityLoading,
     reload: reloadActivities,
   } = useResource(activityLoader, [projectId, poleId], { enabled });
+
+  const {
+    data: poleWorkItems,
+    error: workItemsError,
+    loading: workItemsLoading,
+    reload: reloadWorkItems,
+  } = useResource(workItemsLoader, [projectId, poleId], { enabled });
+
+  const {
+    data: curvePayload,
+    error: curveError,
+    loading: curveLoading,
+    reload: reloadCurve,
+  } = useResource(curveLoader, [projectId, poleId], { enabled });
+
   const pole = useMemo(
     () => (rawPole ? normalizePole(rawPole) : null),
     [rawPole],
@@ -150,12 +199,11 @@ function TiangDetailContent() {
     [progressPayload],
   );
 
-  /* Gabungkan item pekerjaan yang dikonfigurasi pada project dengan
-     progress tersimpan. Tujuannya: setiap tahap pekerjaan tetap
-     terlihat meski belum ada realisasi (ditampilkan 0%), bukan hilang
-     dari daftar. */
+  /* Gabungkan item pekerjaan tiang ini dengan progress tersimpan.
+     Tujuannya: setiap tahap pekerjaan tetap terlihat meski belum ada
+     realisasi (ditampilkan 0%), bukan hilang dari daftar. */
   const mergedStages = useMemo(() => {
-    const configured = project?.workItems ?? [];
+    const configured = poleWorkItems ?? [];
     const byId = new Map(
       workProgress.map((entry) => [String(entry.workItemId), entry]),
     );
@@ -184,7 +232,7 @@ function TiangDetailContent() {
     }
 
     return rows;
-  }, [project, workProgress]);
+  }, [poleWorkItems, workProgress]);
 
   const status = resolveStatus(pole?.status, weightedProgress);
 
@@ -200,6 +248,11 @@ function TiangDetailContent() {
 
     return new Date(Math.max(...stamps)).toISOString();
   }, [workProgress]);
+
+  const curveSummary = useMemo(() => {
+    if (!curvePayload) return null;
+    return summarizeCurve(curvePayload);
+  }, [curvePayload]);
 
   const mappedPole = useMemo(() => {
     if (!pole) return [];
@@ -301,9 +354,18 @@ function TiangDetailContent() {
                 disabled={
                   poleLoading ||
                   progressLoading ||
-                  !project?.workItems?.length
+                  workItemsLoading ||
+                  !poleWorkItems?.length
                 }
               />
+
+              <Link
+                href={`/tiang/${poleId}/pekerjaan`}
+                className="inline-flex h-9 items-center gap-2 rounded-xl border border-neutral-200 bg-paper px-3 text-sm font-medium text-neutral-700 transition-colors hover:bg-canvas"
+              >
+                <ListChecks className="h-4 w-4" />
+                Kelola Item Tiang
+              </Link>
 
               <Link
                 href="/tiang"
@@ -391,14 +453,17 @@ function TiangDetailContent() {
                 </CardHeader>
 
                 <CardContent>
-                  {progressError ? (
+                  {progressError || workItemsError ? (
                     <ErrorNotice
-                      error={progressError}
-                      onRetry={reloadProgress}
+                      error={progressError || workItemsError}
+                      onRetry={() => {
+                        reloadProgress();
+                        reloadWorkItems();
+                      }}
                       compact
                       title="Progress gagal dimuat"
                     />
-                  ) : progressLoading ? (
+                  ) : progressLoading || workItemsLoading ? (
                     <SkeletonRows rows={4} />
                   ) : mergedStages.length ? (
                     <div className="space-y-4">
@@ -466,8 +531,102 @@ function TiangDetailContent() {
                     <EmptyState
                       icon={ClipboardList}
                       compact
-                      title="Belum ada item pekerjaan"
-                      description="Project ini belum memiliki item pekerjaan. Tambahkan item pada halaman Pengaturan Pekerjaan agar realisasi per tahap bisa dicatat."
+                      title="Belum ada item pekerjaan di tiang ini"
+                      description="Tiang ini belum memiliki item pekerjaan. Tambahkan item khusus tiang ini, atau terapkan template pekerjaan project."
+                      action={
+                        <Link
+                          href={`/tiang/${poleId}/pekerjaan`}
+                          className="inline-flex h-9 items-center gap-2 rounded-xl bg-neutral-900 px-3 text-sm font-medium text-white"
+                        >
+                          <ListChecks className="h-4 w-4" />
+                          Kelola Item Tiang
+                        </Link>
+                      }
+                    />
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-neutral-100">
+                      <BarChart3 className="h-4 w-4" />
+                    </div>
+
+                    <div className="flex-1">
+                      <CardTitle>Kurva S Tiang</CardTitle>
+                      <CardDescription>
+                        Rencana khusus tiang ini dibanding realisasi progress-nya
+                      </CardDescription>
+                    </div>
+
+                    {(curveSummary?.hasPlanned || curveSummary?.hasActual) && (
+                      <Badge className={varianceTone(curveSummary.variance)}>
+                        {formatSignedPercent(curveSummary.variance)}
+                      </Badge>
+                    )}
+                  </div>
+                </CardHeader>
+
+                <CardContent className="space-y-5">
+                  {curveLoading ? (
+                    <Skeleton className="h-[380px] w-full" />
+                  ) : curveError ? (
+                    <ErrorNotice
+                      error={curveError}
+                      onRetry={reloadCurve}
+                      title="Data kurva S tiang gagal dimuat"
+                    />
+                  ) : curveSummary?.hasPlanned || curveSummary?.hasActual ? (
+                    <>
+                      <SCurveChart series={curveSummary.series} height={380} />
+
+                      <dl className="grid grid-cols-3 gap-3">
+                        <div className="rounded-xl bg-canvas p-3 text-center">
+                          <dt className="text-[11px] text-neutral-400">
+                            Planned
+                          </dt>
+                          <dd className="mt-0.5 text-sm font-semibold tabular-nums text-neutral-800">
+                            {formatPercent(curveSummary.plannedProgress)}
+                          </dd>
+                        </div>
+
+                        <div className="rounded-xl bg-canvas p-3 text-center">
+                          <dt className="text-[11px] text-neutral-400">
+                            Actual
+                          </dt>
+                          <dd className="mt-0.5 text-sm font-semibold tabular-nums text-neutral-800">
+                            {formatPercent(curveSummary.actualProgress)}
+                          </dd>
+                        </div>
+
+                        <div className="rounded-xl bg-canvas p-3 text-center">
+                          <dt className="text-[11px] text-neutral-400">
+                            Variance
+                          </dt>
+                          <dd
+                            className={`mt-0.5 text-sm font-semibold tabular-nums ${
+                              curveSummary.variance === null
+                                ? "text-neutral-500"
+                                : curveSummary.variance >= 0
+                                  ? "text-emerald-600"
+                                  : "text-rose-600"
+                            }`}
+                          >
+                            {formatSignedPercent(curveSummary.variance)}
+                          </dd>
+                        </div>
+                      </dl>
+
+                      <CurveVarianceTable series={curveSummary.series} />
+                    </>
+                  ) : (
+                    <EmptyState
+                      icon={BarChart3}
+                      compact
+                      title="Kurva S tiang belum tersedia"
+                      description="Tambahkan item pekerjaan dengan bulan rencana, lalu catat realisasi progress untuk menampilkan kurva S tiang ini."
                     />
                   )}
                 </CardContent>
@@ -670,7 +829,7 @@ function TiangDetailContent() {
               onClose={() => setProgressOpen(false)}
               projectId={projectId}
               pole={pole}
-              workItems={project?.workItems ?? []}
+              workItems={poleWorkItems ?? []}
               currentProgress={workProgress}
               onSaved={() => reloadProgress()}
             />
