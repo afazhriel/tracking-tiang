@@ -327,6 +327,13 @@ table th {
     opacity: 0.9;
   }
 
+  /* Varian tebal — dipakai kartu ringkasan dashboard supaya nada
+     warnanya terlihat jelas, bukan cuma garis 3px yang nyaris hilang. */
+  .accent-top.accent-top-strong::before {
+    height: 6px;
+    opacity: 1;
+  }
+
   /* Latar grid teknis — untuk panel peta & grafik agar tidak polos. */
   .grid-paper {
     background-image:

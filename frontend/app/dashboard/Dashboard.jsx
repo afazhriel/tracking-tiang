@@ -48,8 +48,9 @@ import {
 /**
  * Metrik kecil di dalam kartu ringkasan.
  *
- * Dulu enam kotak abu-abu-identik. Sekarang setiap metrik punya
- * nada sendiri sehingga urutan data mudah dipindai mata.
+ * Setiap kotak membawa nada warnanya di tiga tempat sekaligus —
+ * garis atas, latar, dan label — supaya urutan data mudah dipindai
+ * mata, bukan sekadar kotak abu-abu dengan titik berwarna.
  */
 function MiniMetric({ label, value, tone: toneName }) {
   const resolved = tone(toneName)
@@ -58,11 +59,16 @@ function MiniMetric({ label, value, tone: toneName }) {
     <div
       style={accentVars(toneName)}
       className={cn(
-        'accent-top rounded-xl border border-neutral-200/80 bg-paper px-4 py-3',
-        resolved.hover
+        'accent-top accent-top-strong rounded-xl px-4 py-3 ring-1 ring-inset transition-colors',
+        resolved.outline
       )}
     >
-      <p className="flex items-center gap-1.5 text-xs text-neutral-500">
+      <p
+        className={cn(
+          'flex items-center gap-1.5 text-xs font-medium',
+          resolved.text
+        )}
+      >
         <span
           aria-hidden="true"
           className="h-1.5 w-1.5 rounded-full"
@@ -168,7 +174,7 @@ function DashboardContent() {
     },
   ]
 
-  const weightTotal = workItems.reduce((total, item) => total + Number(item.weight_percent || 0), 0)
+  const weightTotal = workItems.reduce((total, item) => total + Number(item.weight ?? item.weight_percent ?? 0), 0)
   const durationMonths =
     project?.startDate && project?.endDate
       ? Math.max(
@@ -194,7 +200,7 @@ function DashboardContent() {
           </p>
 
           <h2 className="font-display text-3xl font-semibold tracking-tight text-neutral-900 sm:text-4xl">
-            {project?.name ?? 'Tracking Tiang'}
+            {project?.name ?? 'Tracking Proyek'}
           </h2>
 
           <p className="mt-3 max-w-2xl text-sm leading-6 text-neutral-500">
