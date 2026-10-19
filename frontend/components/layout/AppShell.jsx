@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { Bell, ChevronDown, LogOut, MapPin, UserRound } from 'lucide-react'
+import { Bell, ChevronDown, LogOut, UserRound } from 'lucide-react'
 import { motion } from 'framer-motion'
 
 import {
@@ -99,9 +99,16 @@ function SidebarHeader() {
 
   return (
     <div className="mb-6 flex items-center gap-2.5">
-      <span className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-brand-500 to-brand-700 text-white shadow-[0_8px_18px_-10px_rgba(201,111,66,.9)]">
-        <MapPin className="h-5 w-5" />
-      </span>
+      {/* Mark aplikasi (public/brand/logo-mark.svg) — sumber yang sama
+          dengan favicon dan icon launcher, jadi logo di bar web tidak
+          pernah berbeda dari logo di aplikasi mobile. */}
+      <img
+        src="/brand/logo-mark.svg"
+        alt=""
+        width={40}
+        height={40}
+        className="h-10 w-10 shrink-0 rounded-xl shadow-[0_8px_18px_-10px_rgba(201,111,66,.9)]"
+      />
 
       <motion.div
         initial={false}

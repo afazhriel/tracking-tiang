@@ -28,11 +28,31 @@ const jetbrains = JetBrains_Mono({
 
 export const metadata = {
   title: {
-    default: 'Tracking Tiang',
-    template: '%s · Tracking Tiang',
+    default: 'Tracking Proyek',
+    template: '%s · Tracking Proyek',
   },
   description:
     'Project tracking tiang tegangan — monitoring titik, progres pekerjaan, dan kurva S.',
+  manifest: '/manifest.json',
+  icons: {
+    /* SVG lebih tajam di tab browser; PNG dipakai perangkat yang
+       tidak mendukung SVG favicon. Dihasilkan oleh
+       scripts/generate-icons.mjs dari public/brand/logo-mark.svg. */
+    icon: [
+      { url: '/favicon.svg', type: 'image/svg+xml' },
+      { url: '/favicon-32.png', sizes: '32x32', type: 'image/png' },
+      { url: '/favicon-16.png', sizes: '16x16', type: 'image/png' },
+    ],
+    apple: '/apple-touch-icon.png',
+  },
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'black-translucent',
+    title: 'Tracking Proyek',
+  },
+  formatDetection: {
+    telephone: false,
+  },
 }
 
 export const viewport = {

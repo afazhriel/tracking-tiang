@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 108" width="108" height="108" fill="none">
+  <!--
+    Pin lokasi bermotif "tiang": lubang bundar pada badan pin
+    dibaca sebagai kepala penanda, ekor pin sebagai tiangnya.
+
+    Sumber foreground untuk icon adaptive Android. Digambar pada
+    kanvas 108x108 dengan ruang aman ±20% di setiap sisi, jadi
+    launcher boleh memotong bentuk apa pun tanpa memotong logonya.
+  -->
+  <defs>
+    <linearGradient id="terracotta" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#e08b5c" />
+      <stop offset="1" stop-color="#b85a32" />
+    </linearGradient>
+  </defs>
+
+  <g transform="translate(18.65 20.1) scale(2.95)" fill="url(#terracotta)" fill-rule="evenodd">
+    <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5a2.5 2.5 0 0 1 0-5 2.5 2.5 0 0 1 0 5z" />
+  </g>
+</svg>
