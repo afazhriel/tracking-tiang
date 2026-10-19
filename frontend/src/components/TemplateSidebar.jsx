@@ -261,11 +261,16 @@ export /**
  * h-14 plus drawer. Anak yang hanya relevan di desktop
  * (tombol lipatkan sidebar) menyembunyikan dirinya sendiri lewat
  * `hidden md:flex`, jadi tidak perlu filter di sini.
+ *
+ * `trailing` hanya masuk ke bar mobile (di kiri tombol menu) —
+ * dipakai AppShell untuk menaruh kontrol profil tanpa membuka
+ * bar kedua yang menumpuk.
  */
 function SidebarBody({
   className,
   children,
   mobileLabel,
+  trailing,
   ...props
 }) {
   return (
@@ -274,7 +279,7 @@ function SidebarBody({
         {children}
       </DesktopSidebar>
 
-      <MobileSidebar label={mobileLabel}>
+      <MobileSidebar label={mobileLabel} trailing={trailing}>
         {children}
       </MobileSidebar>
     </>
@@ -351,7 +356,7 @@ function SidebarLabel({ active, children }) {
  * sebaliknya, menekan tombol lipat desktop tidak akan pernah
  * menutup drawer di layar kecil. Dua konteks layar, dua state.
  */
-function MobileSidebar({ children, label }) {
+function MobileSidebar({ children, label, trailing }) {
   const [open, setOpen] = useState(false)
 
   /* Kunci scroll body selagi drawer terbuka supaya halaman di
@@ -382,15 +387,19 @@ function MobileSidebar({ children, label }) {
         {label}
       </span>
 
-      <button
-        type="button"
-        aria-label="Buka menu navigasi"
-        aria-expanded={open}
-        className="flex h-9 w-9 items-center justify-center rounded-xl text-neutral-800 transition-colors hover:bg-neutral-900/[.06]"
-        onClick={() => setOpen(true)}
-      >
-        <Menu className="h-5 w-5" />
-      </button>
+      <div className="flex shrink-0 items-center gap-1.5">
+        {trailing}
+
+        <button
+          type="button"
+          aria-label="Buka menu navigasi"
+          aria-expanded={open}
+          className="flex h-9 w-9 items-center justify-center rounded-xl text-neutral-800 transition-colors hover:bg-neutral-900/[.06]"
+          onClick={() => setOpen(true)}
+        >
+          <Menu className="h-5 w-5" />
+        </button>
+      </div>
 
       <AnimatePresence>
         {open && (

@@ -1,9 +1,9 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { Bell, LogOut, MapPin } from 'lucide-react'
+import { Bell, ChevronDown, LogOut, MapPin, UserRound } from 'lucide-react'
 import { motion } from 'framer-motion'
 
 import {
@@ -19,9 +19,8 @@ import {
   useSidebarShortcut,
 } from '../../lib/use-sidebar-preference'
 
-import { clearAuth, getStoredUser } from '../../lib/api'
+import { api, clearAuth, getStoredUser } from '../../lib/api'
 import { useAuthGate } from '../../lib/use-api'
-import { formatDate } from '../../lib/format'
 import {
   NAV_ITEMS,
   NAV_SECONDARY,
@@ -31,8 +30,9 @@ import {
 import ProjectProvider from './ProjectProvider'
 import { useProject } from '../../lib/project-context'
 import { ErrorNotice } from '../ui/states'
+import { cn } from '../../lib/utils'
 
-function AppSidebar({ title }) {
+function AppSidebar({ title, trailing }) {
   const pathname = usePathname()
   const { open, toggle } = useSidebarPreference()
 
@@ -45,6 +45,7 @@ function AppSidebar({ title }) {
       <SidebarBody
         className="justify-between gap-6 md:sticky md:top-0 md:h-screen"
         mobileLabel={title}
+        trailing={trailing}
       >
         <div className="flex flex-1 flex-col">
           <SidebarHeader />
@@ -113,7 +114,7 @@ function SidebarHeader() {
         style={{ pointerEvents: expanded ? 'auto' : 'none' }}
       >
         <span className="block truncate font-display text-sm font-semibold text-neutral-900">
-          Tracking Tiang
+          Tracking Proyek
         </span>
         <span className="block truncate text-xs text-neutral-500">
           Project Dashboard
@@ -123,11 +124,86 @@ function SidebarHeader() {
   )
 }
 
-function UserMenu() {
+/**
+ * Kontrol profil di kanan atas — satu-satunya elemen bar atas.
+ *
+ * Bentuknya tombol avatar yang membuka dropdown berisi: identitas
+ * pengguna, link profil & notifikasi (dengan badge unread),
+ * project selector (kalau backend punya >1 project), dan logout.
+ * Panel ditutup saat klik di luar, Escape, atau setelah memilih
+ * link — supaya tidak menutupi konten secara diam-diam.
+ */
+function UserMenu({ compact = false }) {
   const [user] = useState(() => getStoredUser())
+  const [unread, setUnread] = useState(0)
+  const [open, setOpen] = useState(false)
+  const rootRef = useRef(null)
+
+  const { projectId, projects, selectProject } = useProject()
 
   const name = user?.name || user?.nama || 'Pengguna'
+  const role = user?.role?.name || user?.role || 'Project Control'
   const initial = String(name).trim().charAt(0).toUpperCase() || 'U'
+
+  /* Jumlah notifikasi belum dibaca untuk badge pada dropdown.
+     Polling ringan tiap 60 detik; kegagalan (mis. 401) diabaikan
+     diam-diam. */
+  useEffect(() => {
+    let active = true
+
+    const load = async () => {
+      try {
+        const payload = await api.getUnreadNotificationCount()
+        const count =
+          payload?.data?.unread ?? payload?.meta?.unread ?? 0
+
+        if (active) setUnread(Number(count) || 0)
+      } catch {
+        /* abaikan — badge cukup tidak tampil */
+      }
+    }
+
+    const handleUpdate = () => { load() }
+
+    load()
+
+    const timer = setInterval(load, 60000)
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('tracking_tiang:notifications-updated', handleUpdate)
+    }
+
+    return () => {
+      active = false
+      clearInterval(timer)
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('tracking_tiang:notifications-updated', handleUpdate)
+      }
+    }
+  }, [])
+
+  /* Tutup dropdown saat klik di luar root atau menekan Escape. */
+  useEffect(() => {
+    if (!open) return
+
+    function onPointerDown(event) {
+      if (rootRef.current && !rootRef.current.contains(event.target)) {
+        setOpen(false)
+      }
+    }
+
+    function onKeyDown(event) {
+      if (event.key === 'Escape') setOpen(false)
+    }
+
+    document.addEventListener('pointerdown', onPointerDown)
+    document.addEventListener('keydown', onKeyDown)
+
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown)
+      document.removeEventListener('keydown', onKeyDown)
+    }
+  }, [open])
 
   function handleLogout() {
     clearAuth()
@@ -137,96 +213,126 @@ function UserMenu() {
   }
 
   return (
-    <div className="flex items-center gap-2 sm:gap-3">
-      <Link
-        href="/notifikasi"
-        aria-label="Notifikasi"
-        className="relative rounded-xl border border-neutral-200 bg-paper p-2.5 text-neutral-600 transition-all hover:border-lagoon-300 hover:bg-lagoon-50 hover:text-lagoon-700"
-      >
-        <Bell className="h-4 w-4" />
-        <span className="absolute right-2 top-2 h-1.5 w-1.5 rounded-full bg-brand-600 ring-2 ring-paper" />
-      </Link>
-
-      {/* Nama + inisial leading ke /profil. Di mobile disembunyikan
-          supaya header tidak melebar — profil tetap bisa dibuka lewat
-          sidebar dan drawer navigasi. */}
-      <Link
-        href="/profil"
-        aria-label="Buka profil"
-        className="hidden items-center gap-2.5 rounded-xl border border-neutral-200 bg-paper px-2.5 py-1.5 shadow-card transition-colors hover:border-brand-300 hover:bg-brand-50 sm:flex"
-      >
-        <span className="flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br from-plum-500 to-lagoon-600 text-xs font-medium text-white">
-          {initial}
-        </span>
-        <span className="max-w-[9rem] truncate text-sm font-medium text-neutral-800">
-          {name}
-        </span>
-      </Link>
-
+    <div ref={rootRef} className="relative">
       <button
         type="button"
-        onClick={handleLogout}
-        aria-label="Keluar"
-        title="Keluar"
-        className="rounded-xl border border-neutral-200 bg-paper p-2.5 text-neutral-600 transition-all hover:border-clay-300 hover:bg-clay-50 hover:text-clay-700"
+        onClick={() => setOpen((value) => !value)}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label={compact ? 'Menu profil' : `Profil ${name}`}
+        className="flex items-center gap-2 rounded-xl border border-neutral-200 bg-paper py-1 pl-1 pr-2 shadow-card transition-colors hover:border-brand-300 hover:bg-brand-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 sm:gap-2.5 sm:pr-2.5"
       >
-        <LogOut className="h-4 w-4" />
+        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-plum-500 to-lagoon-600 text-xs font-semibold text-white">
+          {initial}
+        </span>
+
+        {!compact && (
+          <span className="hidden min-w-0 text-left sm:block">
+            <span className="block max-w-[9rem] truncate text-sm font-medium leading-tight text-neutral-800">
+              {name}
+            </span>
+            <span className="block max-w-[9rem] truncate text-[11px] leading-tight text-neutral-500">
+              {role}
+            </span>
+          </span>
+        )}
+
+        <ChevronDown
+          className={cn(
+            'h-3.5 w-3.5 shrink-0 text-neutral-400 transition-transform',
+            open && 'rotate-180'
+          )}
+        />
       </button>
-    </div>
-  )
-}
 
-/**
- * Bar project di bawah header.
- *
- * Kalau backend punya lebih dari satu project, bar ini jadi
- * selector. Pilih project lain = muat ulang halaman supaya tidak
- * ada cache progress/peta dari project lama yang ikut tertinggal.
- */
-function ProjectBar() {
-  const { project, projectId, projects, selectProject } = useProject()
+      {open && (
+        <div
+          role="menu"
+          aria-label="Menu profil"
+          className="absolute right-0 top-full z-50 mt-2 w-[min(19rem,calc(100vw-2rem))] overflow-hidden rounded-card border border-neutral-200 bg-paper p-1.5 shadow-lift"
+        >
+          <div className="flex items-center gap-3 rounded-xl bg-neutral-50 px-3 py-2.5">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-plum-500 to-lagoon-600 text-sm font-semibold text-white">
+              {initial}
+            </span>
 
-  if (!project) return null
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold text-neutral-900">
+                {name}
+              </p>
+              <p className="truncate text-xs text-neutral-500">{role}</p>
+            </div>
+          </div>
 
-  const options = projects.length ? projects : []
+          <div className="my-1.5 h-px bg-neutral-200/80" />
 
-  return (
-    <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-neutral-200/70 bg-neutral-50/70 px-4 py-3 text-xs text-neutral-500 sm:px-6">
-      {options.length > 1 ? (
-        <label className="flex min-w-0 items-center gap-2">
-          <span className="shrink-0 font-medium text-neutral-700">Project</span>
-
-          <select
-            value={projectId ?? ''}
-            onChange={(event) => selectProject(event.target.value)}
-            aria-label="Pilih project aktif"
-            className="min-w-0 max-w-[16rem] truncate rounded-lg border border-neutral-200 bg-paper px-2 py-1 text-xs font-medium text-neutral-800 outline-none transition-colors focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
+          <Link
+            href="/profil"
+            role="menuitem"
+            onClick={() => setOpen(false)}
+            className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-neutral-700 transition-colors hover:bg-neutral-100 hover:text-neutral-900"
           >
-            {options.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.code ? `${item.code} · ${item.name}` : item.name}
-              </option>
-            ))}
-          </select>
-        </label>
-      ) : (
-        <span className="font-medium text-neutral-800">{project.name}</span>
-      )}
+            <UserRound className="h-4 w-4 text-neutral-400" />
+            Profil saya
+          </Link>
 
-      {project.code && options.length <= 1 && (
-        <span className="rounded-full bg-paper px-2 py-0.5 font-medium text-neutral-600 ring-1 ring-inset ring-neutral-200">
-          {project.code}
-        </span>
-      )}
+          <Link
+            href="/notifikasi"
+            role="menuitem"
+            onClick={() => setOpen(false)}
+            className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-neutral-700 transition-colors hover:bg-neutral-100 hover:text-neutral-900"
+          >
+            <Bell className="h-4 w-4 text-neutral-400" />
+            Notifikasi
 
-      {project.startDate && (
-        <span>
-          Periode: {formatDate(project.startDate)}
-          {project.endDate ? ` — ${formatDate(project.endDate)}` : ''}
-        </span>
-      )}
+            {unread > 0 && (
+              <span className="ml-auto flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-brand-600 px-1 text-[10px] font-semibold leading-none text-white">
+                {unread > 9 ? '9+' : unread}
+              </span>
+            )}
+          </Link>
 
-      <span className="ml-auto text-neutral-400">Project ID: {projectId}</span>
+          {/* Project selector pindah ke sini dari bar project lama:
+              hanya muncul kalau backend mengirim lebih dari satu
+              project. Pilih project lain = reload halaman supaya
+              cache progress/peta lama ikut terhapus. */}
+          {projects.length > 1 && (
+            <>
+              <div className="my-1.5 h-px bg-neutral-200/80" />
+
+              <label className="block px-3 pb-1 pt-2">
+                <span className="text-[11px] font-medium uppercase tracking-[0.14em] text-neutral-400">
+                  Project aktif
+                </span>
+
+                <select
+                  value={projectId ?? ''}
+                  onChange={(event) => selectProject(event.target.value)}
+                  className="mt-1.5 w-full truncate rounded-lg border border-neutral-200 bg-paper px-2 py-1.5 text-xs font-medium text-neutral-800 outline-none transition-colors focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
+                >
+                  {projects.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.code ? `${item.code} · ${item.name}` : item.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </>
+          )}
+
+          <div className="my-1.5 h-px bg-neutral-200/80" />
+
+          <button
+            type="button"
+            role="menuitem"
+            onClick={handleLogout}
+            className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-clay-700 transition-colors hover:bg-clay-50"
+          >
+            <LogOut className="h-4 w-4 text-clay-500" />
+            Keluar
+          </button>
+        </div>
+      )}
     </div>
   )
 }
@@ -236,32 +342,14 @@ function ShellContent({ children, title }) {
 
   return (
     <div className="flex min-h-screen flex-col bg-canvas text-neutral-900 md:flex-row">
-        <AppSidebar title={title} />
+        <AppSidebar title={title} trailing={<UserMenu compact />} />
 
         <div className="flex min-w-0 flex-1 flex-col">
-          <header className="sticky top-0 z-40 border-b border-neutral-200/80 bg-paper/85 backdrop-blur-md">
-            <div className="flex h-16 items-center justify-between gap-4 px-4 sm:px-6">
-              <div className="flex min-w-0 items-center gap-3">
-                <span
-                  aria-hidden="true"
-                  className="hidden h-8 w-1 shrink-0 rounded-full bg-gradient-to-b from-brand-500 to-lagoon-500 sm:block"
-                />
-
-                <div className="min-w-0">
-                  <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-brand-600">
-                    Project Tracking
-                  </p>
-                  <h1 className="truncate font-display text-lg font-semibold text-neutral-900">
-                    {title}
-                  </h1>
-                </div>
-              </div>
-
-              <UserMenu />
-            </div>
-
-            <ProjectBar />
-          </header>
+          {/* Bar atas tanpa judul — hanya profil di kanan. Judul halaman
+              cukup lewat PageHeader di konten dan label bar mobile. */}
+          <div className="sticky top-0 z-40 hidden h-12 items-center justify-end border-b border-neutral-200/80 bg-paper/85 px-4 backdrop-blur-md sm:px-6 md:flex">
+            <UserMenu />
+          </div>
 
           {(error || loading) && (
             <div className="px-4 pt-5 sm:px-6">
@@ -279,16 +367,9 @@ function ShellContent({ children, title }) {
             </div>
           )}
 
-          <main className="flex-1 px-4 py-6 sm:px-6 sm:py-8">
+          <main className="flex-1 px-4 py-4 sm:px-6 sm:py-6">
             <div className="mx-auto w-full max-w-[1500px]">{children}</div>
           </main>
-
-          <footer className="border-t border-neutral-200/80 bg-paper px-4 py-4 text-xs text-neutral-400 sm:px-6">
-            <div className="mx-auto flex w-full max-w-[1500px] flex-wrap items-center justify-between gap-2">
-              <span>Tracking Tiang · Project Control System</span>
-              <span>Data progress mengikuti endpoint Laravel yang tersedia.</span>
-            </div>
-          </footer>
         </div>
     </div>
   )
