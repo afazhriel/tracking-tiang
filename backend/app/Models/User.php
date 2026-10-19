@@ -44,6 +44,8 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
+        'phone',
+        'avatar',
         'role',
         'status',
     ];
@@ -284,6 +286,23 @@ class User extends Authenticatable
     }
 
     /**
+     * URL foto profil, atau null kalau belum ada.
+     *
+     * Disajikan lewat endpoint public `GET /api/user/avatar/{user}`
+     * (pola yang sama dengan foto progress) karena `<img>` di browser
+     * tidak bisa menyertakan header Authorization. `?v=` memakai
+     * timestamp update supaya foto baru tidak kena cache browser.
+     */
+    public function avatarUrl(): ?string
+    {
+        if (! $this->avatar) {
+            return null;
+        }
+
+        return url('/api/user/avatar/'.$this->id).'?v='.($this->updated_at?->getTimestamp() ?? 0);
+    }
+
+    /**
      * Bentuk user yang dikirim ke frontend.
      *
      * `role` dan `role_label` sengaja ditambahkan di sini: frontend
@@ -302,6 +321,9 @@ class User extends Authenticatable
             'id' => $this->id,
             'name' => $this->name,
             'email' => $this->email,
+            'phone' => $this->phone,
+            'avatar' => $this->avatar,
+            'avatar_url' => $this->avatarUrl(),
             'role' => $this->role,
             'role_label' => self::roleLabel($this->role),
             'status' => $this->status,

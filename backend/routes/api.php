@@ -12,6 +12,7 @@ use App\Http\Controllers\Api\ProjectController;
 use App\Http\Controllers\Api\PoleAssignmentController;
 use App\Http\Controllers\Api\RegionController;
 use App\Http\Controllers\Api\UserController;
+use App\Http\Controllers\Api\UserProfileController;
 use App\Http\Controllers\Api\TeamController;
 use App\Http\Controllers\Api\WorkItemController;
 use Illuminate\Support\Facades\Route;
@@ -67,6 +68,12 @@ Route::get('/regions/districts/{district}/villages', [RegionController::class, '
 Route::get('/photos/{ulid}', [PhotoController::class, 'show']);
 
 /*
+ * Avatar user — public karena `<img>` tidak bisa kirim header
+ * Authorization. Lihat `UserProfileController::showAvatar`.
+ */
+Route::get('/user/avatar/{user}', [UserProfileController::class, 'showAvatar']);
+
+/*
 |--------------------------------------------------------------------------
 | Protected routes
 |--------------------------------------------------------------------------
@@ -76,7 +83,15 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
 
     /* Auth */
     Route::post('/logout', [AuthController::class, 'logout']);
+    Route::post('/logout-all', [UserProfileController::class, 'logoutAll']);
     Route::get('/me', [AuthController::class, 'me']);
+
+    /* Profil sendiri — selalu menempel pada user yang login. */
+    Route::get('/user/profile', [UserProfileController::class, 'show']);
+    Route::put('/user/profile', [UserProfileController::class, 'update']);
+    Route::put('/user/password', [UserProfileController::class, 'updatePassword']);
+    Route::post('/user/avatar', [UserProfileController::class, 'updateAvatar']);
+    Route::delete('/user/avatar', [UserProfileController::class, 'destroyAvatar']);
 
     /* Project */
     Route::get('/projects', [ProjectController::class, 'index']);

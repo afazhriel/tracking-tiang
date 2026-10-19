@@ -74,6 +74,26 @@ export function clearAuth() {
   window.dispatchEvent(new Event(AUTH_CHANGED_EVENT))
 }
 
+/**
+ * Simpan user terbaru ke localStorage + beritahu semua listener.
+ *
+ * Dipakai setelah edit profil agar kartu identitas, menu user di bar
+ * atas, dan halaman profil ikut terupdate di tab yang sama tanpa
+ * logout-login. Penyimpanan dilakukan di sini (bukan di halaman)
+ * supaya bentuk key dan event tetap satu: `USER_KEY` + event auth.
+ */
+export function setStoredUser(user) {
+  if (typeof window === 'undefined') return
+
+  try {
+    window.localStorage.setItem(USER_KEY, JSON.stringify(user))
+  } catch {
+    /* storage tidak tersedia - abaikan */
+  }
+
+  window.dispatchEvent(new Event(AUTH_CHANGED_EVENT))
+}
+
 function buildUrl(path, query) {
   const base = (() => {
     if (/^https?:\/\//i.test(path)) return path
@@ -427,6 +447,43 @@ export const api = {
   getMe: (options) => apiRequest('/api/me', options),
   logout: (options) =>
     apiRequest('/api/logout', { ...options, method: 'POST' }),
+
+  /* --- Profil sendiri ---
+     Kontrak endpoint ini dulu tertulis di `ProfilPage.jsx` sebagai
+     `MISSING_ENDPOINTS`; sekarang sudah ada di backend
+     (`UserProfileController`). Semua operasi menempel pada user yang
+     sedang login — tidak ada user id di URL. */
+  getProfile: (options) => apiRequest('/api/user/profile', options),
+  updateProfile: (payload, options) =>
+    apiRequest('/api/user/profile', {
+      ...options,
+      method: 'PUT',
+      body: payload,
+    }),
+  updatePassword: (payload, options) =>
+    apiRequest('/api/user/password', {
+      ...options,
+      method: 'PUT',
+      body: payload,
+    }),
+  /* Upload dikirim sebagai multipart: backend menolak payload yang
+     bukan gambar berdasarkan isi file, bukan ekstensi nama. */
+  updateAvatar: (file, options) => {
+    const form = new FormData()
+    form.append('avatar', file)
+
+    return apiRequest('/api/user/avatar', {
+      ...options,
+      method: 'POST',
+      body: form,
+    })
+  },
+  removeAvatar: (options) =>
+    apiRequest('/api/user/avatar', { ...options, method: 'DELETE' }),
+  /* Mencabut SEMUA token (termasuk yang dipakai request ini) —
+     lawan dari `logout` yang hanya menutup satu perangkat. */
+  logoutAll: (options) =>
+    apiRequest('/api/logout-all', { ...options, method: 'POST' }),
   register: (payload, options) =>
     apiRequest('/api/register', {
       ...options,
@@ -753,6 +810,8 @@ export function normalizeUser(user) {
     status: user?.status ?? null,
     statusLabel: userStatusLabel(user?.status ?? null),
     phone: user?.phone ?? user?.phone_number ?? user?.no_hp ?? null,
+    avatar: user?.avatar ?? null,
+    avatarUrl: user?.avatar_url ?? null,
     initials: user?.initials ?? derivedInitial,
     teams: Array.isArray(user?.teams) ? user.teams.map(normalizeTeam) : [],
     projects: Array.isArray(user?.projects)
