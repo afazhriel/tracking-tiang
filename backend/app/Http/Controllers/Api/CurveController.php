@@ -132,6 +132,19 @@ class CurveController extends Controller
 
         $projectStart = Carbon::parse($project->start_date);
 
+        /*
+         * Titik awal kurva: rencana kumulatif 0% pada tanggal mulai
+         * proyek. Tanpa ini, garis rencana baru muncul di akhir bulan
+         * pertama sehingga rencana & variance periode awal kosong.
+         * `month` null agar tidak menambah hitungan jumlah bulan.
+         */
+        $planned[] = [
+            'month' => null,
+            'date' => $projectStart->format('Y-m-d'),
+            'monthly_percent' => 0.0,
+            'cumulative_percent' => 0.0,
+        ];
+
         foreach ($monthly as $month => $weight) {
             $cumulative += $weight;
 

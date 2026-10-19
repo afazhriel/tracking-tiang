@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Pole;
 use App\Models\Project;
+use App\Models\Region;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -202,6 +203,19 @@ class PoleController extends Controller
         }
 
         $validated['project_id'] = $project->id;
+
+        /*
+         * Wilayah diisi otomatis dari provinsi (nama = provinsi,
+         * kode = kode BPS provinsi) supaya detail tiang tidak kosong.
+         * Region yang dipilih manual tetap dipakai apa adanya.
+         */
+        if (empty($validated['region_id']) && ! empty($validated['province_id'])) {
+            $region = Region::forProvince($project, $validated['province_id']);
+
+            if ($region !== null) {
+                $validated['region_id'] = $region->id;
+            }
+        }
 
         /*
          * Pembatasan wilayah: selain admin, user hanya boleh menambah

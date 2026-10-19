@@ -400,11 +400,11 @@ function TiangDetailContent() {
                     <DetailRow label="Kode Tiang" value={pole.poleCode} />
                     <DetailRow
                       label="Wilayah"
-                      value={pole.region?.name ?? "—"}
+                      value={pole.region?.name ?? "Belum ditentukan"}
                     />
                     <DetailRow
                       label="Kode Wilayah"
-                      value={pole.region?.code ?? "—"}
+                      value={pole.region?.code ?? "Belum ditentukan"}
                     />
                     <DetailRow
                       label="Latitude"

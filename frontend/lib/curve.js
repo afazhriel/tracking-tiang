@@ -85,11 +85,16 @@ export function buildCurveSeries(curve) {
     const plannedPoint = plannedCursor >= 0 ? planned[plannedCursor] : null
     const actualPoint = actualCursor >= 0 ? actual[actualCursor] : null
 
+    /* Sebelum titik rencana pertama, rencana dianggap 0% (baseline
+       tanggal mulai proyek). Dengan begitu variance tetap terhitung
+       walau realisasi tercatat di awal periode. */
     const plannedValue =
-      plannedPoint?.cumulative_percent === null ||
-      plannedPoint?.cumulative_percent === undefined
-        ? null
-        : Number(plannedPoint.cumulative_percent)
+      plannedCursor < 0
+        ? (planned.length > 0 ? 0 : null)
+        : plannedPoint?.cumulative_percent === null ||
+          plannedPoint?.cumulative_percent === undefined
+          ? null
+          : Number(plannedPoint.cumulative_percent)
 
     const actualValue =
       actualPoint?.progress_percent === null || actualPoint?.progress_percent === undefined

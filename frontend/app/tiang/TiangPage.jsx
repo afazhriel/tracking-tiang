@@ -85,7 +85,7 @@ function PoleListItem({ pole, isSelected, progress, loading, onSelect }) {
       <div className="mt-3 flex items-center gap-3 text-[11px] text-neutral-400">
         <span className="inline-flex items-center gap-1">
           <MapPin className="h-3 w-3" />
-          {pole.region?.name ?? 'Tanpa wilayah'}
+          {pole.region?.name ?? 'Belum ditentukan'}
         </span>
 
         {pole.hasCoordinate ? (
@@ -179,7 +179,7 @@ function PoleSelectionCard({ pole, progressEntry, loading, onReload }) {
           <div className="rounded-xl bg-canvas p-3">
             <p className="text-[11px] text-neutral-400">Wilayah</p>
             <p className="mt-0.5 text-sm font-medium">
-              {pole.region?.name ?? 'â€”'}
+              {pole.region?.name ?? 'Belum ditentukan'}
             </p>
           </div>
 
