@@ -33,6 +33,18 @@ const ENV_ORIGIN = String(process.env.NEXT_PUBLIC_API_ORIGIN || '')
   .trim()
   .replace(/\/+$/, '')
 
+/**
+ * True saat berjalan di dalam APK/IPA (WebView Capacitor), false di browser.
+ *
+ * Dipakai guard agar penanganan khusus native (mis. fallback rute
+ * html5mode di landing page) tidak pernah aktif pada deploy web.
+ */
+export function isNativeApp() {
+  if (typeof window === 'undefined') return false
+
+  return Capacitor.isNativePlatform()
+}
+
 /** Origin yang dipakai saat berjalan di WebView native, atau null di browser. */
 export function getNativeOrigin() {
   if (typeof window === 'undefined') return null
@@ -40,4 +52,27 @@ export function getNativeOrigin() {
   if (!Capacitor.isNativePlatform()) return null
 
   return ENV_ORIGIN || DEFAULT_NATIVE_ORIGIN
+}
+
+/**
+ * Ubah path API menjadi URL absolut saat berjalan di native.
+ *
+ * Di browser cukup mengembalikan path apa adanya (nanti di-proxy
+ * Next.js), sedangkan di WebView aset dibundel lokal sehingga path
+ * relatif akan mengenai server statis — bukan backend.
+ *
+ * Dipakai oleh kode yang memanggil `fetch()` langsung (bukan lewat
+ * `lib/api.js`), mis. halaman login dan landing.
+ */
+export function resolveApiUrl(path) {
+  if (typeof path !== 'string') return path
+
+  // URL absolut (http/https) dibiarkan apa adanya.
+  if (/^https?:\/\//i.test(path)) return path
+
+  const nativeOrigin = getNativeOrigin()
+
+  if (!nativeOrigin) return path
+
+  return `${nativeOrigin}${path.startsWith('/') ? '' : '/'}${path}`
 }

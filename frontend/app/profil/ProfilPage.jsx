@@ -2,6 +2,7 @@
 
 import { useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import {
   Camera,
   CheckCircle2,
@@ -574,6 +575,7 @@ function PasswordForm() {
 }
 
 function ProfilContent() {
+  const router = useRouter()
   const { user, hasUser } = useStoredUser()
   const { project } = useProject()
   const [signingOut, setSigningOut] = useState(false)
@@ -601,7 +603,10 @@ function ProfilContent() {
     }
 
     clearAuth()
-    window.location.href = '/login'
+    /* Navigasi klien — muat dokumen penuh ke `/login` di APK dibalas
+       halaman landing oleh server lokal Capacitor (html5mode),
+       sehingga logout tampak tidak berjalan. Lihat AppShell.handleLogout. */
+    router.replace('/login')
   }
 
   /* Versi "semua perangkat": token dicabut server-side juga untuk
@@ -619,7 +624,10 @@ function ProfilContent() {
     }
 
     clearAuth()
-    window.location.href = '/login'
+    /* Navigasi klien — muat dokumen penuh ke `/login` di APK dibalas
+       halaman landing oleh server lokal Capacitor (html5mode),
+       sehingga logout tampak tidak berjalan. Lihat AppShell.handleLogout. */
+    router.replace('/login')
   }
 
   return (

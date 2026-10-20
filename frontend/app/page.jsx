@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import dynamic from 'next/dynamic'
+import Link from 'next/link'
 import {
   ArrowRight,
   BarChart3,
@@ -26,8 +27,8 @@ import {
   normalizeProject,
   unwrapList,
 } from '../lib/api'
+import { isNativeApp, resolveApiUrl } from '../lib/native'
 import { formatNumber } from '../lib/format'
-import { resolveStatus } from '../lib/status'
 import './landing.css'
 
 /* Leaflet hanya jalan di browser. Di-import lewat `dynamic`
@@ -98,6 +99,47 @@ export default function HomePage() {
   const [mapFailed, setMapFailed] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
 
+  /**
+   * Penjaga fallback rute untuk WebView native (Capacitor `html5mode`).
+   *
+   * Di APK, server lokal Capacitor MEMBALAS SEMUA path tanpa ekstensi
+   * (mis. `/login`, `/dashboard`) dengan `index.html` — halaman
+   * landing — dan bukan `login.html`/`dashboard.html` (lihat
+   * `WebViewLocalServer`: `path.equals("/") || (!lastSegment.contains(".")
+   * && html5mode)` -> `index.html`). Jadi setiap muat dokumen penuh ke
+   * rute dalam "mengulang" landing dan user tidak pernah sampai ke
+   * halaman tujuan.
+   *
+   * Navigasi dalam aplikasi sudah memakai `<Link>` (klien), jadi ini
+   * hanya lapis pengaman terakhir: kalau WebView memuat ulang path
+   * dalam (restore sesi setelah app kill, deep link OS, dsb), alihkan
+   * ke berkas ekspor statis yang benar (`/login.html` -> `login.html`
+   * disajikan apa adanya karena mengandung titik). Guard
+   * `isNativeApp()` mematikan efek ini sepenuhnya di browser/web.
+   */
+  useEffect(() => {
+    if (!isNativeApp()) return
+
+    const knownRoutes = [
+      '/login',
+      '/register',
+      '/dashboard',
+      '/tiang',
+      '/pekerjaan',
+      '/kurva-s',
+      '/aktivitas',
+      '/notifikasi',
+      '/profil',
+      '/tim',
+    ]
+
+    const current = window.location.pathname.replace(/\/+$/, '') || '/'
+
+    if (current !== '/' && knownRoutes.includes(current)) {
+      window.location.replace(`${current}.html`)
+    }
+  }, [])
+
   /* Satu effect untuk project + tiang.
      Alasannya: `poles` butuh `project.id`. Dua effect terpisah akan
      menembak request tiang sebelum tahu project mana yang dipakai,
@@ -123,7 +165,7 @@ export default function HomePage() {
 
       const headers = authHeaders(token)
 
-      const projectsResponse = await fetch(PROJECTS_URL, {
+      const projectsResponse = await fetch(resolveApiUrl(PROJECTS_URL), {
         headers,
         signal: controller.signal,
       })
@@ -149,7 +191,7 @@ export default function HomePage() {
 
       setProject(normalizeProject(active))
 
-      const detailResponse = await fetch(`/api/projects/${active.id}`, {
+      const detailResponse = await fetch(resolveApiUrl(`/api/projects/${active.id}`), {
         headers,
         signal: controller.signal,
       })
@@ -160,10 +202,13 @@ export default function HomePage() {
         if (detail?.data) setProject(normalizeProject(detail.data))
       }
 
-      const polesResponse = await fetch(POLES_URL.replace('{project}', active.id), {
-        headers,
-        signal: controller.signal,
-      })
+      const polesResponse = await fetch(
+        resolveApiUrl(POLES_URL.replace('{project}', active.id)),
+        {
+          headers,
+          signal: controller.signal,
+        }
+      )
 
       if (!polesResponse.ok) throw new Error('Data tiang tidak dapat diakses')
 
@@ -193,10 +238,6 @@ export default function HomePage() {
   )
 
   const targetPoles = project?.totalTargetPoles ?? null
-  const projectName = project?.name ?? 'Proyek Monitoring Tiang'
-  const projectCode = project?.code ?? null
-  const projectStatus = resolveStatus(project?.status)
-  const isActive = projectStatus.key === 'active' || projectStatus.key === 'done'
 
   const closeMenu = useCallback(() => setMenuOpen(false), [])
 
@@ -230,9 +271,9 @@ export default function HomePage() {
           <a href="#ringkasan" onClick={closeMenu}>
             Ringkasan
           </a>
-          <a href="/login" className="nav-dashboard">
+          <Link href="/login" className="nav-dashboard">
             Masuk Dashboard <ArrowRight size={15} />
-          </a>
+          </Link>
         </nav>
 
         <button
@@ -265,10 +306,10 @@ export default function HomePage() {
             </p>
 
             <div className="hero-actions">
-              <a href="/login" className="button-primary">
+              <Link href="/login" className="button-primary">
                 Buka Dashboard
                 <ArrowRight size={18} />
-              </a>
+              </Link>
 
               <a href="#peta" className="button-secondary">
                 Lihat Peta Lokasi
@@ -284,79 +325,6 @@ export default function HomePage() {
 
           <div className="hero-panel">
             <div className="panel-glow" />
-
-            <div className="project-card">
-              <div className="project-card-header">
-                <div>
-                  <span className="label">PROYEK AKTIF</span>
-                  <h2>{loading ? 'Memuat data proyek...' : projectName}</h2>
-                  {projectCode && <p>{projectCode}</p>}
-                </div>
-
-                <div className={isActive ? 'status-badge' : 'status-badge muted'}>
-                  <span />
-                  {loading ? 'Memuat' : isActive ? 'Aktif' : 'Tidak aktif'}
-                </div>
-              </div>
-
-              <div className="project-map">
-                {polesLoading ? (
-                  <div className="map-skeleton">
-                    <span className="map-skeleton-pulse" />
-                    <span className="map-skeleton-label">Memuat peta lokasi...</span>
-                  </div>
-                ) : locatedCount > 0 ? (
-                  <>
-                    <LandingPoleMap poles={poles} />
-                    <div className="map-overlay-top">
-                      <Layers size={13} />
-                      <span>
-                        {formatNumber(locatedCount)} titik terpetakan
-                      </span>
-                    </div>
-                    <div className="map-overlay-hint">Klik penanda untuk detail</div>
-                  </>
-                ) : (
-                  <div className="map-empty">
-                    <MapPin size={20} />
-                    <p className="map-empty-title">
-                      {mapFailed ? 'Peta belum dapat dimuat' : 'Belum ada koordinat tiang'}
-                    </p>
-                    <p className="map-empty-body">
-                      {mapFailed
-                        ? 'Data lokasi tidak dapat diambil saat ini. Numeric lain tetap dapat Anda pantau.'
-                        : 'Tiang pada proyek ini belum memiliki latitude dan longitude, jadi belum tampil di peta.'}
-                    </p>
-                  </div>
-                )}
-              </div>
-
-              <div className="project-stats">
-                <div className="project-stat">
-                  <span>Target Tiang</span>
-                  <strong>
-                    {loading ? '—' : formatNumber(targetPoles)}
-                  </strong>
-                  <small>target proyek</small>
-                </div>
-
-                <div className="project-stat">
-                  <span>Titik Terpetakan</span>
-                  <strong>
-                    {polesLoading ? '—' : formatNumber(locatedCount)}
-                  </strong>
-                  <small>punya koordinat</small>
-                </div>
-
-                <div className="project-stat">
-                  <span>Status Proyek</span>
-                  <strong className={isActive ? 'online-text' : 'muted-text'}>
-                    {loading ? '—' : isActive ? 'Aktif' : 'Idle'}
-                  </strong>
-                  <small>monitoring</small>
-                </div>
-              </div>
-            </div>
           </div>
         </div>
       </section>
@@ -521,10 +489,10 @@ export default function HomePage() {
             </p>
           </div>
 
-          <a href="/login" className="button-primary">
+          <Link href="/login" className="button-primary">
             Masuk Dashboard
             <ArrowRight size={18} />
-          </a>
+          </Link>
         </div>
       </section>
 

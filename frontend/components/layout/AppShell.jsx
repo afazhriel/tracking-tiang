@@ -214,9 +214,13 @@ function UserMenu({ compact = false }) {
 
   function handleLogout() {
     clearAuth()
-    /* Full reload supaya semua state client (project, progress, cache)
-       ikut dibersihkan setelah token dihapus. */
-    window.location.href = '/login'
+    /* Navigasi klien — BUKAN `window.location.href = '/login'`.
+       Di APK (Capacitor, html5mode), muat dokumen penuh ke `/login`
+       dibalas WebView lokal dengan `index.html` (halaman landing),
+       sehingga user tampak "tidak pernah keluar". Negara client lama
+       tetap bersih: begitu token hilang, AuthGate melempar ke
+       `/login` lewat router klien juga. */
+    router.replace('/login')
   }
 
   return (
