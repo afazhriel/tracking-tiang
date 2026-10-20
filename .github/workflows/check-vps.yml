@@ -26,12 +26,37 @@ jobs:
         env:
           SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
           KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_PORT: ${{ secrets.VPS_PORT }}
         run: |
-          test -n "$SSH_KEY" || { echo 'Missing VPS_SSH_KEY secret'; exit 1; }
-          test -n "$KNOWN_HOSTS" || { echo 'Missing VPS_KNOWN_HOSTS secret'; exit 1; }
+          missing=0
+          for name in VPS_HOST VPS_USER VPS_PORT; do
+            if test -n "${!name}"; then
+              echo "$name is available"
+            else
+              echo "Missing $name secret"
+              missing=1
+            fi
+          done
+          if test -z "$SSH_KEY"; then
+            echo 'Missing VPS_SSH_KEY secret'
+            missing=1
+          fi
+          if test -z "$KNOWN_HOSTS"; then
+            echo 'Missing VPS_KNOWN_HOSTS secret'
+            missing=1
+          fi
           install -m 700 -d ~/.ssh
           printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
+          if ssh-keygen -y -P '' -f ~/.ssh/deploy_key > /dev/null; then
+            echo 'VPS_SSH_KEY is a valid unencrypted private key'
+          else
+            echo 'VPS_SSH_KEY must contain the complete unencrypted private key'
+            missing=1
+          fi
+          test "$missing" = 0
           printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
       - name: Inspect VPS prerequisites
         env:
