@@ -24,6 +24,7 @@ class DeployTests(unittest.TestCase):
         self.env.update(
             PATH=str(self.bin) + os.pathsep + self.env['PATH'],
             DEPLOY_REPO=str(self.repo),
+            DEPLOY_CONFIG='/dev/null',
             DEPLOY_FRONTEND=str(self.front_repo / 'frontend'),
             DEPLOY_BUILD_ROOT=str(self.base / 'builds'),
             DEPLOY_BACKUPS=str(self.base / 'backups'),

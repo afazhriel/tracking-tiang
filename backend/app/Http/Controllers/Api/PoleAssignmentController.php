@@ -99,7 +99,7 @@ class PoleAssignmentController extends Controller
             ->where('status', PoleAssignment::STATUS_ACTIVE)
             ->first();
 
-        if (!$assignment) {
+        if (! $assignment) {
             return response()->json([
                 'message' => 'Assignment aktif tidak ditemukan.',
             ], 404);

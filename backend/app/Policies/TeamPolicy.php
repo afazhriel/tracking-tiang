@@ -14,7 +14,7 @@ class TeamPolicy
 
     public function view(User $user, Team $team): bool
     {
-        if (!$user->isActive()) {
+        if (! $user->isActive()) {
             return false;
         }
 

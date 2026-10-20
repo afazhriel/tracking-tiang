@@ -8,8 +8,9 @@ sha=${1:?Usage: bash deploy/vps.sh COMMIT_SHA}
 mode=${2:-}
 [[ -z "$mode" || "$mode" = --replace-vps ]] || { echo 'Invalid deployment mode' >&2; exit 1; }
 # This file is server-owned; never commit its secrets to Git.
-if [[ -f /etc/tracking-tiang-deploy.conf ]]; then
-  source /etc/tracking-tiang-deploy.conf
+configuration=${DEPLOY_CONFIG:-/etc/tracking-tiang-deploy.conf}
+if [[ -f "$configuration" ]]; then
+  source "$configuration"
 fi
 repo=${DEPLOY_REPO:-/opt/tracking-tiang}
 frontend=${DEPLOY_FRONTEND:-/opt/tracking-tiang/frontend-next/frontend}

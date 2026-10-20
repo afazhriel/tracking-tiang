@@ -1,0 +1,180 @@
+name: Quality gates
+
+on:
+  pull_request:
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    name: Laravel tests and Pint
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_DB: tracking_ci
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci-only-password
+        ports: [5432:5432]
+        options: >-
+          --health-cmd "pg_isready -U ci -d tracking_ci"
+          --health-interval 5s --health-timeout 5s --health-retries 15
+    env:
+      APP_ENV: testing
+      APP_KEY: base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+      DB_CONNECTION: pgsql
+      DB_HOST: 127.0.0.1
+      DB_PORT: '5432'
+      DB_DATABASE: tracking_ci
+      DB_USERNAME: ci
+      DB_PASSWORD: ci-only-password
+      DB_URL: ''
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: pdo_pgsql, pdo_sqlite, mbstring, gd, bcmath
+          coverage: none
+          tools: composer:v2
+      - name: Prepare isolated test environment
+        run: |
+          mkdir -p bootstrap/cache storage/framework/{cache/data,sessions,views} storage/logs
+          cp .env.example .env
+      - name: Install locked dependencies
+        run: composer install --no-interaction --prefer-dist --no-progress
+      - name: Laravel Pint
+        run: vendor/bin/pint --test
+      - name: Laravel unit and feature tests on PostgreSQL
+        run: php artisan test --testsuite=Unit,Feature --fail-on-warning --fail-on-risky
+
+  migrations:
+    name: PostgreSQL migration safety
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_DB: tracking_migrations_ci
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci-only-password
+        ports: [5432:5432]
+        options: >-
+          --health-cmd "pg_isready -U ci -d tracking_migrations_ci"
+          --health-interval 5s --health-timeout 5s --health-retries 15
+    env:
+      APP_ENV: testing
+      APP_KEY: base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+      DB_CONNECTION: pgsql
+      DB_HOST: 127.0.0.1
+      DB_PORT: '5432'
+      DB_DATABASE: tracking_migrations_ci
+      DB_USERNAME: ci
+      DB_PASSWORD: ci-only-password
+      DB_URL: ''
+      CI_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: pdo_pgsql, pdo_sqlite, mbstring, gd, bcmath
+          coverage: none
+          tools: composer:v2
+      - name: Prepare isolated test environment
+        run: |
+          mkdir -p backend/bootstrap/cache backend/storage/framework/{cache/data,sessions,views} backend/storage/logs
+          cp backend/.env.example backend/.env
+      - name: Install locked dependencies
+        run: composer install --working-dir=backend --no-interaction --prefer-dist --no-progress
+      - name: Select upgrade baseline
+        run: |
+          baseline="${CI_BASE_SHA:-$(git merge-base HEAD origin/main)}"
+          if [[ -z "$CI_BASE_SHA" && "$baseline" = "$(git rev-parse HEAD)" ]]; then
+            baseline=$(git rev-parse HEAD^)
+          fi
+          [[ "$baseline" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$baseline" != 0000000000000000000000000000000000000000 ]]
+          git cat-file -e "$baseline^{commit}"
+          printf 'CI_BASE_SHA=%s\n' "$baseline" >> "$GITHUB_ENV"
+          mkdir -p "$RUNNER_TEMP/tracking-base"
+          git archive "$baseline" backend/database/migrations | tar -x -C "$RUNNER_TEMP/tracking-base"
+          printf 'CI_BASE_MIGRATIONS=%s\n' "$RUNNER_TEMP/tracking-base/backend/database/migrations" >> "$GITHUB_ENV"
+      - name: Reject rewritten or destructive migrations
+        run: php ci/check-migrations.php
+      - name: Fresh and populated legacy database upgrade
+        working-directory: backend
+        run: vendor/bin/phpunit --testsuite=Migration --fail-on-warning --fail-on-risky --fail-on-skipped
+
+  frontend:
+    name: Frontend lint and build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+      API_UPSTREAM_ORIGIN: http://127.0.0.1:9
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - run: npm run lint -- --max-warnings=0
+      - run: npm test
+      - run: npm run build
+
+  deployment-tests:
+    name: Deployment regression tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r deploy/tests/requirements.txt
+      - run: bash -n deploy/vps.sh deploy/backup-vps.sh deploy/check-vps.sh
+      - run: python3 -m unittest discover -s deploy/tests -v
+
+  gate:
+    name: Quality gate
+    if: always()
+    needs: [backend, migrations, frontend, deployment-tests]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+      - name: Require every check to succeed
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          python3 - <<'PY'
+          import json, os
+          results = json.loads(os.environ['RESULTS'])
+          failed = [name for name, job in results.items() if job['result'] != 'success']
+          if failed:
+              raise SystemExit('Failed, cancelled or skipped checks: ' + ', '.join(failed))
+          print('All quality gates passed')
+          PY

@@ -31,7 +31,7 @@ class PoleController extends Controller
                 fn ($query, $provinceId) => $query->where('province_id', $provinceId)
             )
             ->when($validated['search'] ?? null, function ($query, $search) {
-                $term = '%' . strtolower($search) . '%';
+                $term = '%'.strtolower($search).'%';
 
                 $query->where(function ($inner) use ($term) {
                     $inner->whereRaw('LOWER(pole_code) LIKE ?', [$term])
@@ -140,15 +140,15 @@ class PoleController extends Controller
          */
 
         if (
-            !empty($validated['province_id']) &&
-            !empty($validated['regency_id'])
+            ! empty($validated['province_id']) &&
+            ! empty($validated['regency_id'])
         ) {
             $regencyBelongsToProvince = DB::table('regencies')
                 ->where('id', $validated['regency_id'])
                 ->where('province_id', $validated['province_id'])
                 ->exists();
 
-            if (!$regencyBelongsToProvince) {
+            if (! $regencyBelongsToProvince) {
                 return response()->json([
                     'message' => 'Kabupaten/kota tidak sesuai dengan provinsi.',
                     'errors' => [
@@ -161,15 +161,15 @@ class PoleController extends Controller
         }
 
         if (
-            !empty($validated['regency_id']) &&
-            !empty($validated['district_id'])
+            ! empty($validated['regency_id']) &&
+            ! empty($validated['district_id'])
         ) {
             $districtBelongsToRegency = DB::table('districts')
                 ->where('id', $validated['district_id'])
                 ->where('regency_id', $validated['regency_id'])
                 ->exists();
 
-            if (!$districtBelongsToRegency) {
+            if (! $districtBelongsToRegency) {
                 return response()->json([
                     'message' => 'Kecamatan tidak sesuai dengan kabupaten/kota.',
                     'errors' => [
@@ -182,15 +182,15 @@ class PoleController extends Controller
         }
 
         if (
-            !empty($validated['district_id']) &&
-            !empty($validated['village_id'])
+            ! empty($validated['district_id']) &&
+            ! empty($validated['village_id'])
         ) {
             $villageBelongsToDistrict = DB::table('villages')
                 ->where('id', $validated['village_id'])
                 ->where('district_id', $validated['district_id'])
                 ->exists();
 
-            if (!$villageBelongsToDistrict) {
+            if (! $villageBelongsToDistrict) {
                 return response()->json([
                     'message' => 'Desa/kelurahan tidak sesuai dengan kecamatan.',
                     'errors' => [
