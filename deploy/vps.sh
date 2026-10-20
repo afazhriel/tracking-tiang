@@ -29,7 +29,7 @@ test -z "$(git status --porcelain)" || {
 }
 systemctl cat "$service" >/dev/null
 docker compose config --quiet
-docker compose exec -T backend php -v >/dev/null
+docker compose exec -T backend php -v >/dev/null < /dev/null
 # Avoid overwriting a frontend checkout with local source modifications.
 frontend_repo=$(git -C "$frontend" rev-parse --show-toplevel)
 test -z "$(git -C "$frontend_repo" status --porcelain)" || {
@@ -74,7 +74,7 @@ git -C "$frontend_repo" rev-parse HEAD > "$backup/frontend-commit"
 tar --exclude=node_modules --exclude=.git -czf "$backup/frontend.tar.gz" -C "$frontend" .
 tar --exclude=vendor -czf "$backup/backend.tar.gz" backend
 # Backup must succeed before database migrations or source changes.
-docker compose exec -T postgres sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc' > "$backup/database.dump"
+docker compose exec -T postgres sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc' > "$backup/database.dump" < /dev/null
 test -s "$backup/database.dump"
 
 # From here failures can require operator recovery; print the backup location.
@@ -82,11 +82,11 @@ trap 'echo "Deployment failed. Recovery files: $backup. Review deploy/README.md;
 git merge --ff-only "$sha"
 git -C "$frontend_repo" merge --ff-only "$sha"
 docker compose up -d --no-deps --force-recreate backend
-docker compose exec -T backend composer install --no-dev --prefer-dist --no-interaction --optimize-autoloader
-docker compose exec -T backend php artisan migrate --force
-docker compose exec -T backend php artisan optimize:clear
-docker compose exec -T backend php artisan config:cache
-docker compose exec -T backend php artisan queue:restart
+docker compose exec -T backend composer install --no-dev --prefer-dist --no-interaction --optimize-autoloader < /dev/null
+docker compose exec -T backend php artisan migrate --force < /dev/null
+docker compose exec -T backend php artisan optimize:clear < /dev/null
+docker compose exec -T backend php artisan config:cache < /dev/null
+docker compose exec -T backend php artisan queue:restart < /dev/null
 docker compose restart backend
 
 # Only stop the frontend after the replacement build is ready.
