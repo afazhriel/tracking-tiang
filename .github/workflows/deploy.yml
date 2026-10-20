@@ -4,6 +4,11 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      replace_vps:
+        description: Replace VPS source with GitHub after backing up local changes
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -15,7 +20,7 @@ concurrency:
 jobs:
   deploy:
     # Enable only after configuring production secrets and checking the VPS layout.
-    if: vars.DEPLOY_ENABLED == 'true'
+    if: vars.DEPLOY_ENABLED == 'true' || (github.event_name == 'workflow_dispatch' && inputs.replace_vps)
     runs-on: ubuntu-latest
     environment: production
     timeout-minutes: 40
@@ -23,6 +28,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: Validate deployment scripts
         run: bash -n deploy/vps.sh
+      - name: Test deployment behavior
+        run: python3 -m unittest discover -s deploy/tests -v
       - name: Configure SSH
         env:
           SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
@@ -39,6 +46,7 @@ jobs:
           VPS_HOST: ${{ secrets.VPS_HOST }}
           VPS_USER: ${{ secrets.VPS_USER }}
           VPS_PORT: ${{ secrets.VPS_PORT }}
+          REPLACE_VPS: ${{ inputs.replace_vps }}
         run: |
           test -n "$VPS_HOST"
           test -n "$VPS_USER"
@@ -46,9 +54,17 @@ jobs:
           [[ "$VPS_USER" =~ ^[a-zA-Z_][a-zA-Z0-9_-]*$ ]]
           port="${VPS_PORT:-22}"
           [[ "$port" =~ ^[0-9]+$ ]]
+          mode=''
+          if [[ "$REPLACE_VPS" = true ]]; then
+            mode=--replace-vps
+          fi
+          # Read the entire script before executing so child processes cannot
+          # consume later commands from SSH stdin.
+          remote_command='script=$(mktemp); trap '\''rm -f "$script"'\'' EXIT; cat > "$script"; bash "$script" "$@" < /dev/null'
+          printf -v escaped_command '%q' "$remote_command"
           ssh -i ~/.ssh/deploy_key -p "$port" \
             -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=20 \
-            "$VPS_USER@$VPS_HOST" "bash -s -- '$GITHUB_SHA'" < deploy/vps.sh
+            "$VPS_USER@$VPS_HOST" "bash -c $escaped_command -- '$GITHUB_SHA' '$mode'" < deploy/vps.sh
       - name: Remove SSH key
         if: always()
         run: rm -f ~/.ssh/deploy_key

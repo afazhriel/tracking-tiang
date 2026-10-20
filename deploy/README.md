@@ -17,7 +17,10 @@ Frontend ternyata tidak menggunakan Docker. Workflow mempertahankan susunan
 tersebut. Jangan aktifkan jika susunan VPS sudah berubah. Kedua checkout harus
 berasal dari repo ini, punya akses baca GitHub, bersih, dan bisa fast-forward ke
 `main`. Perubahan manual/WIP harus dibackup dan direkonsiliasi terlebih dahulu;
-script tidak menjalankan `git reset --hard`.
+Deploy rutin menolak perubahan manual pada source aktif. Mode manual
+`replace_vps=true` khusus penyelarasan awal membuat backup sebelum mengganti
+source dengan commit GitHub dan membersihkan file kode tambahan yang tidak
+diabaikan Git. `.env`, storage dan vendor yang diabaikan Git tetap dipertahankan.
 
 ## Persiapan satu kali
 
@@ -59,7 +62,9 @@ script tidak menjalankan `git reset --hard`.
    DEPLOY_BACKUPS=/opt/tracking-tiang-deploy-backups
    ```
 
-6. Commit dan push perubahan workflow ini ke `main`. Setelah prasyarat cocok,
+6. Commit dan push perubahan workflow ini ke `main`. Untuk penyelarasan awal yang
+   sudah disetujui pemilik, jalankan manual dengan `replace_vps=true`; mode ini
+   dapat dijalankan meskipun deploy rutin belum diaktifkan. Setelah prasyarat cocok,
    buat repository variable `DEPLOY_ENABLED=true` di Settings → Secrets and
    variables → Actions → Variables. Jalankan workflow manual untuk deploy
    pertama dan periksa log serta web. Push berikutnya akan deploy otomatis.
@@ -72,6 +77,8 @@ script tidak menjalankan `git reset --hard`.
 - Frontend dibangun di folder sementara sebelum source aktif diperbarui. Build
   menggunakan `.env*` produksi yang sudah ada di VPS. PHP image juga dibangun
   sebelum pergantian source, dari Dockerfile commit yang dituju.
+- Perubahan yang hanya menyentuh workflow/dokumentasi memperbarui SHA kedua
+  checkout dan menjalankan smoke check tanpa membangun atau merestart aplikasi.
 - Sebelum perubahan aktif, script membackup frontend (termasuk build), source
   backend, SHA kedua checkout, dan database PostgreSQL format custom. Backup
   mengandung data sensitif; disimpan dengan izin terbatas di luar repo. Pastikan

@@ -31,9 +31,10 @@ tersebut. Rekomendasi: rekonsiliasi perubahan aktif VPS ke GitHub terlebih dahul
 lalu jadikan source hasil rekonsiliasi sebagai acuan deploy berikutnya. Alternatif:
 gunakan GitHub sebagai acuan setelah pemilik memilih untuk mengganti fitur VPS.
 
-Workflow deploy masih dinonaktifkan. Script juga menolak checkout kotor sehingga
-perubahan source belum ditimpa. Pemilihan sumber kode sudah ditanyakan kepada
-pemilik melalui chat.
+Pemilik sudah memilih melalui chat: **gunakan versi GitHub dan simpan versi VPS
+sebagai backup**. Backup awal di bawah selesai sebelum penyelarasan source.
+Workflow sedang disiapkan untuk penyelarasan pertama; deploy rutin tetap menolak
+perubahan manual baru pada source aktif.
 
 ## Backup dan bukti
 
