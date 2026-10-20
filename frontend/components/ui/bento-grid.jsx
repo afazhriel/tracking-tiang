@@ -11,8 +11,15 @@ export function BentoGrid({ children, className }) {
   return (
     <div
       className={cn(
-        'grid w-full auto-rows-[22rem] grid-cols-1 gap-4',
-        'lg:grid-cols-3',
+        /* Tinggi kartu dulu dipaku 22rem di SEMUA ukuran layar. Di
+           ponsel itu berarti setiap pintasan setinggi ±352px — hanya
+           satu kartu terlihat per layar dan halaman terasa kosong.
+           Sekarang: tinggi otomatis di mobile (`auto-rows-[13rem]`
+           masih memberi bentuk bento yang seragam), baru dipaku
+           22rem dan dibagi 3 kolom sejak `lg`. */
+        'grid w-full auto-rows-[13rem] grid-cols-1 gap-4',
+        'sm:auto-rows-[15rem]',
+        'lg:auto-rows-[22rem] lg:grid-cols-3',
         className
       )}
     >
@@ -66,7 +73,7 @@ export function BentoCard({
         className="grid-paper pointer-events-none absolute inset-0 opacity-35"
       />
 
-      <div className="pointer-events-none relative z-10 flex flex-col gap-1 p-6 transition-all duration-300 group-hover:-translate-y-10">
+      <div className="pointer-events-none relative z-10 flex flex-col gap-1 p-5 transition-all duration-300 sm:p-6 lg:group-hover:-translate-y-10">
         <span
           className={cn(
             'flex h-12 w-12 items-center justify-center rounded-card ring-1 ring-inset ring-black/5',
@@ -85,7 +92,14 @@ export function BentoCard({
         </p>
       </div>
 
-      <div className="pointer-events-none absolute bottom-0 flex w-full translate-y-10 items-center gap-3 p-4 opacity-0 transition-all duration-300 group-hover:translate-y-0 group-hover:opacity-100">
+      {/* Aksi kartu.
+          Sebelumnya panel ini `absolute bottom-0 translate-y-10
+          opacity-0` dan hanya muncul saat `group-hover`. Perangkat
+          sentuh tidak punya hover, jadi tombol "Lihat tiang" dan
+          badge TIDAK PERNAH bisa diklik di ponsel.
+          Sekarang statis (selalu terlihat) di layar kecil, dan baru
+          memakai animasi hover sejak `lg` tempat kursor memang ada. */}
+      <div className="relative z-10 flex w-full flex-wrap items-center gap-3 px-5 pb-5 sm:px-6 sm:pb-6 lg:pointer-events-none lg:absolute lg:bottom-0 lg:translate-y-10 lg:p-4 lg:opacity-0 lg:transition-all lg:duration-300 lg:group-hover:translate-y-0 lg:group-hover:opacity-100">
         <Button
           variant="accent"
           tone={toneName}

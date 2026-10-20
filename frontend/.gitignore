@@ -23,5 +23,9 @@ dist-ssr
 *.sln
 *.sw?
 
-# Next.js.next.vercel
+# Next.js
+.next
+.vercel
 
+# Build statis Capacitor (hasil `next build` dengan CAPACITOR_BUILD=1)
+out

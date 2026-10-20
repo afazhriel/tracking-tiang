@@ -1,8 +1,59 @@
 {
   "appId": "com.trackingtiang.app",
-  "appName": "Tracking Tiang",
+  "appName": "Tracking Proyek",
+  "webDir": "out",
   "server": {
-    "url": "http://pjl.ituiot.com",
-    "cleartext": true
+    "androidScheme": "https",
+    "cleartext": false,
+    "html5mode": true
+  },
+  "android": {
+    "backgroundColor": "#1c1614",
+    "allowMixedContent": false,
+    "captureInput": true,
+    "webContentsDebuggingEnabled": false,
+    "splashScreen": {
+      "launchShowDuration": 2000,
+      "launchAutoHide": true,
+      "backgroundColor": "#1c1614",
+      "androidScaleType": "CENTER_CROP",
+      "showSpinner": false
+    }
+  },
+  "ios": {
+    "backgroundColor": "#1c1614",
+    "splashScreen": {
+      "launchShowDuration": 2000,
+      "launchAutoHide": true,
+      "backgroundColor": "#1c1614",
+      "showSpinner": false
+    }
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 2000,
+      "launchAutoHide": true,
+      "backgroundColor": "#1c1614",
+      "androidScaleType": "CENTER_CROP",
+      "showSpinner": false
+    },
+    "StatusBar": {
+      "style": "DARK",
+      "backgroundColor": "#1c1614",
+      "overlaysWebView": false
+    },
+    "Keyboard": {
+      "resize": "body",
+      "style": "DARK",
+      "resizeOnFullScreen": true
+    },
+    "PushNotifications": {
+      "presentationOptions": ["badge", "sound", "alert"]
+    },
+    "LocalNotifications": {
+      "smallIcon": "ic_stat_icon_config_sample",
+      "iconColor": "#c96f42",
+      "sound": "beep.wav"
+    }
   }
 }

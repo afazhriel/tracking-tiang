@@ -29,7 +29,7 @@ export function CardHeader({ className, children, ...props }) {
   return (
     <div
       className={cn(
-        'flex flex-col gap-1 border-b border-neutral-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between',
+        'flex flex-col gap-1 border-b border-neutral-100 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5',
         className
       )}
       {...props}
@@ -64,7 +64,7 @@ export function CardDescription({ className, children, ...props }) {
 export function CardContent({ className, children, ...props }) {
   return (
     <div
-      className={cn('px-5 py-5', className)}
+      className={cn('px-4 py-4 sm:px-5 sm:py-5', className)}
       {...props}
     >
       {children}

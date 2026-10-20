@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <application
         android:allowBackup="true"
@@ -7,7 +8,8 @@
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
-        android:theme="@style/AppTheme">
+        android:theme="@style/AppTheme"
+        tools:replace="android:allowBackup">
 
         <activity
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode|navigation|density"
@@ -22,7 +24,39 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
+            <!-- Deep linking.
+                 Hanya path aplikasi yang boleh dibuka OS. Tanpa
+                 `android:pathPrefix`, SEMUA tautan pjl.ituiot.com
+                 (termasuk halaman pemasaran) akan membajak APK. -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="pjl.ituiot.com" android:pathPrefix="/dashboard" />
+                <data android:scheme="https" android:host="pjl.ituiot.com" android:pathPrefix="/tiang" />
+                <data android:scheme="https" android:host="pjl.ituiot.com" android:pathPrefix="/pekerjaan" />
+                <data android:scheme="https" android:host="pjl.ituiot.com" android:pathPrefix="/kurva-s" />
+                <data android:scheme="https" android:host="pjl.ituiot.com" android:pathPrefix="/aktivitas" />
+                <data android:scheme="https" android:host="pjl.ituiot.com" android:pathPrefix="/notifikasi" />
+                <data android:scheme="https" android:host="pjl.ituiot.com" android:pathPrefix="/profil" />
+                <data android:scheme="https" android:host="pjl.ituiot.com" android:pathPrefix="/tim" />
+            </intent-filter>
+
+            <!-- Skema kustom: tidak diperiksa OS, aman tanpa pathPrefix. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="trackingtiang" android:host="app" />
+            </intent-filter>
+
         </activity>
+
+        <!-- FCM Push Notifications.
+             Entri <service> untuk FirebaseMessagingService DIHAPUS:
+             itu kelas framework, bukan service aplikasi, sehingga
+             deklarasi seperti itu tidak berfungsi (FCM sudah
+             menyediakan service-nya sendiri lewat manifest library). -->
 
         <provider
             android:name="androidx.core.content.FileProvider"
@@ -36,6 +70,21 @@
     </application>
 
     <!-- Permissions -->
-
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CAMERA" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+
+    <!-- Camera features -->
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
+    <uses-feature android:name="android.hardware.location.gps" android:required="false" />
 </manifest>

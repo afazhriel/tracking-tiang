@@ -7,6 +7,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { Menu, X } from 'lucide-react'
 import { cn } from '../../lib/utils'
 import { SidebarContext, useSidebar } from '../../lib/use-sidebar'
+import { useIsMobile } from '../../lib/use-media-query'
 
 /* Lebar dua state dalam px. Angka ini jadi acuan semua padding,
    supaya state terlipat tidak pernah lebih sempit dari isinya. */
@@ -357,7 +358,30 @@ function SidebarLabel({ active, children }) {
  * menutup drawer di layar kecil. Dua konteks layar, dua state.
  */
 function MobileSidebar({ children, label, trailing }) {
-  const [open, setOpen] = useState(false)
+  const [openState, setOpenState] = useState(false)
+  const isMobile = useIsMobile()
+
+  /* Drawer hanya masuk akal selama layar masih mobile. Kalau pengguna
+     memutar perangkat ke lanskap atau membuka di layar lebar, drawer
+     harus menutup sendiri — kalau tidak, body tetap terkunci scroll
+     padahal tombol bar-nya sudah hilang (`md:hidden`).
+
+     Diturunkan (derived), BUKAN lewat `setState` di dalam effect:
+     efek yang menyetel state sinkron memicu cascading render dan
+     dilarang `react-hooks/set-state-in-effect`. Karena `isMobile`
+     sudah reaktif lewat `useSyncExternalStore`, cukup `&&`-kan. */
+  const open = openState && isMobile
+
+  /* Setelah layar kembali mobile, `openState` lama (`true`) tidak
+     boleh membuka drawer sendiri. Rekonsiliasi saat render — pola
+     resmi React "adjusting state when a prop changes" — jadi tidak
+     butuh effect tambahan. */
+  const [wasMobile, setWasMobile] = useState(isMobile)
+
+  if (wasMobile !== isMobile) {
+    setWasMobile(isMobile)
+    if (!isMobile && openState) setOpenState(false)
+  }
 
   /* Kunci scroll body selagi drawer terbuka supaya halaman di
      belakang tidak ikut bergulir. */
@@ -370,35 +394,57 @@ function MobileSidebar({ children, label, trailing }) {
     /* Escape menutup drawer: user di mobile tidak punya tombol
        collapse, jadi keyboard adalah jalur keluar yang wajar. */
     function onKeyDown(event) {
-      if (event.key === 'Escape') setOpen(false)
+      if (event.key === 'Escape') setOpenState(false)
     }
 
     window.addEventListener('keydown', onKeyDown)
 
+    /* Tombol back Android harus menutup drawer lebih dulu, bukan
+       langsung keluar dari aplikasi. `remove()` dipanggil saat
+       drawer tertutup sehingga tidak ada listener menumpuk. */
+    let backHandle = null
+    let cancelled = false
+
+    import('../../lib/capacitor').then(async ({ addBackButtonListener }) => {
+      const handle = await addBackButtonListener(() => setOpenState(false))
+
+      if (cancelled) {
+        handle?.remove?.()
+        return
+      }
+
+      backHandle = handle
+    })
+
     return () => {
+      cancelled = true
+      backHandle?.remove?.()
       document.body.style.overflow = previous
       window.removeEventListener('keydown', onKeyDown)
     }
   }, [open])
 
   return (
-    <div className="flex h-14 w-full items-center justify-between gap-3 border-b border-neutral-200/80 bg-paper px-4 md:hidden">
-      <span className="truncate text-sm font-semibold text-neutral-800">
-        {label}
-      </span>
+    <div className="safe-top sticky top-0 z-40 w-full border-b border-neutral-200/80 bg-paper/95 backdrop-blur-md md:hidden">
+      <div className="flex h-14 w-full items-center justify-between gap-3 px-4">
+        <span className="truncate text-sm font-semibold text-neutral-800">
+          {label}
+        </span>
 
-      <div className="flex shrink-0 items-center gap-1.5">
-        {trailing}
+        <div className="flex shrink-0 items-center gap-1.5">
+          {trailing}
 
-        <button
-          type="button"
-          aria-label="Buka menu navigasi"
-          aria-expanded={open}
-          className="flex h-9 w-9 items-center justify-center rounded-xl text-neutral-800 transition-colors hover:bg-neutral-900/[.06]"
-          onClick={() => setOpen(true)}
-        >
-          <Menu className="h-5 w-5" />
-        </button>
+          <button
+            type="button"
+            aria-label="Buka menu navigasi"
+            aria-expanded={open}
+            aria-controls="mobile-navigation"
+            className="flex h-9 w-9 items-center justify-center rounded-xl text-neutral-800 transition-colors hover:bg-neutral-900/[.06] active:bg-neutral-900/[.08]"
+            onClick={() => setOpenState(true)}
+          >
+            <Menu className="h-5 w-5" />
+          </button>
+        </div>
       </div>
 
       <AnimatePresence>
@@ -409,20 +455,25 @@ function MobileSidebar({ children, label, trailing }) {
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
             className="fixed inset-0 z-[100] bg-espresso-950/40 backdrop-blur-sm"
-            onClick={() => setOpen(false)}
+            onClick={() => setOpenState(false)}
           >
             <motion.nav
+              id="mobile-navigation"
               initial={{ x: '-100%' }}
               animate={{ x: 0 }}
               exit={{ x: '-100%' }}
               transition={{ duration: DURATION_PANEL, ease: EASE_PANEL }}
               onClick={(event) => event.stopPropagation()}
-              className="flex h-full w-[min(19rem,85vw)] flex-col overflow-y-auto border-r border-neutral-200 bg-paper p-5 shadow-lift"
+              className="safe-top safe-bottom flex h-full w-[min(19rem,85vw)] flex-col overflow-y-auto border-r border-neutral-200 bg-paper p-5 shadow-lift"
             >
+              {/* Tombol tutup ikut turun mengikuti safe-area: di
+                  perangkat berponi, `absolute top-5` sebelumnya
+                  berada di bawah status bar. */}
               <button
                 type="button"
-                className="absolute right-5 top-5 flex h-9 w-9 items-center justify-center rounded-xl text-neutral-600 transition-colors hover:bg-neutral-100"
-                onClick={() => setOpen(false)}
+                className="absolute right-5 flex h-9 w-9 items-center justify-center rounded-xl text-neutral-600 transition-colors hover:bg-neutral-100"
+                style={{ top: 'calc(1.25rem + env(safe-area-inset-top, 0px))' }}
+                onClick={() => setOpenState(false)}
                 aria-label="Tutup menu navigasi"
               >
                 <X className="h-4 w-4" />

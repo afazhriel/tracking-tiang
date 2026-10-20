@@ -176,6 +176,34 @@ html {
   -webkit-text-size-adjust: 100%;
 }
 
+/* =========================================================
+ * MOBILE / SAFE AREA
+ * `viewport-fit=cover` (app/layout.jsx) membuat konten boleh
+ * masuk ke area poni & gesture bar. Itulah perilaku yang
+ * diinginkan untuk latar, tetapi kontrol interaktif harus
+ * digeser keluar dari area itu.
+ *
+ * Dua kelas di bawah ini yang melakukannya. Nilainya
+ * `env(..., 0px)` sehingga di desktop/browser biasa hasilnya 0
+ * dan tidak ada perubahan tata letak sama sekali.
+ * ========================================================= */
+
+/* Elemen yang menempel di tepi atas viewport (bar mobile, header). */
+.safe-top {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
+/* Konten utama & elemen menempel di tepi bawah (sheet, drawer, tab bar). */
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Sisi kiri/kanan — penting di mode lanskap berponi. */
+.safe-x {
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
+}
+
 body {
   min-height: 100%;
   margin: 0;
@@ -184,6 +212,12 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
+
+  /* Layar kecil: hilangkan kilatan biru saat menekan tombol/link,
+     dan cegah halaman melebar karena satu elemen yang lebih lebar
+     dari viewport (penyebab umum "geser kanan-kiri" di Android). */
+  -webkit-tap-highlight-color: transparent;
+  overflow-x: hidden;
 
   /* Latar hangat berlapis: kertas hangat + kabut terracotta,
      plum, dan oker. Empat sumber cahaya halus supaya bidang
@@ -210,8 +244,16 @@ body {
       color-mix(in oklab, var(--color-lagoon-100) 40%, transparent),
       transparent 62%
     );
-  background-attachment: fixed;
   background-repeat: no-repeat;
+}
+
+/* `background-attachment: fixed` memaksa repaint seluruh latar di
+   setiap frame scroll — di WebView Android ini terasa sebagai
+   scroll yang tersendat. Di layar kecil cukup di-scroll biasa. */
+@media (min-width: 768px) {
+  body {
+    background-attachment: fixed;
+  }
 }
 
 *,

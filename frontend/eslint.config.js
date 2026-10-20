@@ -32,12 +32,28 @@ export default defineConfig([
   },
 
   {
-    /* Next.js mewajibkan `metadata` dan `viewport` diekspor langsung
-       dari `app/layout.jsx`. Dua export itu bukan komponen, jadi
-       aturan fast-refresh tidak berlaku di file layout. */
-    files: ['app/**/layout.{js,jsx}'],
+    /* Next.js mewajibkan sejumlah file `page.jsx`/`layout.jsx`
+       mengekspor hal selain komponen: `metadata`, `viewport`, dan
+       `generateStaticParams`. Ketiganya bukan komponen, jadi aturan
+       fast-refresh tidak berlaku di file-file ini. */
+    files: [
+      'app/**/layout.{js,jsx}',
+      'app/**/page.{js,jsx}',
+      'app/**/[[]*[]]/page.{js,jsx}',
+    ],
     rules: {
       'react-refresh/only-export-components': 'off',
+    },
+  },
+
+  {
+    /* Next.js mengganti `process.env.NEXT_PUBLIC_*` menjadi literal
+       saat build; mengakses `process.env` di modul yang juga jalan di
+       browser adalah pola resmi. `process` hanya perlu dikenal lint di
+       file yang memang membacanya. */
+    files: ['lib/native.js', 'next.config.mjs'],
+    languageOptions: {
+      globals: { ...globals.browser, process: 'readonly' },
     },
   },
 

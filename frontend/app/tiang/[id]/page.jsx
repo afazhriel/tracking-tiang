@@ -1,11 +1,16 @@
-'use client'
+import TiangDetail from './TiangDetailPage'
 
-import dynamic from 'next/dynamic'
-
-const TiangDetailPage = dynamic(() => import('./TiangDetailPage'), {
-  ssr: false,
-})
+/**
+ * Detail satu tiang.
+ *
+ * Shell server tanpa `'use client'` supaya boleh mengekspor
+ * `generateStaticParams` (dibutuhkan build static export/APK).
+ * Penjelasan lengkap ada di `app/pekerjaan/[id]/page.jsx`.
+ */
+export function generateStaticParams() {
+  return [{ id: 'placeholder' }]
+}
 
 export default function Page() {
-  return <TiangDetailPage />
+  return <TiangDetail />
 }

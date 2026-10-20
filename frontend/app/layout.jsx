@@ -58,6 +58,10 @@ export const metadata = {
 export const viewport = {
   width: 'device-width',
   initialScale: 1,
+  /* `viewportFit: 'cover'` wajib supaya `env(safe-area-inset-*)`
+     bernilai nyata di perangkat berponi (notch) dan gesture bar.
+     Tanpa ini, padding safe-area di globals.css selalu 0. */
+  viewportFit: 'cover',
   themeColor: '#c96f42',
 }
 

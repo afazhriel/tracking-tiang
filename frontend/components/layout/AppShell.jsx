@@ -374,7 +374,7 @@ function ShellContent({ children, title }) {
             </div>
           )}
 
-          <main className="flex-1 px-4 py-4 sm:px-6 sm:py-6">
+          <main className="safe-bottom flex-1 px-4 py-4 sm:px-6 sm:py-6">
             <div className="mx-auto w-full max-w-[1500px]">{children}</div>
           </main>
         </div>

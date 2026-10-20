@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Warna jendela aplikasi (windowBackground, status bar, dan
+         navigation bar). Disamakan dengan `backgroundColor` Capacitor
+         dan token warna espresso-900 di frontend supaya tidak ada
+         kedipan putih saat aplikasi start.
+
+         Catatan: warna adaptive launcher `ic_launcher_background`
+         TIDAK didefinisikan di sini — sudah ada di
+         `ic_launcher_background.xml`. Menaruhnya di dua file membuat
+         `mergeDebugResources` gagal dengan "Duplicate resources". -->
+    <color name="splashBackground">#1C1614</color>
+</resources>

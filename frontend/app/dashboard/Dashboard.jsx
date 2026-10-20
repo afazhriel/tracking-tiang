@@ -59,7 +59,7 @@ function MiniMetric({ label, value, tone: toneName }) {
     <div
       style={accentVars(toneName)}
       className={cn(
-        'accent-top accent-top-strong rounded-xl px-4 py-3 ring-1 ring-inset transition-colors',
+        'accent-top accent-top-strong min-w-0 rounded-xl px-3.5 py-3 ring-1 ring-inset transition-colors sm:px-4',
         resolved.outline
       )}
     >
@@ -71,10 +71,10 @@ function MiniMetric({ label, value, tone: toneName }) {
       >
         <span
           aria-hidden="true"
-          className="h-1.5 w-1.5 rounded-full"
+          className="h-1.5 w-1.5 shrink-0 rounded-full"
           style={{ backgroundColor: resolved.hex }}
         />
-        {label}
+        <span className="truncate">{label}</span>
       </p>
 
       <p className="mt-1.5 font-display text-base font-semibold tabular-nums text-neutral-900">
@@ -216,6 +216,7 @@ function DashboardContent() {
             Icon={MapPin}
             tone="lagoon"
             valueTone
+            className="min-w-0"
           />
 
           <StatCard
@@ -224,6 +225,7 @@ function DashboardContent() {
             Icon={BarChart3}
             tone="sage"
             valueTone
+            className="min-w-0"
           />
 
           <StatCard
@@ -232,11 +234,12 @@ function DashboardContent() {
             Icon={CalendarDays}
             tone="ochre"
             valueTone
+            className="min-w-0"
           />
 
           <div
             style={accentVars('plum')}
-            className="accent-top surface-elevate rounded-card border border-neutral-200 px-4 py-4"
+            className="accent-top surface-elevate min-w-0 rounded-card border border-neutral-200 px-4 py-4"
           >
             <div className="flex items-start justify-between gap-3">
               <p className="text-xs font-medium text-neutral-500">Status</p>
@@ -272,8 +275,18 @@ function DashboardContent() {
         ))}
       </BentoGrid>
 
+      {/* =========================================================
+          Bagian bawah overview: Ringkasan Proyek + Monitoring
+          Lapangan. Perbaikan khusus layar kecil:
+          - Grid sudah satu kolom di mobile, tapi kartu `lg:col-span-2`
+            dan panel gelap `col-span-3` dulu mengandalkan grid 3
+            kolom yang baru aktif di `lg`; sekarang urutannya
+            eksplisit dan `col-span` hanya berlaku sejak `lg`.
+          - Panel gelap memakai `p-6` + bayangan besar; di ponsel itu
+            memakan hampir seluruh lebar layar. Padding jadi bertahap.
+          ========================================================= */}
       <section className="grid gap-4 lg:grid-cols-3">
-        <Card className="lg:col-span-2" tone="brand">
+        <Card className="min-w-0 lg:col-span-2" tone="brand">
           <CardHeader>
             <CardHeading
               Icon={FileText}
@@ -284,7 +297,7 @@ function DashboardContent() {
 
             <Link
               href="/kurva-s"
-              className="inline-flex items-center gap-2 rounded-xl border border-neutral-200 bg-paper px-3 py-1.5 text-xs font-medium text-neutral-600 transition-colors hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700"
+              className="inline-flex shrink-0 items-center gap-2 rounded-xl border border-neutral-200 bg-paper px-3 py-1.5 text-xs font-medium text-neutral-600 transition-colors hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700"
             >
               Analisa kurva
             </Link>
@@ -293,7 +306,7 @@ function DashboardContent() {
           <CardContent>
             {project ? (
               <>
-                <div className="grid gap-4 sm:grid-cols-3">
+                <div className="grid gap-3 sm:grid-cols-3 sm:gap-4">
                   <MiniMetric
                     label="Kode Project"
                     value={project.code ?? '—'}
@@ -311,7 +324,7 @@ function DashboardContent() {
                   />
                 </div>
 
-                <div className="mt-4 grid gap-4 sm:grid-cols-3">
+                <div className="mt-3 grid gap-3 sm:mt-4 sm:grid-cols-3 sm:gap-4">
                   <MiniMetric
                     label="Item Pekerjaan"
                     value={`${formatNumber(workItems.length)} item`}
@@ -351,12 +364,12 @@ function DashboardContent() {
           </CardContent>
         </Card>
 
-        <div className="accent-top relative col-span-3 lg:col-span-1 flex flex-col justify-between overflow-hidden rounded-card border border-espresso-800 bg-espresso-900 p-6 text-espresso-50 shadow-[0_18px_40px_-24px_rgba(43,32,24,.8)] [--accent-from:var(--color-lagoon-400)] [--accent-to:var(--color-brand-400)]">
+        <div className="accent-top relative flex min-w-0 flex-col justify-between overflow-hidden rounded-card border border-espresso-800 bg-espresso-900 p-5 text-espresso-50 shadow-[0_18px_40px_-24px_rgba(43,32,24,.8)] [--accent-from:var(--color-lagoon-400)] [--accent-to:var(--color-brand-400)] sm:p-6 lg:col-span-1">
           {/* Kabut lagoon: satu-satunya ungu/kolom dingin di halaman
               ini, dipakai untuk menandai panel "monitoring". */}
           <div
             aria-hidden="true"
-            className="pointer-events-none absolute -right-20 -top-24 h-72 w-72 rounded-full bg-lagoon-500/25 blur-3xl"
+            className="pointer-events-none absolute -right-20 -top-24 h-56 w-56 rounded-full bg-lagoon-500/25 blur-3xl sm:h-72 sm:w-72"
           />
 
           <div
@@ -369,7 +382,7 @@ function DashboardContent() {
               <Globe2 className="h-5 w-5" />
             </span>
 
-            <h3 className="mt-8 font-display text-lg font-semibold">
+            <h3 className="mt-6 font-display text-lg font-semibold sm:mt-8">
               Monitoring Lapangan
             </h3>
 
@@ -391,7 +404,7 @@ function DashboardContent() {
                   href="/tiang"
                   className="inline-flex items-center gap-2 transition-colors hover:text-white"
                 >
-                  <MapPin className="h-3.5 w-3.5 text-lagoon-300" />
+                  <MapPin className="h-3.5 w-3.5 shrink-0 text-lagoon-300" />
                   {formatNumber(registeredPoles)} titik tiang terdaftar
                 </Link>
               </li>
@@ -400,7 +413,7 @@ function DashboardContent() {
                   href="/pekerjaan"
                   className="inline-flex items-center gap-2 transition-colors hover:text-white"
                 >
-                  <ClipboardList className="h-3.5 w-3.5 text-lagoon-300" />
+                  <ClipboardList className="h-3.5 w-3.5 shrink-0 text-lagoon-300" />
                   {formatNumber(workItems.length)} item pekerjaan
                 </Link>
               </li>
@@ -409,7 +422,7 @@ function DashboardContent() {
                   href="/aktivitas"
                   className="inline-flex items-center gap-2 transition-colors hover:text-white"
                 >
-                  <Activity className="h-3.5 w-3.5 text-lagoon-300" />
+                  <Activity className="h-3.5 w-3.5 shrink-0 text-lagoon-300" />
                   Riwayat aktivitas lapangan
                 </Link>
               </li>

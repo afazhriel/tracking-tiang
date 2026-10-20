@@ -102,7 +102,10 @@ export function Modal({
         aria-label={title}
         tabIndex={-1}
         className={cn(
-          'relative flex max-h-[92vh] w-full flex-col overflow-hidden rounded-t-2xl bg-paper shadow-lift outline-none sm:rounded-card',
+          /* Mobile: sheet dari bawah — perlu jeda gesture bar.
+             `max-h` memakai dvh supaya tinggi tidak salah hitung
+             saat address bar browser mobile muncul/hilang. */
+          'safe-bottom relative flex max-h-[92dvh] w-full flex-col overflow-hidden rounded-t-2xl bg-paper shadow-lift outline-none sm:rounded-card',
           widthClass,
           className
         )}
