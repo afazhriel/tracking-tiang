@@ -1,0 +1,54 @@
+name: Deploy VPS
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-vps
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    # Enable only after configuring production secrets and checking the VPS layout.
+    if: vars.DEPLOY_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate deployment scripts
+        run: bash -n deploy/vps.sh
+      - name: Configure SSH
+        env:
+          SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
+        run: |
+          test -n "$SSH_KEY"
+          test -n "$KNOWN_HOSTS"
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+      - name: Deploy exact commit
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_PORT: ${{ secrets.VPS_PORT }}
+        run: |
+          test -n "$VPS_HOST"
+          test -n "$VPS_USER"
+          [[ "$VPS_HOST" =~ ^[a-zA-Z0-9.-]+$ ]]
+          [[ "$VPS_USER" =~ ^[a-zA-Z_][a-zA-Z0-9_-]*$ ]]
+          port="${VPS_PORT:-22}"
+          [[ "$port" =~ ^[0-9]+$ ]]
+          ssh -i ~/.ssh/deploy_key -p "$port" \
+            -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=20 \
+            "$VPS_USER@$VPS_HOST" "bash -s -- '$GITHUB_SHA'" < deploy/vps.sh
+      - name: Remove SSH key
+        if: always()
+        run: rm -f ~/.ssh/deploy_key
