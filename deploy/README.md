@@ -105,5 +105,7 @@ docker compose config --quiet
 systemctl is-active tracking-tiang-next
 ```
 
-Tidak ada akses VPS/SSH yang dikonfigurasi dalam sesi penyusunan workflow ini;
-keberhasilan deploy langsung belum diverifikasi.
+Akses SSH dan host key berhasil diuji melalui workflow `Check VPS access` pada
+20 Oktober 2026. Web/API merespons HTTP 200 dan backup source/database sudah
+dibuat. Deploy belum diaktifkan karena source aktif VPS berbeda dari GitHub;
+lihat [hasil pemeriksaan](VPS-AUDIT.md) sebelum merekonsiliasi kedua versi.

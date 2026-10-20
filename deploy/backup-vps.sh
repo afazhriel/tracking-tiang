@@ -19,8 +19,10 @@ git -C "$frontend" rev-parse HEAD > "$backup/frontend-commit"
 git -C "$frontend" diff --binary > "$backup/frontend-working.patch"
 git -C "$frontend" diff --cached --binary > "$backup/frontend-index.patch"
 cp docker-compose.yml "$backup/docker-compose.yml"
-tar --exclude=vendor --exclude=node_modules -czf "$backup/backend.tar.gz" backend
-tar --exclude=node_modules --exclude=.git --exclude=.gradle --exclude=build \
+tar --exclude=vendor --exclude=node_modules --exclude=backend/storage/logs \
+  --exclude=backend/storage/framework -czf "$backup/backend.tar.gz" backend
+tar --exclude=node_modules --exclude=.git --exclude=.gradle \
+  --exclude=./android/app/build --exclude=./android/build --exclude=./.next/cache \
   -czf "$backup/frontend.tar.gz" -C "$frontend" .
 docker compose exec -T postgres sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc' \
   > "$backup/database.dump" < /dev/null
