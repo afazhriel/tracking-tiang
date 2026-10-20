@@ -22,7 +22,25 @@ for checkout in "$repo" "$frontend"; do
   git -C "$checkout" diff --stat
   git -C "$checkout" fetch origin main < /dev/null
   printf 'Differences from latest GitHub main:\n'
-  git -C "$checkout" diff --stat origin/main -- backend frontend
+  git -C "$checkout" diff --stat origin/main -- .
+done
+for component in backend frontend; do
+  live="$repo/backend"
+  checkout="$repo"
+  if [[ "$component" = frontend ]]; then
+    live="$frontend"
+    checkout=$(git -C "$frontend" rev-parse --show-toplevel)
+  fi
+  printf '\nActual content differences for %s (ignores old Git index):\n' "$component"
+  while IFS=$'\t' read -r metadata path; do
+    [[ "$path" = */android/* || "$path" = */.env* ]] && continue
+    file="$live/${path#*/}"
+    if [[ ! -f "$file" ]]; then
+      printf 'MISSING %s\n' "$path"
+    elif [[ "$(git hash-object "$file")" != "${metadata##* }" ]]; then
+      printf 'DIFFERENT %s\n' "$path"
+    fi
+  done < <(git -C "$checkout" ls-tree -r origin/main -- ":(top)$component")
 done
 systemctl show "$service" -p ActiveState -p User -p WorkingDirectory
 test -f "$repo/backend/.env"
