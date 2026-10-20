@@ -45,6 +45,33 @@ export function isNativeApp() {
   return Capacitor.isNativePlatform()
 }
 
+/**
+ * href untuk rute dinamis (`/tiang/12`, `/pekerjaan/3`).
+ *
+ * Di BROWSER tetap path cantik `/tiang/12` (SSR Next menanganinya).
+ * Di NATIVE (APK) memakai query `/tiang/detail?id=12`: ekspor statis
+ * tidak punya berkas RSC untuk `/tiang/12`, jadi navigasi klien ke
+ * path dinamis berakhir 404 lalu muat penuh — yang dibalas server
+ * lokal Capacitor dengan `index.html` (landing). Rute statis
+ * `/tiang/detail` diekspor lengkap, jadi aman di WebView.
+ */
+export function detailHref(base, id) {
+  if (id === null || id === undefined || id === '') return base
+
+  return isNativeApp()
+    ? `${base}/detail?id=${encodeURIComponent(id)}`
+    : `${base}/${id}`
+}
+
+/** href daftar item pekerjaan satu tiang — lihat `detailHref`. */
+export function poleWorkHref(poleId) {
+  if (poleId === null || poleId === undefined || poleId === '') return '/tiang'
+
+  return isNativeApp()
+    ? `/tiang/detail/pekerjaan?pole=${encodeURIComponent(poleId)}`
+    : `/tiang/${poleId}/pekerjaan`
+}
+
 /** Origin yang dipakai saat berjalan di WebView native, atau null di browser. */
 export function getNativeOrigin() {
   if (typeof window === 'undefined') return null

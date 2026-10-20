@@ -39,7 +39,7 @@ class ProvinceProgressTest extends TestCase
     private function makeProject(string $code = 'PRJ-1'): Project
     {
         return Project::create([
-            'name' => 'Proyek ' . $code,
+            'name' => 'Proyek '.$code,
             'code' => $code,
             'status' => 'active',
         ]);
@@ -54,10 +54,11 @@ class ProvinceProgressTest extends TestCase
         ]);
     }
 
-    private function makeWorkItem(Project $project): WorkItem
+    private function makeWorkItem(Project $project, ?Pole $pole = null): WorkItem
     {
         return WorkItem::create([
             'project_id' => $project->id,
+            'pole_id' => $pole?->id,
             'name' => 'Pondasi',
             'weight_percent' => 100,
             'sequence' => 1,
@@ -150,8 +151,8 @@ class ProvinceProgressTest extends TestCase
     public function test_pic_can_record_progress_in_assigned_province(): void
     {
         $project = $this->makeProject();
-        $workItem = $this->makeWorkItem($project);
         $pole = $this->makePole($project, '32');
+        $workItem = $this->makeWorkItem($project, $pole);
         $pic = $this->picWithProvince('32', $project);
 
         $this->actingAs($pic, 'sanctum')
@@ -171,8 +172,8 @@ class ProvinceProgressTest extends TestCase
     public function test_supervisor_without_province_cannot_record_progress(): void
     {
         $project = $this->makeProject();
-        $workItem = $this->makeWorkItem($project);
         $pole = $this->makePole($project, '32');
+        $workItem = $this->makeWorkItem($project, $pole);
         $supervisor = User::factory()->supervisor()->create();
 
         $this->actingAs($supervisor, 'sanctum')
@@ -227,8 +228,8 @@ class ProvinceProgressTest extends TestCase
         Storage::fake('public');
 
         $project = $this->makeProject();
-        $workItem = $this->makeWorkItem($project);
         $pole = $this->makePole($project, '32');
+        $workItem = $this->makeWorkItem($project, $pole);
         $pic = $this->picWithProvince('32', $project);
 
         $response = $this->actingAs($pic, 'sanctum')
@@ -268,8 +269,8 @@ class ProvinceProgressTest extends TestCase
         Storage::fake('public');
 
         $project = $this->makeProject();
-        $workItem = $this->makeWorkItem($project);
         $pole = $this->makePole($project, '32');
+        $workItem = $this->makeWorkItem($project, $pole);
         $pic = $this->picWithProvince('32', $project);
 
         $this->actingAs($pic, 'sanctum')
@@ -306,4 +307,3 @@ class ProvinceProgressTest extends TestCase
         $this->assertSame(1, $byProvince['33']['pole_count']);
     }
 }
-

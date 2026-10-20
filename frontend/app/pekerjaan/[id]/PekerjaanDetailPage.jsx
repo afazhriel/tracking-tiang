@@ -1,8 +1,8 @@
 'use client'
 
-import { useCallback, useEffect, useMemo } from 'react'
+import { useCallback, useEffect, useMemo, Suspense } from 'react'
 import Link from 'next/link'
-import { useParams } from 'next/navigation'
+import { useParams, useSearchParams } from 'next/navigation'
 import {
   ArrowLeft,
   CalendarDays,
@@ -15,6 +15,7 @@ import {
 } from 'lucide-react'
 
 import AppShell from '../../../components/layout/AppShell'
+import { detailHref } from '../../../lib/native'
 import { useProject } from '../../../lib/project-context'
 import { Badge, StatusBadge } from '../../../components/ui/badge'
 import { Breadcrumbs } from '../../../components/ui/breadcrumbs'
@@ -63,7 +64,10 @@ function Row({ label, value, mono = false }) {
  */
 function PekerjaanDetailContent() {
   const params = useParams()
-  const workItemId = params?.id ?? null
+  const searchParams = useSearchParams()
+  /* Di browser: path `/pekerjaan/{id}`. Di APK (ekspor statis): query
+     `/pekerjaan/detail?id={id}` — lihat `detailHref` di lib/native.js. */
+  const workItemId = params?.id ?? searchParams?.get('id') ?? null
   const { projectId, project } = useProject()
 
   const enabled = Boolean(projectId && workItemId)
@@ -125,7 +129,9 @@ function PekerjaanDetailContent() {
     const rows = poles.map((pole) => {
       const entry = store[pole.id]
       const item = entry?.items?.find(
-        (candidate) => candidate.workItemId === workItemId
+        (candidate) =>
+          String(candidate.workItemId) === String(workItemId) ||
+          String(candidate.workItem?.sourceItemId) === String(workItemId)
       )
 
       return {
@@ -519,7 +525,7 @@ function PekerjaanDetailContent() {
                             return (
                               <Link
                                 key={row.pole.id}
-                                href={`/tiang/${row.pole.id}`}
+                                href={detailHref('/tiang', row.pole.id)}
                                 className="block rounded-xl border border-neutral-100 p-3 transition-colors hover:border-neutral-200 hover:bg-canvas"
                               >
                                 <div className="flex flex-wrap items-center justify-between gap-2">
@@ -648,9 +654,13 @@ function PekerjaanDetailContent() {
 }
 
 export default function PekerjaanDetailPage() {
+  /* Suspense wajib karena `useSearchParams()` di dalam konten — tanpa
+     ini build static export menolak. */
   return (
     <AppShell title="Detail Pekerjaan">
-      <PekerjaanDetailContent />
+      <Suspense fallback={null}>
+        <PekerjaanDetailContent />
+      </Suspense>
     </AppShell>
   )
 }

@@ -18,6 +18,7 @@ import {
 
 import AppShell from '../../components/layout/AppShell'
 import { ActionButton, PageHeader } from '../../components/layout/PageHeader'
+import { detailHref } from '../../lib/native'
 import { useProject } from '../../lib/project-context'
 import { Badge, StatusBadge } from '../../components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../components/ui/card'
@@ -139,7 +140,7 @@ function PekerjaanContent() {
   const itemsLoader = useCallback(async () => {
     if (!projectId) return { items: [], meta: null }
 
-    const payload = await api.listWorkItems(projectId)
+    const payload = await api.listWorkItemsAggregate(projectId)
 
     return {
       items: unwrapList(payload).map(normalizeWorkItem),
@@ -280,12 +281,14 @@ function PekerjaanContent() {
               </ActionButton>
             )}
 
-            <SyncProgressControl
-              running={running}
-              progressInfo={progressInfo}
-              onSync={() => loadMany(poleIds)}
-              onCancel={cancel}
-            />
+            {!hasBackendAggregate && (
+              <SyncProgressControl
+                running={running}
+                progressInfo={progressInfo}
+                onSync={() => loadMany(poleIds)}
+                onCancel={cancel}
+              />
+            )}
           </>
         }
       />
@@ -355,7 +358,7 @@ function PekerjaanContent() {
             <div>
               <CardTitle>Work Item Project</CardTitle>
               <CardDescription>
-                Sumber data: GET /api/projects/{'{id}'}/work-items
+                Sumber data: GET /api/projects/{'{id}'}/work-items?scope=aggregate
               </CardDescription>
             </div>
           </div>
@@ -386,7 +389,7 @@ function PekerjaanContent() {
                   return (
                     <Link
                       key={item.id}
-                      href={`/pekerjaan/${item.id}`}
+                      href={detailHref('/pekerjaan', item.id)}
                       className="block rounded-card border border-neutral-200 bg-paper p-4 transition-colors hover:border-neutral-300"
                     >
                       <div className="flex items-start justify-between gap-3">
@@ -460,7 +463,7 @@ function PekerjaanContent() {
 
                             <Td>
                               <Link
-                                href={`/pekerjaan/${item.id}`}
+                                href={detailHref('/pekerjaan', item.id)}
                                 className="font-medium text-neutral-900 transition-colors hover:text-neutral-950"
                               >
                                 {item.name}
@@ -502,7 +505,7 @@ function PekerjaanContent() {
 
                             <Td align="right">
                               <Link
-                                href={`/pekerjaan/${item.id}`}
+                                href={detailHref('/pekerjaan', item.id)}
                                 aria-label={`Detail ${item.name}`}
                                 className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-neutral-200 text-neutral-500 transition-colors hover:bg-canvas hover:text-neutral-800"
                               >

@@ -6,8 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Models\Pole;
 use App\Models\PoleProgressHistory;
 use App\Models\Project;
-use Illuminate\Http\JsonResponse;
 use Carbon\Carbon;
+use Illuminate\Http\JsonResponse;
 
 class CurveController extends Controller
 {
@@ -94,7 +94,7 @@ class CurveController extends Controller
         $maxMonth = 9;
 
         foreach ($workItems as $item) {
-            if (!$item->planned_start_month || !$item->planned_end_month) {
+            if (! $item->planned_start_month || ! $item->planned_end_month) {
                 continue;
             }
 
@@ -111,7 +111,7 @@ class CurveController extends Controller
             $start = $item->planned_start_month;
             $end = $item->planned_end_month;
 
-            if (!$start || !$end) {
+            if (! $start || ! $end) {
                 continue;
             }
 

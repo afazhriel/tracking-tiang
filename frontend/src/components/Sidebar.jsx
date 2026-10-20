@@ -44,7 +44,7 @@ function Brand({ collapsed }) {
 
       {!collapsed && (
         <div className="pcr-brand-text">
-          <strong>TRACKING TIANG</strong>
+          <strong>TRACKING PROYEK</strong>
           <span>PROJECT CONTROL</span>
         </div>
       )}
@@ -202,7 +202,7 @@ export default function Sidebar({
           <Menu size={18} />
         </button>
 
-        <strong>Tracking Tiang</strong>
+        <strong>Tracking Proyek</strong>
 
         <button
           type="button"
@@ -242,7 +242,7 @@ export default function Sidebar({
                   </span>
 
                   <div className="pcr-brand-text">
-                    <strong>TRACKING TIANG</strong>
+                    <strong>TRACKING PROYEK</strong>
                     <span>PROJECT CONTROL</span>
                   </div>
 

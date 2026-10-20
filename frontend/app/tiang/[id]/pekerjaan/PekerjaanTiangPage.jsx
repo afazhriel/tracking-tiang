@@ -1,8 +1,8 @@
 'use client'
 
-import { useCallback, useMemo, useState } from 'react'
+import { Suspense, useCallback, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { useParams } from 'next/navigation'
+import { useParams, useSearchParams } from 'next/navigation'
 import {
   ArrowLeft,
   CircleAlert,
@@ -35,6 +35,7 @@ import { EmptyState } from '../../../../components/ui/empty-state'
 import { StatCard, StatCardGrid } from '../../../../components/ui/stat-card'
 import { Table, TableWrap, Td, Th, Tr } from '../../../../components/ui/table'
 import { ErrorNotice, SkeletonRows } from '../../../../components/ui/states'
+import { detailHref } from '../../../../lib/native'
 import { useProject } from '../../../../lib/project-context'
 import { useCurrentUser } from '../../../../lib/use-current-user'
 import {
@@ -428,7 +429,11 @@ function PoleWorkItemFormModal({
 
 function PekerjaanTiangContent() {
   const params = useParams()
-  const poleId = params?.id ?? null
+  const searchParams = useSearchParams()
+  /* Di browser: path `/tiang/{id}/pekerjaan`. Di APK (ekspor statis):
+     query `/tiang/detail/pekerjaan?pole={id}` — lihat `poleWorkHref`
+     di lib/native.js. */
+  const poleId = params?.id ?? searchParams?.get('pole') ?? null
   const { projectId } = useProject()
 
   const currentUser = useCurrentUser()
@@ -527,7 +532,7 @@ function PekerjaanTiangContent() {
         subtitle="Kelola item pekerjaan khusus tiang ini. Item di sini independen dari tiang lain dan menjadi dasar progres tiang."
         actions={
           <>
-            <ActionButton href={`/tiang/${poleId}`} icon={ArrowLeft}>
+            <ActionButton href={detailHref('/tiang', poleId)} icon={ArrowLeft}>
               Detail Tiang
             </ActionButton>
 
@@ -807,9 +812,13 @@ function PekerjaanTiangContent() {
 }
 
 export default function PekerjaanTiangPage() {
+  /* Suspense wajib karena `useSearchParams()` di dalam konten — tanpa
+     ini build static export menolak. */
   return (
     <AppShell title="Item Pekerjaan Tiang">
-      <PekerjaanTiangContent />
+      <Suspense fallback={null}>
+        <PekerjaanTiangContent />
+      </Suspense>
     </AppShell>
   )
 }

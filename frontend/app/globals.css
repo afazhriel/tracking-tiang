@@ -403,3 +403,11 @@ table th {
     color: transparent;
   }
 }
+
+/* Local JetBrains Mono */
+.fontsource-jetbrains-variable {
+  --font-jetbrains: "JetBrains Mono Variable", Consolas, monospace;
+}
+.fontsource-jetbrains-class {
+  font-family: "JetBrains Mono Variable", Consolas, monospace;
+}

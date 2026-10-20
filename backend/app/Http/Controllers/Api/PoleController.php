@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Models\Pole;
 use App\Models\Project;
 use App\Models\Region;
+use App\Models\User;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -31,13 +33,17 @@ class PoleController extends Controller
                 fn ($query, $provinceId) => $query->where('province_id', $provinceId)
             )
             ->when($validated['search'] ?? null, function ($query, $search) {
-                $term = '%' . strtolower($search) . '%';
+                $term = '%'.strtolower($search).'%';
 
                 $query->where(function ($inner) use ($term) {
                     $inner->whereRaw('LOWER(pole_code) LIKE ?', [$term])
                         ->orWhereRaw('LOWER(address) LIKE ?', [$term]);
                 });
-            })
+            });
+
+        $this->scopeVisiblePoles($poles, $request->user(), 'poles');
+
+        $poles = $poles
             ->orderBy('province_id')
             ->orderBy('pole_code')
             ->paginate($perPage);
@@ -46,11 +52,46 @@ class PoleController extends Controller
     }
 
     /**
+     * Batasi daftar tiang sesuai hak akses user.
+     *
+     * Admin/Supervisor bebas (seluruh tiang pada project). Selain itu
+     * (PIC) hanya tiang di provinsi yang ditugaskan atau tiang yang
+     * ditugaskan langsung/lewat timnya — sejalan dengan `PolePolicy@view`.
+     *
+     * @param  Builder<Pole>|\Illuminate\Database\Query\Builder  $query
+     */
+    private function scopeVisiblePoles($query, ?User $user, string $table = 'poles'): void
+    {
+        if ($user === null || $user->isAdmin() || $user->isSupervisor()) {
+            return;
+        }
+
+        $provinceIds = $user->managedProvinceIds() ?? [];
+        $poleIds = $user->assignedPoleIds();
+
+        if ($provinceIds === [] && $poleIds === []) {
+            $query->whereRaw('1 = 0');
+
+            return;
+        }
+
+        $query->where(function ($inner) use ($provinceIds, $poleIds, $table) {
+            if ($provinceIds !== []) {
+                $inner->whereIn($table.'.province_id', $provinceIds);
+            }
+
+            if ($poleIds !== []) {
+                $inner->orWhereIn($table.'.id', $poleIds);
+            }
+        });
+    }
+
+    /**
      * Ringkasan jumlah tiang + rata-rata progress per provinsi.
      *
      * Dipakai halaman Tiang untuk grup/filter per provinsi.
      */
-    public function summary(Project $project): JsonResponse
+    public function summary(Request $request, Project $project): JsonResponse
     {
         $this->authorize('view', $project);
 
@@ -59,7 +100,11 @@ class PoleController extends Controller
         $perPole = DB::table('poles')
             ->leftJoin('pole_work_progress as pwp', 'pwp.pole_id', '=', 'poles.id')
             ->leftJoin('work_items as wi', 'wi.id', '=', 'pwp.work_item_id')
-            ->where('poles.project_id', $project->id)
+            ->where('poles.project_id', $project->id);
+
+        $this->scopeVisiblePoles($perPole, $request->user(), 'poles');
+
+        $perPole = $perPole
             ->groupBy('poles.id', 'poles.province_id')
             ->select(
                 'poles.province_id',
@@ -140,15 +185,15 @@ class PoleController extends Controller
          */
 
         if (
-            !empty($validated['province_id']) &&
-            !empty($validated['regency_id'])
+            ! empty($validated['province_id']) &&
+            ! empty($validated['regency_id'])
         ) {
             $regencyBelongsToProvince = DB::table('regencies')
                 ->where('id', $validated['regency_id'])
                 ->where('province_id', $validated['province_id'])
                 ->exists();
 
-            if (!$regencyBelongsToProvince) {
+            if (! $regencyBelongsToProvince) {
                 return response()->json([
                     'message' => 'Kabupaten/kota tidak sesuai dengan provinsi.',
                     'errors' => [
@@ -161,15 +206,15 @@ class PoleController extends Controller
         }
 
         if (
-            !empty($validated['regency_id']) &&
-            !empty($validated['district_id'])
+            ! empty($validated['regency_id']) &&
+            ! empty($validated['district_id'])
         ) {
             $districtBelongsToRegency = DB::table('districts')
                 ->where('id', $validated['district_id'])
                 ->where('regency_id', $validated['regency_id'])
                 ->exists();
 
-            if (!$districtBelongsToRegency) {
+            if (! $districtBelongsToRegency) {
                 return response()->json([
                     'message' => 'Kecamatan tidak sesuai dengan kabupaten/kota.',
                     'errors' => [
@@ -182,15 +227,15 @@ class PoleController extends Controller
         }
 
         if (
-            !empty($validated['district_id']) &&
-            !empty($validated['village_id'])
+            ! empty($validated['district_id']) &&
+            ! empty($validated['village_id'])
         ) {
             $villageBelongsToDistrict = DB::table('villages')
                 ->where('id', $validated['village_id'])
                 ->where('district_id', $validated['district_id'])
                 ->exists();
 
-            if (!$villageBelongsToDistrict) {
+            if (! $villageBelongsToDistrict) {
                 return response()->json([
                     'message' => 'Desa/kelurahan tidak sesuai dengan kecamatan.',
                     'errors' => [
@@ -240,10 +285,45 @@ class PoleController extends Controller
 
         $pole = Pole::create($validated);
 
+        $this->seedWorkItemsFromTemplate($project, $pole);
+
         return response()->json([
             'message' => 'Tiang berhasil dibuat.',
             'data' => $pole->load(['region', 'province:id,name']),
         ], 201);
+    }
+
+    /**
+     * Salin item template project ke tiang baru supaya tiang langsung
+     * punya daftar pekerjaannya sendiri (independen per tiang).
+     */
+    private function seedWorkItemsFromTemplate(Project $project, Pole $pole): void
+    {
+        $templates = $project->workItems()
+            ->whereNull('pole_id')
+            ->orderBy('sequence')
+            ->orderBy('id')
+            ->get();
+
+        if ($templates->isEmpty()) {
+            return;
+        }
+
+        DB::transaction(function () use ($pole, $templates) {
+            foreach ($templates as $template) {
+                $pole->workItems()->create([
+                    'project_id' => $pole->project_id,
+                    'source_item_id' => $template->id,
+                    'name' => $template->name,
+                    'weight_percent' => $template->weight_percent,
+                    'sequence' => $template->sequence,
+                    'planned_duration_days' => $template->planned_duration_days,
+                    'is_active' => $template->is_active,
+                    'planned_start_month' => $template->planned_start_month,
+                    'planned_end_month' => $template->planned_end_month,
+                ]);
+            }
+        });
     }
 
     public function show(Project $project, Pole $pole): JsonResponse

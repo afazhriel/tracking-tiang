@@ -17,7 +17,9 @@ class User extends Authenticatable
     use Notifiable;
 
     public const ROLE_ADMIN = 'admin';
+
     public const ROLE_SUPERVISOR = 'supervisor';
+
     public const ROLE_PIC = 'pic';
 
     /**
@@ -28,7 +30,9 @@ class User extends Authenticatable
     public const DEFAULT_ROLE = self::ROLE_PIC;
 
     public const STATUS_ACTIVE = 'active';
+
     public const STATUS_PENDING = 'pending';
+
     public const STATUS_SUSPENDED = 'suspended';
 
     /**

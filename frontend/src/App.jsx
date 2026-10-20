@@ -66,7 +66,7 @@ function App() {
   }, [])
 
   const targetPoles = project?.total_target_poles ?? 1500
-  const projectName = project?.name ?? 'Tracking Tiang'
+  const projectName = project?.name ?? 'Tracking Proyek'
   const projectCode = project?.code ?? 'TT-DEMO-001'
   const status = project?.status ?? 'active'
 
@@ -279,7 +279,7 @@ function App() {
           </div>
 
           <p>
-            Tracking Tiang dirancang untuk membantu tim proyek melihat kondisi
+            Tracking Proyek dirancang untuk membantu tim proyek melihat kondisi
             lapangan, mengukur progress, dan mengambil keputusan berdasarkan
             data yang terpusat.
           </p>

@@ -7,12 +7,15 @@ use App\Models\Pole;
 use App\Models\PoleAssignment;
 use App\Models\Team;
 use App\Models\User;
+use App\Services\NotificationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 
 class PoleAssignmentController extends Controller
 {
+    public function __construct(private NotificationService $notifications) {}
+
     public function index(User $user): JsonResponse
     {
         abort_unless($this->isAdmin(request()), 403, 'Forbidden.');
@@ -83,6 +86,18 @@ class PoleAssignmentController extends Controller
             'assigner:id,name,email',
         ]);
 
+        $poleLabel = $pole->pole_code ?: "Tiang #{$pole->id}";
+
+        $this->notifications->send(
+            $user->id,
+            $pole->project_id,
+            'sistem',
+            "Anda ditugaskan ke {$poleLabel}",
+            'Tiang ini kini menjadi bagian dari tugas lapangan Anda.',
+            "/tiang/{$pole->id}",
+            ['pole_id' => $pole->id]
+        );
+
         return response()->json($assignment, $existing ? 200 : 201);
     }
 
@@ -99,7 +114,7 @@ class PoleAssignmentController extends Controller
             ->where('status', PoleAssignment::STATUS_ACTIVE)
             ->first();
 
-        if (!$assignment) {
+        if (! $assignment) {
             return response()->json([
                 'message' => 'Assignment aktif tidak ditemukan.',
             ], 404);

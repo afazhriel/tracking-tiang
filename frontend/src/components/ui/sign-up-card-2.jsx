@@ -129,7 +129,7 @@ export function Component() {
                 </h1>
 
                 <p className="mt-2 text-sm text-neutral-500">
-                  Daftar untuk mengakses Tracking Tiang. Akun akan
+                  Daftar untuk mengakses Tracking Proyek. Akun akan
                   diaktifkan oleh admin.
                 </p>
               </div>
@@ -285,7 +285,7 @@ export function Component() {
         </div>
 
         <p className="mt-5 text-center text-xs text-espresso-300/70">
-          Tracking Tiang · Project Control System
+          Tracking Proyek · Project Control System
         </p>
       </div>
     </main>

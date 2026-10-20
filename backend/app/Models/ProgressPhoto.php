@@ -66,7 +66,7 @@ class ProgressPhoto extends Model
 
     public function url(): string
     {
-        return '/api/photos/' . $this->ulid;
+        return '/api/photos/'.$this->ulid;
     }
 
     public function toPayload(): array

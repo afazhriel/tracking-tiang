@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { CircleAlert, ImagePlus, Save, X } from 'lucide-react'
+import { CircleAlert, ImagePlus, Save, X, Camera } from 'lucide-react'
 
 import { api } from '../../lib/api'
 import { clampPercent, formatPercent, todayIso } from '../../lib/format'
@@ -16,6 +16,7 @@ import {
   TextArea,
   TextInput,
 } from '../ui/modal'
+import { takePhoto, pickPhoto, isNative } from '../../lib/capacitor'
 
 function toDateInput(value) {
   return value ? String(value).slice(0, 10) : ''
@@ -82,8 +83,8 @@ export function UpdateProgressModal({
         required
         hint={
           workItems?.length
-            ? 'Wajib. Harus item yang terdaftar pada project ini.'
-            : 'Project ini belum punya item pekerjaan, jadi form tidak bisa dipakai.'
+            ? 'Wajib. Harus item pekerjaan milik tiang ini.'
+            : 'Tiang ini belum punya item pekerjaan, jadi form tidak bisa dipakai.'
         }
         className="mb-4"
       >
@@ -143,21 +144,110 @@ function ProgressForm({
   const [fieldErrors, setFieldErrors] = useState(null)
   const [formError, setFormError] = useState(null)
   const [saving, setSaving] = useState(false)
+  const [capturing, setCapturing] = useState(false)
 
+  const native = isNative()
+
+  /* Nilai numerik dari input teks — dipakai slider, preview, dan
+     payload. `clampPercent` mengubah '' atau huruf jadi 0 dan
+     membatasi rentang ke 0..100. */
   const numericPercent = clampPercent(percent)
 
   const photoPreviews = useMemo(
-    () => photos.map((file) => ({ file, url: URL.createObjectURL(file) })),
+    () => photos.map((p) => ({ ...p, url: p.url ?? URL.createObjectURL(p.file) })),
     [photos]
   )
 
   /* Object URL harus dilepas supaya tidak menahan memori blob. */
   useEffect(
     () => () => {
-      photoPreviews.forEach((preview) => URL.revokeObjectURL(preview.url))
+      photoPreviews.forEach((preview) => {
+        if (preview.url?.startsWith('blob:')) URL.revokeObjectURL(preview.url)
+      })
     },
     [photoPreviews]
   )
+
+  async function handleTakePhoto() {
+    if (capturing) return
+    if (photos.length >= MAX_PHOTOS) {
+      setPhotoError(`Maksimal ${MAX_PHOTOS} foto per pencatatan.`)
+      return
+    }
+
+    setCapturing(true)
+    setPhotoError(null)
+
+    try {
+      const result = await takePhoto({
+        quality: 80,
+        allowEditing: false,
+        resultType: 'base64',
+        source: 'camera',
+        saveToGallery: false,
+      })
+
+      if (result?.base64String) {
+        const byteString = atob(result.base64String)
+        const arrayBuffer = new ArrayBuffer(byteString.length)
+        const uint8Array = new Uint8Array(arrayBuffer)
+        for (let i = 0; i < byteString.length; i++) {
+          uint8Array[i] = byteString.charCodeAt(i)
+        }
+        const blob = new Blob([uint8Array], { type: 'image/jpeg' })
+        const file = new File([blob], `photo_${Date.now()}.jpg`, { type: 'image/jpeg' })
+        setPhotos((prev) => [...prev, { file, base64: result.base64String }])
+      }
+    } catch (error) {
+      if (error?.message?.includes('cancelled') || error?.message?.includes('dismissed')) {
+        // User cancelled - not an error
+      } else {
+        setPhotoError('Gagal mengambil foto: ' + (error?.message ?? 'Unknown error'))
+      }
+    } finally {
+      setCapturing(false)
+    }
+  }
+
+  async function handlePickPhoto() {
+    if (capturing) return
+    if (photos.length >= MAX_PHOTOS) {
+      setPhotoError(`Maksimal ${MAX_PHOTOS} foto per pencatatan.`)
+      return
+    }
+
+    setCapturing(true)
+    setPhotoError(null)
+
+    try {
+      const result = await pickPhoto({
+        quality: 80,
+        allowEditing: false,
+        resultType: 'base64',
+        source: 'photos',
+      })
+
+      if (result?.base64String) {
+        const byteString = atob(result.base64String)
+        const arrayBuffer = new ArrayBuffer(byteString.length)
+        const uint8Array = new Uint8Array(arrayBuffer)
+        for (let i = 0; i < byteString.length; i++) {
+          uint8Array[i] = byteString.charCodeAt(i)
+        }
+        const blob = new Blob([uint8Array], { type: 'image/jpeg' })
+        const file = new File([blob], `photo_${Date.now()}.jpg`, { type: 'image/jpeg' })
+        setPhotos((prev) => [...prev, { file, base64: result.base64String }])
+      }
+    } catch (error) {
+      if (error?.message?.includes('cancelled') || error?.message?.includes('dismissed')) {
+        // User cancelled - not an error
+      } else {
+        setPhotoError('Gagal memilih foto: ' + (error?.message ?? 'Unknown error'))
+      }
+    } finally {
+      setCapturing(false)
+    }
+  }
 
   function handlePhotoSelect(event) {
     const files = Array.from(event.target.files ?? [])
@@ -412,32 +502,68 @@ function ProgressForm({
         hint={`Opsional. Maksimal ${MAX_PHOTOS} foto (JPG, PNG, WEBP), maks 5 MB per foto. Di HP bisa langsung dari kamera.`}
       >
         <div className="space-y-3">
-          <input
-            id="progress-photos"
-            name="photos"
-            type="file"
-            accept="image/*"
-            multiple
-            capture="environment"
-            onChange={handlePhotoSelect}
-            disabled={photos.length >= MAX_PHOTOS}
-            className="sr-only"
-          />
+          {native ? (
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={handleTakePhoto}
+                disabled={capturing || photos.length >= MAX_PHOTOS}
+                className={cn(
+                  'inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed',
+                  capturing
+                    ? 'border-neutral-200 bg-neutral-100 text-neutral-500'
+                    : 'border-neutral-300 bg-paper text-neutral-700 hover:border-brand-400 hover:bg-brand-50'
+                )}
+              >
+                <Camera className="h-4 w-4" />
+                {capturing ? 'Mengambil...' : 'Ambil Foto'}
+              </button>
 
-          <label
-            htmlFor="progress-photos"
-            className={cn(
-              'flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed px-4 py-3 text-sm font-medium transition-colors',
-              photos.length >= MAX_PHOTOS
-                ? 'cursor-not-allowed border-neutral-200 text-neutral-400'
-                : 'border-neutral-300 text-neutral-600 hover:border-brand-400 hover:bg-canvas'
-            )}
-          >
-            <ImagePlus className="h-4 w-4" />
-            {photos.length >= MAX_PHOTOS
-              ? `Batas ${MAX_PHOTOS} foto tercapai`
-              : 'Ambil foto / pilih dari galeri'}
-          </label>
+              <button
+                type="button"
+                onClick={handlePickPhoto}
+                disabled={capturing || photos.length >= MAX_PHOTOS}
+                className={cn(
+                  'inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed',
+                  capturing
+                    ? 'border-neutral-200 bg-neutral-100 text-neutral-500'
+                    : 'border-neutral-300 bg-paper text-neutral-700 hover:border-brand-400 hover:bg-brand-50'
+                )}
+              >
+                <ImagePlus className="h-4 w-4" />
+                {capturing ? 'Memilih...' : 'Pilih dari Galeri'}
+              </button>
+            </div>
+          ) : (
+            <>
+              <input
+                id="progress-photos"
+                name="photos"
+                type="file"
+                accept="image/*"
+                multiple
+                capture="environment"
+                onChange={handlePhotoSelect}
+                disabled={photos.length >= MAX_PHOTOS}
+                className="sr-only"
+              />
+
+              <label
+                htmlFor="progress-photos"
+                className={cn(
+                  'flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed px-4 py-3 text-sm font-medium transition-colors',
+                  photos.length >= MAX_PHOTOS
+                    ? 'cursor-not-allowed border-neutral-200 text-neutral-400'
+                    : 'border-neutral-300 text-neutral-600 hover:border-brand-400 hover:bg-canvas'
+                )}
+              >
+                <ImagePlus className="h-4 w-4" />
+                {photos.length >= MAX_PHOTOS
+                  ? `Batas ${MAX_PHOTOS} foto tercapai`
+                  : 'Ambil foto / pilih dari galeri'}
+              </label>
+            </>
+          )}
 
           {photoPreviews.length > 0 && (
             <ul className="grid grid-cols-3 gap-2 sm:grid-cols-4">

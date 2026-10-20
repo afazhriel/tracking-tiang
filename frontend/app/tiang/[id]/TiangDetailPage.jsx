@@ -1,13 +1,14 @@
 "use client";
 
 import {
+  Suspense,
   useCallback,
   useEffect,
   useMemo,
   useState,
 } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import {
   ArrowLeft,
   BarChart3,
@@ -21,6 +22,7 @@ import {
 } from "lucide-react";
 
 import AppShell from "../../../components/layout/AppShell";
+import { detailHref, poleWorkHref } from "../../../lib/native";
 import { useProject } from "../../../lib/project-context";
 import MapPanel from "../../../components/tiang/MapPanel";
 import SCurveChart from "../../../components/kurva-s/SCurveChart";
@@ -99,7 +101,10 @@ function varianceTone(variance) {
  */
 function TiangDetailContent() {
   const params = useParams();
-  const poleId = params?.id ?? null;
+  const searchParams = useSearchParams();
+  /* Di browser: path `/tiang/{id}`. Di APK (ekspor statis): query
+     `/tiang/detail?id={id}` — lihat `detailHref` di lib/native.js. */
+  const poleId = params?.id ?? searchParams?.get("id") ?? null;
   const { projectId, project } = useProject();
   const [progressOpen, setProgressOpen] = useState(false);
 
@@ -360,7 +365,7 @@ function TiangDetailContent() {
               />
 
               <Link
-                href={`/tiang/${poleId}/pekerjaan`}
+                href={poleWorkHref(poleId)}
                 className="inline-flex h-9 items-center gap-2 rounded-xl border border-neutral-200 bg-paper px-3 text-sm font-medium text-neutral-700 transition-colors hover:bg-canvas"
               >
                 <ListChecks className="h-4 w-4" />
@@ -482,7 +487,7 @@ function TiangDetailContent() {
                           >
                             <div className="flex flex-wrap items-center justify-between gap-2">
                               <Link
-                                href={`/pekerjaan/${item.workItemId}`}
+                                href={detailHref("/pekerjaan", item.workItemId)}
                                 className="text-sm font-medium text-neutral-800 transition-colors hover:text-neutral-950"
                               >
                                 {item.workItem?.name ??
@@ -535,7 +540,7 @@ function TiangDetailContent() {
                       description="Tiang ini belum memiliki item pekerjaan. Tambahkan item khusus tiang ini, atau terapkan template pekerjaan project."
                       action={
                         <Link
-                          href={`/tiang/${poleId}/pekerjaan`}
+                          href={poleWorkHref(poleId)}
                           className="inline-flex h-9 items-center gap-2 rounded-xl bg-neutral-900 px-3 text-sm font-medium text-white"
                         >
                           <ListChecks className="h-4 w-4" />
@@ -841,9 +846,13 @@ function TiangDetailContent() {
 }
 
 export default function TiangDetailPage() {
+  /* Suspense wajib karena `useSearchParams()` di dalam konten —
+     tanpa ini build static export menolak. */
   return (
     <AppShell title="Detail Tiang">
-      <TiangDetailContent />
+      <Suspense fallback={null}>
+        <TiangDetailContent />
+      </Suspense>
     </AppShell>
   );
 }

@@ -18,6 +18,7 @@ import {
 
 import AppShell from '../../components/layout/AppShell'
 import { ActionButton, PageHeader } from '../../components/layout/PageHeader'
+import { detailHref } from '../../lib/native'
 import { useProject } from '../../lib/project-context'
 import SCurveChart from '../../components/kurva-s/SCurveChart'
 import CurveVarianceTable from '../../components/kurva-s/CurveVarianceTable'
@@ -308,7 +309,7 @@ function KurvaSContent() {
               {poles.map((pole) => (
                 <Link
                   key={pole.id}
-                  href={`/tiang/${pole.id}`}
+                  href={detailHref('/tiang', pole.id)}
                   className="group rounded-xl border border-neutral-200 bg-paper p-4 transition-all hover:border-brand-300 hover:bg-brand-50 hover:shadow-md"
                 >
                   <div className="flex items-start justify-between gap-3">

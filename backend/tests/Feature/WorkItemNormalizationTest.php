@@ -180,12 +180,26 @@ class WorkItemNormalizationTest extends TestCase
 
         $this->assertEqualsWithDelta(100.0, $this->totalWeight($project), 0.01);
 
-        $pole = Pole::create([
-            'project_id' => $project->id,
-            'pole_code' => 'TIANG-K1',
-        ]);
+        /* Tiang dibuat lewat API supaya otomatis mendapat salinan item
+           template (independen per tiang). */
+        $poleResponse = $this->actingAs($admin, 'sanctum')
+            ->postJson("/api/projects/{$project->id}/poles", [
+                'pole_code' => 'TIANG-K1',
+            ])
+            ->assertCreated();
 
-        foreach ($project->workItems()->get() as $item) {
+        $pole = Pole::findOrFail($poleResponse->json('data.id'));
+
+        $pole->load('workItems');
+
+        $this->assertCount(2, $pole->workItems);
+        $this->assertEqualsWithDelta(
+            100.0,
+            (float) $pole->workItems->sum('weight_percent'),
+            0.01
+        );
+
+        foreach ($pole->workItems as $item) {
             $this->actingAs($admin, 'sanctum')
                 ->postJson("/api/projects/{$project->id}/poles/{$pole->id}/progress", [
                     'work_item_id' => $item->id,

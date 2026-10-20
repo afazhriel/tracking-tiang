@@ -1,5 +1,5 @@
-import { JetBrains_Mono, Plus_Jakarta_Sans, Space_Grotesk } from 'next/font/google'
-
+import "@fontsource-variable/jetbrains-mono/wght.css";
+import { Plus_Jakarta_Sans, Space_Grotesk } from "next/font/google";
 import 'leaflet/dist/leaflet.css'
 import './globals.css'
 
@@ -19,12 +19,7 @@ const grotesk = Space_Grotesk({
   display: 'swap',
 })
 
-const jetbrains = JetBrains_Mono({
-  subsets: ['latin'],
-  weight: ['400', '500', '600'],
-  variable: '--font-jetbrains',
-  display: 'swap',
-})
+const jetbrains = { variable: "fontsource-jetbrains-variable", className: "fontsource-jetbrains-class" }
 
 export const metadata = {
   title: {

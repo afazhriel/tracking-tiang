@@ -2,10 +2,10 @@
 
 **Proyek:** Tracking Tiang
 **Tanggal:** 2026-10-16
-**Server produksi:** `srv2029172` (`187.77.112.247`) — `https://pjl.ituiot.com`
+**Server produksi:** VPS produksi — `https://pjl.ituiot.com`
 **Repo lokal:** `C:\Dev\tracking-tiang\tracking-tiang`
 **Remote GitHub:** `https://github.com/afazhriel/tracking-tiang.git`
-**Dieksekusi oleh:** opencode (via SSH `id_tiang`)
+**Dieksekusi oleh:** opencode (via SSH)
 
 ---
 
@@ -83,7 +83,7 @@ Tindakan:
 
 ## 4. Pembersihan (Cleanup)
 
-- Menghapus file nyasar di server: `/root/:USERPROFILE\.ssh\id_tiang` dan `.pub`.
+- Menghapus file kunci SSH nyasar yang pernah tersalin ke `/root/` (beserta pasangan `.pub`-nya).
 - Memindahkan berkas backup kontroler keluar dari direktori aplikasi ke `backups/code-bak-<timestamp>/` (6 file `.bak-*`; tidak lagi mengotori `app/Http/Controllers/Api/`).
 - `/api/projects` (`401`) dan `/api/regions/provinces` (`200`) diverifikasi ulang setelah perubahan.
 
@@ -244,8 +244,8 @@ Langkah aman (non-destruktif, di branch terpisah):
 ## 11. Lampiran
 
 **Akses:**
-- SSH: `ssh -i "$env:USERPROFILE\.ssh\id_tiang" root@187.77.112.247` (key `id_tiang`, pubkey `opencode-tiang`).
-- Kredensial DB: user `tracking_admin`; DB `tracking_tiang` (app) & `tracking_tiang_recovery` (sumber).
+- SSH produksi: gunakan kunci SSH pribadi operator (nama file kunci dan host sengaja tidak dicantumkan di repositori).
+- Kredensial DB: dikelola lewat `.env`/variabel docker-compose di server, tidak boleh dituliskan di repo.
 
 **Berkas kunci:**
 - `/opt/tracking-tiang/02_restore_data.sh` — skrip restore.
@@ -351,7 +351,7 @@ Kebutuhan: sistem role + registrasi akun yang rapi di area auth. Keputusan user:
 - **Sinkron:** `git fetch origin --prune` + `git checkout -f origin/main -- backend/`. Route `register`/`users`/`teams`/`invitations` kini aktif; `bootstrap/app.php` alias middleware `active`/`role` benar. (File lama tak dirujuk, mis. `PoleActivityController.php`, dibiarkan di disk tanpa efek.)
 - **Composer:** `composer update laravel/sanctum` menambahkan `laravel/sanctum v4.3.3` ke `composer.lock` (sebelumnya lock TIDAK sinkron dengan `composer.json` → `composer install` gagal). Lock hasil diperbaiki lalu di-pull ke lokal → commit **`36ebc90`**.
 - **Cache & restart:** `php artisan optimize:clear` → `php artisan config:cache` → `docker compose restart backend`.
-- **Verifikasi API (via nginx, Host `pjl.ituiot.com`):** `POST /api/register {}` → **422**; payload valid → **201** (`role=pic`, `status=pending`); login probe dengan email HURUF BESAR (password benar) → **422** "menunggu persetujuan" (membuktikan normalisasi email + gerbang pending); `/api/users` `/api/me` `/api/projects` `/api/teams` tanpa auth → **401**; `/api/login` kredensial salah → **422**. User probe dihapus — tersisa hanya `admin@trackingtiang.local`.
+- **Verifikasi API (via nginx, Host `pjl.ituiot.com`):** `POST /api/register {}` → **422**; payload valid → **201** (`role=pic`, `status=pending`); login probe dengan email HURUF BESAR (password benar) → **422** "menunggu persetujuan" (membuktikan normalisasi email + gerbang pending); `/api/users` `/api/me` `/api/projects` `/api/teams` tanpa auth → **401**; `/api/login` kredensial salah → **422**. User probe dihapus — tersisa hanya akun admin bawaan (email tidak dicantumkan di repo).
 - **Rollback:** restore `backups/deploy-20261016_041724/backend-live.tar.gz` ke `/opt/tracking-tiang/backend` lalu `docker compose restart backend`.
 
 **Frontend (`/opt/tracking-tiang/frontend-next`, `main` @ `1d6c856` → `55218de`):**

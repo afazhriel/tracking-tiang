@@ -125,7 +125,11 @@ export default function HomePage() {
       '/register',
       '/dashboard',
       '/tiang',
+      '/tiang/detail',
+      '/tiang/detail/pekerjaan',
       '/pekerjaan',
+      '/pekerjaan/detail',
+      '/pekerjaan/pengaturan',
       '/kurva-s',
       '/aktivitas',
       '/notifikasi',
@@ -135,8 +139,45 @@ export default function HomePage() {
 
     const current = window.location.pathname.replace(/\/+$/, '') || '/'
 
-    if (current !== '/' && knownRoutes.includes(current)) {
-      window.location.replace(`${current}.html`)
+    /* Sudah berkas HTML — biarkan. */
+    if (current === '/' || current.endsWith('.html')) return
+
+    const search = window.location.search
+
+    /* Rute dinamis `/tiang/12`, `/tiang/12/pekerjaan`, `/pekerjaan/3`:
+       ekspor statis tidak punya berkasnya, jadi alihkan ke rute statis
+       query-param (pasangan `detailHref`/`poleWorkHref` di lib/native.js).
+       Segmen literal `detail` dikecualikan supaya tidak berputar ke
+       dirinya sendiri. */
+    const deepWork = current.match(/^\/tiang\/(?!detail(?:\/|$))([^/]+)\/pekerjaan$/)
+    const deepPole = current.match(/^\/tiang\/(?!detail(?:\/|$))([^/]+)$/)
+    const deepItem = current.match(/^\/pekerjaan\/(?!detail(?:\/|$))([^/]+)$/)
+
+    if (deepWork) {
+      window.location.replace(
+        `/tiang/detail/pekerjaan?pole=${encodeURIComponent(deepWork[1])}${search}`
+      )
+      return
+    }
+
+    if (deepPole) {
+      window.location.replace(
+        `/tiang/detail?id=${encodeURIComponent(deepPole[1])}${search}`
+      )
+      return
+    }
+
+    if (deepItem) {
+      window.location.replace(
+        `/pekerjaan/detail?id=${encodeURIComponent(deepItem[1])}${search}`
+      )
+      return
+    }
+
+    /* Rute statis: `index.html` dibalas untuk path tanpa titik, jadi
+       tuju berkas ekspor yang benar (`/login` -> `/login.html`). */
+    if (knownRoutes.includes(current)) {
+      window.location.replace(`${current}.html${search}`)
     }
   }, [])
 

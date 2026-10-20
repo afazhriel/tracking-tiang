@@ -8,7 +8,9 @@ use App\Models\PoleProgressHistory;
 use App\Models\PoleWorkProgress;
 use App\Models\ProgressPhoto;
 use App\Models\Project;
+use App\Models\User;
 use App\Models\WorkItem;
+use App\Services\NotificationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -16,6 +18,8 @@ use Illuminate\Support\Str;
 
 class ProgressController extends Controller
 {
+    public function __construct(private NotificationService $notifications) {}
+
     public function index(Project $project, Pole $pole): JsonResponse
     {
         abort_unless((int) $pole->project_id === (int) $project->id, 404);
@@ -59,6 +63,7 @@ class ProgressController extends Controller
 
         $workItem = WorkItem::where('id', $validated['work_item_id'])
             ->where('project_id', $project->id)
+            ->where('pole_id', $pole->id)
             ->firstOrFail();
 
         $userId = $request->user()?->id;
@@ -121,12 +126,67 @@ class ProgressController extends Controller
             ]));
         }
 
+        $poleProgress = $this->calculatePoleProgress($pole);
+
+        $this->notifyProgress(
+            $project,
+            $pole,
+            $workItem,
+            $validated['progress_percent'],
+            $poleProgress,
+            $userId
+        );
+
         return response()->json([
             'message' => 'Progress berhasil disimpan.',
             'data' => $progress->load('workItem'),
             'photos' => $photos->map(fn (ProgressPhoto $photo) => $photo->toPayload()),
-            'pole_progress' => $this->calculatePoleProgress($pole),
+            'pole_progress' => $poleProgress,
         ]);
+    }
+
+    /**
+     * Kirim notifikasi progress (dan penyelesaian tiang) ke anggota project.
+     */
+    private function notifyProgress(
+        Project $project,
+        Pole $pole,
+        WorkItem $workItem,
+        float|int|string $progressPercent,
+        float $poleProgress,
+        ?int $userId
+    ): void {
+        $poleCode = $pole->pole_code ?: "Tiang #{$pole->id}";
+        $userName = $userId
+            ? (User::find($userId)?->name ?? 'Tim lapangan')
+            : 'Tim lapangan';
+        $progress = number_format((float) $progressPercent, 0);
+
+        $this->notifications->sendToProjectMembers(
+            $project,
+            'progress',
+            "Progress {$poleCode} diperbarui",
+            "{$userName} memperbarui {$workItem->name} ke {$progress}%.",
+            "/tiang/{$pole->id}",
+            [
+                'pole_id' => $pole->id,
+                'work_item_id' => $workItem->id,
+                'progress_percent' => (float) $progressPercent,
+            ],
+            $userId
+        );
+
+        if ((float) $progressPercent >= 100 && round($poleProgress, 2) >= 100) {
+            $this->notifications->sendToProjectMembers(
+                $project,
+                'aktivitas',
+                "{$poleCode} mencapai 100%",
+                "Seluruh item pekerjaan pada {$poleCode} sudah diselesaikan.",
+                "/tiang/{$pole->id}",
+                ['pole_id' => $pole->id],
+                $userId
+            );
+        }
     }
 
     private function calculatePoleProgress(Pole $pole): float

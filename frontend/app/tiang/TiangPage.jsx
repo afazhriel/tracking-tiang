@@ -15,6 +15,7 @@ import {
 
 import AppShell from '../../components/layout/AppShell'
 import { ActionButton, PageHeader } from '../../components/layout/PageHeader'
+import { detailHref } from '../../lib/native'
 import { useProject } from '../../lib/project-context'
 import MapPanel from '../../components/tiang/MapPanel'
 import { Badge, StatusBadge } from '../../components/ui/badge'
@@ -217,7 +218,7 @@ function PoleSelectionCard({ pole, progressEntry, loading, onReload }) {
         )}
 
         <Link
-          href={`/tiang/${pole.id}`}
+          href={detailHref('/tiang', pole.id)}
           className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-neutral-900 text-sm font-medium text-white transition-colors hover:bg-neutral-800"
         >
           Lihat Detail

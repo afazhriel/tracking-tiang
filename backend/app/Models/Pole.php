@@ -54,4 +54,12 @@ class Pole extends Model
     {
         return $this->hasMany(PoleWorkProgress::class);
     }
+
+    /**
+     * Item pekerjaan milik tiang ini (independen per tiang).
+     */
+    public function workItems(): HasMany
+    {
+        return $this->hasMany(WorkItem::class);
+    }
 }

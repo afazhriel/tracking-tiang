@@ -346,94 +346,14 @@
   filter: blur(90px);
 }
 
-.project-card {
-  position: relative;
-  padding: 22px;
-  border: 1px solid var(--lp-line);
-  border-radius: 24px;
-  background: var(--lp-surface);
-  box-shadow:
-    0 30px 80px rgba(12, 8, 6, 0.45),
-    inset 0 1px 0 rgba(246, 239, 231, 0.05);
-  backdrop-filter: blur(24px);
-}
+/* PETA (map-wide section) */
 
-/* Garis aksen terracotta di tepi atas kartu proyek. */
-.project-card::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 22px;
-  right: 22px;
-  height: 2px;
-  border-radius: 0 0 99px 99px;
-  background: linear-gradient(90deg, transparent, var(--lp-brand), var(--lp-lagoon), transparent);
-}
-
-.project-card-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 15px;
-  margin-bottom: 18px;
-}
-
-.label {
-  color: var(--lp-faint);
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: 0.18em;
-}
-
-.project-card h2 {
-  margin: 6px 0 3px;
-  font-size: 18px;
-  letter-spacing: -0.025em;
-}
-
-.project-card-header p {
-  margin: 0;
-  color: var(--lp-faint);
-  font-size: 11px;
-}
-
-.status-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 7px 9px;
-  border: 1px solid rgba(143, 179, 122, 0.20);
-  border-radius: 999px;
-  color: var(--lp-sage);
-  background: rgba(143, 179, 122, 0.08);
-  font-size: 8px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-}
-
-.status-badge span {
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: var(--lp-sage);
-  box-shadow: 0 0 9px var(--lp-sage);
-}
-
-/* PETA */
-
-.project-map,
 .map-wide {
   position: relative;
   overflow: hidden;
   background:
     radial-gradient(circle at 48% 45%, rgba(201, 111, 66, 0.16), transparent 27%),
     linear-gradient(135deg, #2a211c, #1b1512);
-}
-
-.project-map {
-  height: 300px;
-  border: 1px solid var(--lp-line-soft);
-  border-radius: 17px;
 }
 
 /* Tile Leaflet dibuat redup supaya kartu gelap tetap dominan dan
@@ -579,68 +499,6 @@
   color: var(--lp-faint);
   font-size: 10px;
   line-height: 1.7;
-}
-
-.muted-text {
-  color: var(--lp-muted) !important;
-  font-size: 16px !important;
-}
-
-.status-badge.muted {
-  border-color: var(--lp-line);
-  color: var(--lp-muted);
-  background: rgba(246, 239, 231, 0.04);
-}
-
-.status-badge.muted span {
-  background: var(--lp-muted);
-  box-shadow: none;
-}
-
-.project-stats {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  margin-top: 15px;
-  padding-top: 17px;
-  border-top: 1px solid var(--lp-line-soft);
-}
-
-.project-stat {
-  padding: 0 12px;
-  border-right: 1px solid var(--lp-line-soft);
-}
-
-.project-stat:first-child {
-  padding-left: 2px;
-}
-
-.project-stat:last-child {
-  border-right: 0;
-}
-
-.project-stat span,
-.project-stat small {
-  display: block;
-  color: var(--lp-faint);
-  font-size: 9px;
-}
-
-.project-stat strong {
-  display: block;
-  margin: 5px 0 2px;
-  color: var(--lp-text);
-  font-family: var(--font-grotesk), system-ui, sans-serif;
-  font-size: 19px;
-  letter-spacing: -0.03em;
-}
-
-.project-stat small {
-  color: #6a5c54;
-}
-
-.online-text {
-  color: var(--lp-sage) !important;
-  font-size: 16px !important;
 }
 
 /* OVERVIEW STRIP */

@@ -14,6 +14,7 @@ import {
 
 import AppShell from '../../components/layout/AppShell'
 import { ActionButton, PageHeader } from '../../components/layout/PageHeader'
+import { detailHref } from '../../lib/native'
 import { useProject } from '../../lib/project-context'
 import { Badge } from '../../components/ui/badge'
 import {
@@ -140,7 +141,7 @@ function ActivityRow({ activity }) {
 
           {activity.poleId ? (
             <Link
-              href={`/tiang/${activity.poleId}`}
+              href={detailHref('/tiang', activity.poleId)}
               className="inline-flex items-center gap-1.5 transition-colors hover:text-neutral-800"
             >
               <MapPin className="h-3.5 w-3.5" />

@@ -1,9 +1,10 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { CircleAlert, MapPin, Plus } from 'lucide-react'
+import { CircleAlert, MapPin, Plus, MapPinCheck, Loader2 } from 'lucide-react'
 
 import { api } from '../../lib/api'
+import { cn } from '../../lib/utils'
 import {
   FormField,
   Modal,
@@ -13,6 +14,7 @@ import {
   TextInput,
 } from '../ui/modal'
 import { ActionButton } from '../layout/PageHeader'
+import { getCurrentPosition, isNative } from '../../lib/capacitor'
 
 const EMPTY_FORM = {
   pole_code: '',
@@ -78,6 +80,9 @@ export function CreatePoleModal({
   const [fieldErrors, setFieldErrors] = useState(null)
   const [formError, setFormError] = useState(null)
   const [saving, setSaving] = useState(false)
+  const [gettingLocation, setGettingLocation] = useState(false)
+
+  const native = isNative()
 
   /* Non-admin hanya boleh memilih provinsi yang ditugaskan. Admin
      (`allowedProvinces === null`) melihat seluruh provinsi. */
@@ -293,6 +298,34 @@ export function CreatePoleModal({
     setFieldErrors(null)
     setFormError(null)
     setSaving(false)
+  }
+
+  async function handleGetCurrentLocation() {
+    if (gettingLocation) return
+
+    setGettingLocation(true)
+    setFieldErrors((prev) => {
+      if (!prev) return prev
+      const next = { ...prev }
+      delete next.latitude
+      delete next.longitude
+      return Object.keys(next).length ? next : null
+    })
+
+    try {
+      const position = await getCurrentPosition()
+      const { latitude, longitude } = position.coords
+
+      setForm((prev) => ({
+        ...prev,
+        latitude: String(latitude),
+        longitude: String(longitude),
+      }))
+    } catch (error) {
+      setFormError(error)
+    } finally {
+      setGettingLocation(false)
+    }
   }
 
   async function handleSubmit(event) {
@@ -603,19 +636,42 @@ export function CreatePoleModal({
             error={fieldErrors?.latitude?.[0]}
             hint="-90 sampai 90. Boleh kosong."
           >
-            <TextInput
-              id="pole-latitude"
-              name="latitude"
-              type="number"
-              inputMode="decimal"
-              step="any"
-              min={-90}
-              max={90}
-              value={form.latitude}
-              onChange={update('latitude')}
-              invalid={Boolean(fieldErrors?.latitude)}
-              placeholder="-6.9127"
-            />
+            <div className="flex gap-2">
+              <TextInput
+                id="pole-latitude"
+                name="latitude"
+                type="number"
+                inputMode="decimal"
+                step="any"
+                min={-90}
+                max={90}
+                value={form.latitude}
+                onChange={update('latitude')}
+                invalid={Boolean(fieldErrors?.latitude)}
+                placeholder="-6.9127"
+                className="flex-1"
+              />
+              {native && (
+                <button
+                  type="button"
+                  onClick={handleGetCurrentLocation}
+                  disabled={gettingLocation}
+                  className={cn(
+                    'inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed',
+                    gettingLocation
+                      ? 'border-neutral-200 bg-neutral-100 text-neutral-500'
+                      : 'border-neutral-300 bg-paper text-neutral-700 hover:border-brand-400 hover:bg-brand-50'
+                  )}
+                  title="Ambil lokasi GPS saat ini"
+                >
+                  {gettingLocation ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <MapPinCheck className="h-4 w-4" />
+                  )}
+                </button>
+              )}
+            </div>
           </FormField>
 
           <FormField

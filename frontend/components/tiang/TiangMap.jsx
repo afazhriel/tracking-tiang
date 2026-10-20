@@ -7,6 +7,7 @@ import { MapContainer, Marker, Popup, TileLayer, useMap } from 'react-leaflet'
 import { MapPinOff } from 'lucide-react'
 
 import { formatPercent } from '../../lib/format'
+import { detailHref } from '../../lib/native'
 import { resolveStatus } from '../../lib/status'
 
 const FALLBACK_CENTER = [-6.9, 107.6]
@@ -183,7 +184,7 @@ export default function TiangMap({
                     </div>
 
                     <Link
-                      href={`/tiang/${pole.id}`}
+                      href={detailHref('/tiang', pole.id)}
                       className="mt-2 inline-block text-xs font-medium text-orange-600 hover:underline"
                     >
                       Lihat detail

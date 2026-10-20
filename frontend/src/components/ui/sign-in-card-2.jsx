@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import {
   ArrowLeft,
   Eye,
@@ -10,6 +11,8 @@ import {
   MapPin,
   TriangleAlert,
 } from 'lucide-react'
+
+import { resolveApiUrl } from '../../../lib/native'
 
 /**
  * Kartu login.
@@ -20,9 +23,10 @@ import {
  * lagoon untuk penanda "data".
  *
  * Logika auth tidak diubah: token tetap disimpan di localStorage
- * dengan key yang sama, lalu full-reload ke /dashboard.
+ * dengan key yang sama, lalu pindah ke /dashboard.
  */
 export function Component() {
+  const router = useRouter()
   const [showPassword, setShowPassword] = useState(false)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -36,7 +40,12 @@ export function Component() {
     setError('')
 
     try {
-      const response = await fetch('/api/login', {
+      /* Di aplikasi native (APK), aset dibundel lokal sehingga origin
+         adalah `https://localhost` — request `/api/login` relatif akan
+         mengenai server statis lokal, bukan backend. `resolveApiUrl()`
+         mengembalikan URL absolut saat di WebView, dan path apa adanya
+         di browser (tetap lewat proxy Next.js). */
+      const response = await fetch(resolveApiUrl('/api/login'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -61,7 +70,10 @@ export function Component() {
         JSON.stringify(data.user)
       )
 
-      window.location.href = '/dashboard'
+      /* Navigasi klien, bukan `window.location.href`: reload penuh
+         membuang state dan di WebView memicu kedipan putih. Router
+         Next.js sudah menangani perpindahan halaman. */
+      router.push('/dashboard')
     } catch (err) {
       console.error(err)
       setError('Tidak dapat terhubung ke server.')
@@ -114,7 +126,7 @@ export function Component() {
             </h1>
 
             <p className="mt-2 text-sm text-neutral-500">
-              Masuk untuk melanjutkan ke Tracking Tiang.
+              Masuk untuk melanjutkan ke Tracking Proyek.
             </p>
           </div>
 
@@ -222,7 +234,7 @@ export function Component() {
         </div>
 
         <p className="mt-5 text-center text-xs text-espresso-300/70">
-          Tracking Tiang · Project Control System
+          Tracking Proyek · Project Control System
         </p>
       </div>
     </main>

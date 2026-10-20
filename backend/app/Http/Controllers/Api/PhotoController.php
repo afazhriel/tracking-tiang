@@ -27,9 +27,27 @@ class PhotoController extends Controller
 
         abort_unless($disk->exists($photo->path), 404);
 
-        return response()->file($disk->path($photo->path), [
-            'Content-Type' => $photo->mime_type ?: 'application/octet-stream',
-            'Cache-Control' => 'public, max-age=31536000, immutable',
+        /*
+         * MIME ditentukan server dari isi file, bukan dari nilai yang
+         * dikirim klien saat upload. Fallback ke `mime_type` tersimpan
+         * hanya bila deteksi gagal.
+         */
+        $mime = $disk->mimeType($photo->path)
+            ?: ($photo->mime_type ?: 'application/octet-stream');
+
+        $response = response()->file($disk->path($photo->path), [
+            'Content-Type' => $mime,
+            'X-Content-Type-Options' => 'nosniff',
         ]);
+
+        /*
+         * `response()->file()` default menandai response `public`.
+         * Paksa `private` supaya foto tidak disimpan di cache bersama,
+         * lalu beri TTL pendek.
+         */
+        $response->setPrivate();
+        $response->setMaxAge(3600);
+
+        return $response;
     }
 }

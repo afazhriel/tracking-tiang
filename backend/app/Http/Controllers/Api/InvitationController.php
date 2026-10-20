@@ -253,11 +253,11 @@ class InvitationController extends Controller
 
         try {
             Mail::raw(
-                "Halo " . ($invitation->name ?: $invitation->email) . ",\n\n"
-                . "Anda diundang masuk ke Tracking Tiang dengan role: "
-                . (User::roleLabel($invitation->role) ?? $invitation->role) . ".\n\n"
-                . "Selesaikan pendaftaran di:\n{$url}\n\n"
-                . "Undangan berlaku sampai: " . $invitation->expires_at->toDayDateTimeString() . "\n",
+                'Halo '.($invitation->name ?: $invitation->email).",\n\n"
+                .'Anda diundang masuk ke Tracking Tiang dengan role: '
+                .(User::roleLabel($invitation->role) ?? $invitation->role).".\n\n"
+                ."Selesaikan pendaftaran di:\n{$url}\n\n"
+                .'Undangan berlaku sampai: '.$invitation->expires_at->toDayDateTimeString()."\n",
                 fn ($message) => $message
                     ->to($invitation->email)
                     ->subject('Undangan akses Tracking Tiang')
