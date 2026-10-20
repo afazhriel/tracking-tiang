@@ -7,6 +7,15 @@ on:
       - .github/workflows/check-vps.yml
       - deploy/check-vps.sh
   workflow_dispatch:
+    inputs:
+      backup:
+        description: Create private source and database backups on the VPS
+        type: boolean
+        default: false
+      snapshot_certificate:
+        description: Optional public certificate for an encrypted source comparison archive
+        type: string
+        required: false
 
 permissions:
   contents: read
@@ -74,6 +83,38 @@ jobs:
           ssh -i ~/.ssh/deploy_key -p "$port" \
             -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=20 \
             "$VPS_USER@$VPS_HOST" 'bash -s' < deploy/check-vps.sh
+      - name: Back up live application on VPS
+        if: inputs.backup == true
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_PORT: ${{ secrets.VPS_PORT }}
+        run: |
+          ssh -i ~/.ssh/deploy_key -p "${VPS_PORT:-22}" \
+            -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=20 \
+            "$VPS_USER@$VPS_HOST" 'bash -s' < deploy/backup-vps.sh
+      - name: Collect encrypted source for comparison
+        if: inputs.snapshot_certificate != ''
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_PORT: ${{ secrets.VPS_PORT }}
+          SNAPSHOT_CERTIFICATE: ${{ inputs.snapshot_certificate }}
+        run: |
+          set -o pipefail
+          printf '%s\n' "$SNAPSHOT_CERTIFICATE" > snapshot-cert.pem
+          ssh -i ~/.ssh/deploy_key -p "${VPS_PORT:-22}" \
+            -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=20 \
+            "$VPS_USER@$VPS_HOST" \
+            'tar -czf - --exclude="*.bak*" --exclude="*.backup*" -C /opt/tracking-tiang backend/app backend/routes backend/database/migrations backend/bootstrap/app.php backend/composer.json backend/composer.lock backend/tests -C /opt/tracking-tiang/frontend-next frontend/app frontend/components frontend/lib frontend/src frontend/scripts frontend/next.config.mjs frontend/capacitor.config.json frontend/package.json frontend/package-lock.json' \
+            | openssl cms -encrypt -binary -aes-256-cbc -outform DER \
+                -out vps-source.tar.gz.enc snapshot-cert.pem
+      - uses: actions/upload-artifact@v4
+        if: inputs.snapshot_certificate != ''
+        with:
+          name: vps-source-encrypted
+          path: vps-source.tar.gz.enc
+          retention-days: 1
       - name: Remove SSH key
         if: always()
         run: rm -f ~/.ssh/deploy_key
