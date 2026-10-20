@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Matches the hybrid Docker + systemd layout recorded in RECOVERY_AUDIT.
 set -Eeuo pipefail
-umask 077
+umask 022
 
 sha=${1:?Usage: bash deploy/vps.sh COMMIT_SHA}
 [[ "$sha" =~ ^[0-9a-f]{40}$ ]] || { echo 'Invalid commit SHA' >&2; exit 1; }
@@ -68,7 +68,7 @@ done
 docker build -t tracking-tiang-php:latest -f "$stage/backend/Dockerfile" "$stage/backend"
 
 backup="${DEPLOY_BACKUPS:-/opt/tracking-tiang-deploy-backups}/auto-$(date -u +%Y%m%dT%H%M%SZ)-${sha:0:12}"
-mkdir -p "$backup"
+(umask 077; mkdir -p "$backup")
 git rev-parse HEAD > "$backup/backend-commit"
 git -C "$frontend_repo" rev-parse HEAD > "$backup/frontend-commit"
 tar --exclude=node_modules --exclude=.git -czf "$backup/frontend.tar.gz" -C "$frontend" .
