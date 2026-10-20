@@ -1,8 +1,9 @@
 # Deploy otomatis ke VPS
 
 Workflow `.github/workflows/deploy.yml` berjalan setiap push ke `main` atau lewat
-Actions → Deploy VPS → Run workflow. Workflow belum aktif sampai repository
-variable `DEPLOY_ENABLED` bernilai `true`. Tidak ada secret di kode.
+Actions → Deploy VPS → Run workflow. Setelah aktivasi, workflow berjalan otomatis
+secara default. Repository variable `DEPLOY_ENABLED=false` menjeda deploy berikutnya.
+Tidak ada secret di kode.
 
 ## Susunan yang didukung
 
@@ -15,7 +16,7 @@ Berdasarkan `RECOVERY_AUDIT_2026-10-16.md`, bukan pemeriksaan langsung VPS:
 
 Frontend ternyata tidak menggunakan Docker. Workflow mempertahankan susunan
 tersebut. Jangan aktifkan jika susunan VPS sudah berubah. Kedua checkout harus
-berasal dari repo ini, punya akses baca GitHub, bersih, dan bisa fast-forward ke
+berasal dari repo ini, punya akses baca GitHub, source aktif bersih, dan bisa fast-forward ke
 `main`. Perubahan manual/WIP harus dibackup dan direkonsiliasi terlebih dahulu;
 Deploy rutin menolak perubahan manual pada source aktif. Mode manual
 `replace_vps=true` khusus penyelarasan awal membuat backup sebelum mengganti
@@ -62,12 +63,11 @@ diabaikan Git. `.env`, storage dan vendor yang diabaikan Git tetap dipertahankan
    DEPLOY_BACKUPS=/opt/tracking-tiang-deploy-backups
    ```
 
-6. Commit dan push perubahan workflow ini ke `main`. Untuk penyelarasan awal yang
-   sudah disetujui pemilik, jalankan manual dengan `replace_vps=true`; mode ini
-   dapat dijalankan meskipun deploy rutin belum diaktifkan. Setelah prasyarat cocok,
-   buat repository variable `DEPLOY_ENABLED=true` di Settings → Secrets and
-   variables → Actions → Variables. Jalankan workflow manual untuk deploy
-   pertama dan periksa log serta web. Push berikutnya akan deploy otomatis.
+6. Untuk VPS baru, jeda workflow dengan repository variable `DEPLOY_ENABLED=false`
+   sampai layout/secrets siap. Hapus variable itu atau ubah menjadi `true` setelah
+   siap. Untuk penyelarasan source awal yang sudah disetujui pemilik, jalankan
+   manual dengan `replace_vps=true`. Periksa hasil deploy pertama beserta web/API.
+   Push berikutnya ke `main` akan deploy otomatis.
    Lindungi branch `main` dengan review/checks sesuai kebutuhan tim.
 
 ## Perilaku dan batasan
@@ -113,6 +113,6 @@ systemctl is-active tracking-tiang-next
 ```
 
 Akses SSH dan host key berhasil diuji melalui workflow `Check VPS access` pada
-20 Oktober 2026. Web/API merespons HTTP 200 dan backup source/database sudah
-dibuat. Deploy belum diaktifkan karena source aktif VPS berbeda dari GitHub;
-lihat [hasil pemeriksaan](VPS-AUDIT.md) sebelum merekonsiliasi kedua versi.
+20 Oktober 2026. Pemilik memilih source GitHub sebagai acuan. Penyelarasan dan
+deploy pertama berhasil setelah backup source/database dibuat. Deploy otomatis
+aktif untuk push ke `main`; lihat [hasil pemeriksaan dan lokasi backup](VPS-AUDIT.md).

@@ -19,8 +19,8 @@ concurrency:
 
 jobs:
   deploy:
-    # Enable only after configuring production secrets and checking the VPS layout.
-    if: vars.DEPLOY_ENABLED == 'true' || (github.event_name == 'workflow_dispatch' && inputs.replace_vps)
+    # Enabled after the first verified deployment; false pauses future runs.
+    if: vars.DEPLOY_ENABLED != 'false'
     runs-on: ubuntu-latest
     environment: production
     timeout-minutes: 40
