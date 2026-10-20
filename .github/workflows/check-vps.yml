@@ -1,0 +1,54 @@
+name: Check VPS access
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/check-vps.yml
+      - deploy/check-vps.sh
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-vps
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure SSH
+        env:
+          SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
+        run: |
+          test -n "$SSH_KEY" || { echo 'Missing VPS_SSH_KEY secret'; exit 1; }
+          test -n "$KNOWN_HOSTS" || { echo 'Missing VPS_KNOWN_HOSTS secret'; exit 1; }
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+      - name: Inspect VPS prerequisites
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_PORT: ${{ secrets.VPS_PORT }}
+        run: |
+          test -n "$VPS_HOST" || { echo 'Missing VPS_HOST secret'; exit 1; }
+          test -n "$VPS_USER" || { echo 'Missing VPS_USER secret'; exit 1; }
+          [[ "$VPS_HOST" =~ ^[a-zA-Z0-9.-]+$ ]]
+          [[ "$VPS_USER" =~ ^[a-zA-Z_][a-zA-Z0-9_-]*$ ]]
+          port="${VPS_PORT:-22}"
+          [[ "$port" =~ ^[0-9]+$ ]]
+          bash -n deploy/check-vps.sh
+          ssh -i ~/.ssh/deploy_key -p "$port" \
+            -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=20 \
+            "$VPS_USER@$VPS_HOST" 'bash -s' < deploy/check-vps.sh
+      - name: Remove SSH key
+        if: always()
+        run: rm -f ~/.ssh/deploy_key
