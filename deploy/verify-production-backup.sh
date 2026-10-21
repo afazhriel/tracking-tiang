@@ -51,7 +51,8 @@ container=$(docker_local run --detach --network none --memory 1g --cpus 1 --pids
 [[ "$container" =~ ^[a-f0-9]{64}$ ]] || { echo 'Invalid isolated container ID.' >&2; exit 1; }
 ready=0
 for attempt in {1..60}; do
-  if docker_local exec "$container" pg_isready -U tracking_restore -d tracking_recovery > /dev/null 2>&1; then
+  # initdb temporarily opens a Unix-only server; it is not the final server.
+  if docker_local exec "$container" pg_isready -h 127.0.0.1 -U tracking_restore -d tracking_recovery > /dev/null 2>&1; then
     ready=1
     break
   fi

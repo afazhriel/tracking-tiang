@@ -27,6 +27,9 @@ privat. Setelah maintenance, drain backend, snapshot DB/file dan checksum,
 
 - Network `none`, tanpa port, tanpa mount produksi, CPU/memory dibatasi.
 - Verifikasi manifest tiga arsip tetap dan checksum sebelum menjalankan container.
+- Readiness menunggu TCP loopback server final: reproduksi lokal membuktikan
+  socket Unix dapat menerima koneksi pada server init sementara sebelum startup
+  selesai. Network tetap none; tidak ada port yang dipublikasikan.
 - Restore penuh dengan `--exit-on-error`, tanpa owner/ACL produksi, termasuk
   constraint data; keberadaan migration ledger diperiksa.
 - Detail error berpotensi berisi data pengguna sehingga disimpan hanya di direktori
