@@ -73,7 +73,7 @@ export function UpdateProgressModal({
       open={open}
       onClose={onClose}
       title={`Catat Progress — ${pole?.poleCode ?? 'Tiang'}`}
-      description="POST /api/projects/{project}/poles/{pole}/progress. Penyimpanan menambah satu entri riwayat baru."
+      description="Simpan realisasi beserta foto sebagai satu catatan riwayat."
       footer={null}
     >
       <FormField
@@ -281,10 +281,11 @@ function ProgressForm({
 
           <div>
             <p className="text-sm font-medium text-clay-800">
-              Progress gagal disimpan
+              {formError.outcomeUnknown ? 'Status penyimpanan belum dapat dipastikan' : 'Progress gagal disimpan'}
             </p>
             <p className="mt-0.5 text-xs leading-5 text-clay-700">
               {formError.message}
+              {formError.outcomeUnknown && ' Muat ulang data tiang sebelum mengirim ulang untuk menghindari catatan ganda.'}
             </p>
           </div>
         </div>

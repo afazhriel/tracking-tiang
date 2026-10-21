@@ -17,13 +17,14 @@ export const USER_KEY = 'tracking_tiang_user'
 export const AUTH_CHANGED_EVENT = 'tracking_tiang:auth-changed'
 
 export class ApiError extends Error {
-  constructor(message, { status = 0, url = '', cause = null } = {}) {
+  constructor(message, { status = 0, url = '', cause = null, outcomeUnknown = false } = {}) {
     super(message)
     this.name = 'ApiError'
     this.status = status
     this.url = url
     this.cause = cause
     this.fieldErrors = null
+    this.outcomeUnknown = outcomeUnknown
   }
 
   get isNetworkError() {
@@ -157,6 +158,7 @@ export async function apiRequest(
     }
   }
 
+  const isMutation = !['GET', 'HEAD'].includes(method.toUpperCase())
   const url = buildUrl(path, query)
   const inflightKey = JSON.stringify([url, requestHeaders])
 
@@ -185,7 +187,7 @@ export async function apiRequest(
 
       throw new ApiError(
         'Tidak dapat terhubung ke server. Periksa koneksi Anda.',
-        { status: 0, url, cause: error }
+        { status: 0, url, cause: error, outcomeUnknown: isMutation }
       )
     }
 
@@ -193,10 +195,12 @@ export async function apiRequest(
 
     const text = await response.text()
     let payload = null
+    let validJson = false
 
     if (text) {
       try {
         payload = JSON.parse(text)
+        validJson = true
       } catch {
         payload = null
       }
@@ -205,7 +209,7 @@ export async function apiRequest(
     if (!response.ok) {
       const error = new ApiError(
         payload?.message || `Permintaan gagal (HTTP ${response.status}).`,
-        { status: response.status, url }
+        { status: response.status, url, outcomeUnknown: isMutation && response.status >= 500 && payload?.saved !== false }
       )
 
       /* Laravel mengirim 422 dengan `errors` per-field saat validasi
@@ -218,6 +222,11 @@ export async function apiRequest(
       throw error
     }
 
+    if (!validJson) {
+      throw new ApiError('Respons server tidak valid. Muat ulang untuk memeriksa status data.', {
+        status: response.status, url, outcomeUnknown: isMutation,
+      })
+    }
     return payload
   }
 

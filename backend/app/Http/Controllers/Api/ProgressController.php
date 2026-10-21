@@ -11,15 +11,18 @@ use App\Models\Project;
 use App\Models\User;
 use App\Models\WorkItem;
 use App\Services\NotificationService;
+use App\Services\PendingPhotos;
 use App\Services\PoleWorkItems;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Throwable;
 
 class ProgressController extends Controller
 {
-    public function __construct(private NotificationService $notifications, private PoleWorkItems $items) {}
+    public function __construct(private NotificationService $notifications, private PoleWorkItems $items, private PendingPhotos $uploads) {}
 
     public function index(Project $project, Pole $pole): JsonResponse
     {
@@ -65,83 +68,77 @@ class ProgressController extends Controller
         $userId = $request->user()?->id;
         $files = $request->file('photos') ?? [];
 
-        [$progress, $history, $workItem] = DB::transaction(function () use (
-            $pole,
-            $project,
-            $validated,
-            $userId
-        ) {
-            $pole = $this->items->lock($pole);
-            $workItem = WorkItem::whereKey($validated['work_item_id'])->where('project_id', $project->id)->firstOrFail();
-            if ($workItem->pole_id !== null) {
-                abort_unless((int) $workItem->pole_id === (int) $pole->id, 404);
-            }
-            if ($pole->workItems()->exists() || $pole->work_items_customized_at !== null) {
-                $this->items->materialize($pole);
-                if ($workItem->pole_id === null) {
-                    $workItem = $pole->workItems()->where('source_item_id', $workItem->id)->firstOrFail();
+        try {
+            [$progress, $photos, $poleProgress] = DB::transaction(function () use (
+                $pole,
+                $project,
+                $validated,
+                $userId,
+                $files
+            ) {
+                $pole = $this->items->lock($pole);
+                $workItem = WorkItem::whereKey($validated['work_item_id'])->where('project_id', $project->id)->firstOrFail();
+                if ($workItem->pole_id !== null) {
+                    abort_unless((int) $workItem->pole_id === (int) $pole->id, 404);
                 }
-            }
-            $progress = PoleWorkProgress::updateOrCreate(
-                [
+                if ($pole->workItems()->exists() || $pole->work_items_customized_at !== null) {
+                    $this->items->materialize($pole);
+                    if ($workItem->pole_id === null) {
+                        $workItem = $pole->workItems()->where('source_item_id', $workItem->id)->firstOrFail();
+                    }
+                }
+                $progress = PoleWorkProgress::updateOrCreate(
+                    [
+                        'pole_id' => $pole->id,
+                        'work_item_id' => $workItem->id,
+                    ],
+                    [
+                        ...Arr::only($validated, ['progress_percent', 'started_at', 'completed_at', 'notes']),
+                        'updated_by' => $userId,
+                    ]
+                );
+
+                $history = PoleProgressHistory::create([
                     'pole_id' => $pole->id,
                     'work_item_id' => $workItem->id,
-                ],
-                [
                     'progress_percent' => $validated['progress_percent'],
-                    'started_at' => $validated['started_at'] ?? null,
-                    'completed_at' => $validated['completed_at'] ?? null,
+                    'recorded_at' => now(),
+                    'weight_percent_snapshot' => $workItem->weight_percent,
+                    'is_active_snapshot' => $workItem->is_active,
+                    'recorded_by' => $userId,
                     'notes' => $validated['notes'] ?? null,
-                    'updated_by' => $userId,
-                ]
-            );
+                ]);
 
-            $history = PoleProgressHistory::create([
-                'pole_id' => $pole->id,
-                'work_item_id' => $workItem->id,
-                'progress_percent' => $validated['progress_percent'],
-                'recorded_at' => now(),
-                'weight_percent_snapshot' => $workItem->weight_percent,
-                'is_active_snapshot' => $workItem->is_active,
-                'recorded_by' => $userId,
-                'notes' => $validated['notes'] ?? null,
-            ]);
+                $photos = collect();
+                foreach ($files as $file) {
+                    $path = $this->uploads->store($file, 'progress-photos');
+                    $photos->push(ProgressPhoto::create([
+                        'ulid' => (string) Str::ulid(),
+                        'pole_id' => $pole->id,
+                        'work_item_id' => $workItem->id,
+                        'progress_history_id' => $history->id,
+                        'disk' => 'public',
+                        'path' => $path,
+                        'original_name' => $file->getClientOriginalName(),
+                        'mime_type' => $file->getMimeType(),
+                        'size' => $file->getSize(),
+                        'uploaded_by' => $userId,
+                    ]));
+                }
+                $poleProgress = $this->calculatePoleProgress($pole);
+                $this->notifyProgress($project, $pole, $workItem, $validated['progress_percent'], $poleProgress, $userId);
+                $progress->setRelation('workItem', $workItem);
 
-            $this->notifyProgress($project, $pole, $workItem, $validated['progress_percent'], $this->calculatePoleProgress($pole), $userId);
-
-            return [$progress, $history, $workItem];
-        });
-
-        /* Simpan foto SETELAH transaksi selesai, supaya kegagalan
-           storage tidak membatalkan catatan progress-nya. */
-        $photos = collect();
-
-        foreach ($files as $file) {
-            if (! $file || ! $file->isValid()) {
-                continue;
-            }
-
-            $path = $file->store('progress-photos', 'public');
-
-            $photos->push(ProgressPhoto::create([
-                'ulid' => (string) Str::ulid(),
-                'pole_id' => $pole->id,
-                'work_item_id' => $workItem->id,
-                'progress_history_id' => $history->id,
-                'disk' => 'public',
-                'path' => $path,
-                'original_name' => $file->getClientOriginalName(),
-                'mime_type' => $file->getMimeType(),
-                'size' => $file->getSize(),
-                'uploaded_by' => $userId,
-            ]));
+                return [$progress, $photos, $poleProgress];
+            });
+        } catch (Throwable $exception) {
+            $this->uploads->discardUnreferenced();
+            throw $exception;
         }
-
-        $poleProgress = $this->calculatePoleProgress($pole);
 
         return response()->json([
             'message' => 'Progress berhasil disimpan.',
-            'data' => $progress->load('workItem'),
+            'data' => $progress,
             'photos' => $photos->map(fn (ProgressPhoto $photo) => $photo->toPayload()),
             'pole_progress' => $poleProgress,
         ]);

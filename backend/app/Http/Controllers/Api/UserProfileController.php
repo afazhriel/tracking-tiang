@@ -4,13 +4,16 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Services\PendingPhotos;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Password;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
+use Throwable;
 
 /**
  * Profil user yang sedang login.
@@ -138,7 +141,7 @@ class UserProfileController extends Controller
      * baru tersimpan, supaya kegagalan di tengah tidak menghilangkan
      * foto yang masih dipakai.
      */
-    public function updateAvatar(Request $request): JsonResponse
+    public function updateAvatar(Request $request, PendingPhotos $uploads): JsonResponse
     {
         $request->validate([
             'avatar' => ['required', 'image', 'max:2048'],
@@ -148,20 +151,20 @@ class UserProfileController extends Controller
             'avatar.max' => 'Ukuran foto maksimal 2 MB.',
         ]);
 
-        $user = $request->user();
-        $file = $request->file('avatar');
-        $path = $file->storeAs(
-            'avatars',
-            Str::ulid().'.'.($file->guessExtension() ?? 'png'),
-            'public'
-        );
+        try {
+            $path = $uploads->store($request->file('avatar'), 'avatars');
+            [$user, $previous] = DB::transaction(function () use ($request, $path) {
+                $user = User::whereKey($request->user()->id)->lockForUpdate()->firstOrFail();
+                $previous = $user->avatar;
+                $user->update(['avatar' => $path]);
 
-        $previous = $user->avatar;
-        $user->update(['avatar' => $path]);
-
-        if ($previous && $previous !== $path) {
-            Storage::disk('public')->delete($previous);
+                return [$user, $previous];
+            });
+        } catch (Throwable $exception) {
+            $uploads->discardUnreferenced();
+            throw $exception;
         }
+        $uploads->discardRetiredAvatar($previous);
 
         $payload = $user->fresh()->toAuthPayload();
 
@@ -174,16 +177,16 @@ class UserProfileController extends Controller
     /**
      * Hapus foto profil (kembali ke inisial nama).
      */
-    public function destroyAvatar(Request $request): JsonResponse
+    public function destroyAvatar(Request $request, PendingPhotos $uploads): JsonResponse
     {
-        $user = $request->user();
-        $previous = $user->avatar;
+        [$user, $previous] = DB::transaction(function () use ($request) {
+            $user = User::whereKey($request->user()->id)->lockForUpdate()->firstOrFail();
+            $previous = $user->avatar;
+            $user->update(['avatar' => null]);
 
-        $user->update(['avatar' => null]);
-
-        if ($previous) {
-            Storage::disk('public')->delete($previous);
-        }
+            return [$user, $previous];
+        });
+        $uploads->discardRetiredAvatar($previous);
 
         $payload = $user->fresh()->toAuthPayload();
 

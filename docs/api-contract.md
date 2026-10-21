@@ -117,8 +117,17 @@ POST progress menerima template ID untuk tiang legacy. Setelah dikustomisasi,
 ID template dipetakan ke salinan milik tiang itu. ID item tiang lain ditolak 404;
 konflik partial backfill 409. Histori baru menyimpan snapshot bobot. Perubahan
 pekerjaan/progres diserialisasikan dengan lock project lalu pole di transaksi.
-Foto tetap disimpan setelah transaksi progres, mengikuti kontrak sebelumnya;
-kegagalan storage dapat meninggalkan progres tanpa foto dan harus ditangani klien.
+Foto dan metadata kini disimpan sebelum transaksi progres di-commit. Kegagalan
+storage/metadata/notifikasi membatalkan seluruh state/histori/notifikasi baru;
+503 `{message,saved:false}` menandakan kegagalan penyimpanan foto yang dibatalkan.
+Berkas baru yang tidak lagi direferensikan dibersihkan, berkas lama tetap ada.
+Jika DB tidak dapat diperiksa setelah error commit, berkas dipertahankan untuk
+menghindari penghapusan file yang mungkin sudah direferensikan. File dan PostgreSQL
+bukan satu transaksi fisik: proses mati mendadak masih dapat meninggalkan orphan.
+Kolom tanggal/catatan yang tidak dikirim dipertahankan; null eksplisit mengosongkan.
+Response menyertakan snapshot progres/bobot dari transaksi tersebut. Koneksi
+terputus/5xx umum tidak menjamin operasi belum commit; klien menampilkan hasil
+belum diketahui dan meminta refresh sebelum pengiriman ulang.
 
 Kurva S project mempertahankan angka agregat seluruh proyek, sedangkan route tiang
 menggunakan izin view tiang. Aktualitas histori memakai snapshot bila tersedia;

@@ -143,3 +143,19 @@ test('pole work items, curve, and notification helpers use the documented API me
     if (path.endsWith('/read-all')) assert.equal(JSON.parse(request.body).project_id, 1)
   }
 })
+
+test('HTTP 200 with an HTML fallback cannot be reported as a successful save', async () => {
+  globalThis.fetch = async () => new Response('<html>Fallback</html>', { status: 200 })
+  await assert.rejects(api.savePoleProgress(1, 2, { work_item_id: 3, progress_percent: 20 }), (error) => {
+    assert.ok(error instanceof ApiError)
+    assert.equal(error.outcomeUnknown, true)
+    return true
+  })
+})
+
+test('failed writes distinguish an unknown network outcome from a confirmed upload rollback', async () => {
+  globalThis.fetch = async () => { throw new Error('Connection interrupted') }
+  await assert.rejects(api.savePoleProgress(1, 2, { work_item_id: 3, progress_percent: 20 }), (error) => error.outcomeUnknown === true)
+  globalThis.fetch = async () => Response.json({ message: 'Foto gagal disimpan.', saved: false }, { status: 503 })
+  await assert.rejects(api.savePoleProgress(1, 2, { work_item_id: 3, progress_percent: 20 }), (error) => error.status === 503 && error.outcomeUnknown === false)
+})
