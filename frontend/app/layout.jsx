@@ -1,27 +1,27 @@
-import { JetBrains_Mono, Plus_Jakarta_Sans, Space_Grotesk } from 'next/font/google'
+import localFont from 'next/font/local'
 
 import 'leaflet/dist/leaflet.css'
 import './globals.css'
 
-/* Font diunduh saat build lalu di-self-host oleh Next.js,
-   jadi tidak ada request ke Google Fonts saat runtime. */
-const jakarta = Plus_Jakarta_Sans({
-  subsets: ['latin'],
-  weight: ['400', '500', '600', '700', '800'],
+/* Font asli disimpan bersama source agar build tidak bergantung pada jaringan
+   Google Fonts. Jenis huruf dan CSS variable desain tetap sama. */
+const jakarta = localFont({
+  src: './fonts/PlusJakartaSans.ttf',
+  weight: '400 800',
   variable: '--font-jakarta',
   display: 'swap',
 })
 
-const grotesk = Space_Grotesk({
-  subsets: ['latin'],
-  weight: ['500', '600', '700'],
+const grotesk = localFont({
+  src: './fonts/SpaceGrotesk.ttf',
+  weight: '500 700',
   variable: '--font-grotesk',
   display: 'swap',
 })
 
-const jetbrains = JetBrains_Mono({
-  subsets: ['latin'],
-  weight: ['400', '500', '600'],
+const jetbrains = localFont({
+  src: './fonts/JetBrainsMono.ttf',
+  weight: '400 600',
   variable: '--font-jetbrains',
   display: 'swap',
 })
