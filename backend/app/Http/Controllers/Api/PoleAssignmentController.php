@@ -51,16 +51,11 @@ class PoleAssignmentController extends Controller
             ? Team::findOrFail($validated['team_id'])
             : null;
 
-        if ($team && $team->status !== 'active') {
-            return response()->json([
-                'message' => 'Team sedang tidak aktif.',
-            ], 422);
-        }
-
-        abort_if($team && $team->project_id !== null && (int) $team->project_id !== (int) $pole->project_id, 422, 'Tim dan tiang harus berasal dari proyek yang sama.');
-
         return DB::transaction(function () use ($request, $user, $pole, $team) {
             $this->items->lock($pole);
+            $team = $team ? Team::whereKey($team->id)->lockForUpdate()->firstOrFail() : null;
+            abort_if($team && $team->status !== 'active', 422, 'Team sedang tidak aktif.');
+            abort_if($team && $team->project_id !== null && (int) $team->project_id !== (int) $pole->project_id, 422, 'Tim dan tiang harus berasal dari proyek yang sama.');
             $existing = PoleAssignment::where('pole_id', $pole->id)->where('user_id', $user->id)->first();
             abort_if($team && PoleAssignment::where('pole_id', $pole->id)->where('team_id', $team->id)->when($existing, fn ($q) => $q->where('id', '!=', $existing->id))->exists(), 409, 'Tim sudah ditugaskan ke tiang ini.');
             $assignment = PoleAssignment::updateOrCreate(

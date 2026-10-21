@@ -165,3 +165,19 @@ frontend/deployment tidak berubah dari tahap sebelumnya (14 tes frontend, 15 tes
 deployment, ESLint dan build lulus); quality gates PR tetap menjalankan semuanya
 pada commit gabungan terbaru. Tidak ada migration atau dependency baru. Urutan
 review enam PR di atas wajib disertai CI ulang setelah retarget ke main.
+
+## Lanjutan akses tim (PR #7)
+
+Empat kegagalan dibuktikan pada source sebelum perbaikan: anggota yang baru
+ditambahkan sesudah assignment dan undangan ke tim tanpa project_id mendapat 403
+pada tiang yang ditugaskan; tim nonaktif tetap memberi akses; perpindahan project
+tim lolos walaupun assignment masih aktif. TeamAccess memberi project membership
+dari project tim dan assignment aktif di bawah transaksi/lock tim. Writer
+assignment membaca ulang status/project setelah lock; update tim menolak pindah
+project selama assignment aktif (409). Akses melalui tim nonaktif ditutup.
+
+Delapan regression tests juga mencakup rollback saat grant gagal, role membership
+lama, pencabutan anggota, dan pindah project tim tanpa assignment. Tidak ada
+migration, penghapusan histori atau membership project lama. Unit/Feature lokal:
+181 tes / 571 assertions lulus. Review #7 setelah #6 dan retarget/CI ulang sesuai
+prosedur di atas. Pembatasan produksi tetap berlaku; source ini belum dideploy.
