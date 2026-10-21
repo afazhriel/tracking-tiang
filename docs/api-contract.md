@@ -216,3 +216,15 @@ accept ditolak 403; jika accept menang, revoke ditolak 422. Error persistence ti
 meninggalkan akun aktif setengah jadi. Team-only invitation memberi membership
 project tim; explicit project membership tetap didukung. Akun dengan email yang
 sudah ada tetap ditolak, tanpa reset password.
+
+### Konsistensi akses tim
+
+Penambahan anggota serta penerimaan undangan tim memberikan membership project
+tim dan project dari penugasan aktifnya, termasuk tim lama tanpa project_id.
+Grant memakai firstOrCreate sehingga role membership lama tidak ditimpa.
+Keanggotaan tim dan grant project berada dalam satu transaksi dengan lock tim;
+penugasan juga memeriksa ulang status/project setelah memperoleh lock yang sama.
+Tim tidak dapat dipindah project selama masih punya penugasan aktif (409).
+Anggota tim nonaktif kehilangan akses tiang melalui tim; assignment langsung dan
+izin provinsi tetap independen. Menghapus anggota tim mempertahankan membership
+project yang berdiri sendiri serta seluruh histori pekerjaan.

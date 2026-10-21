@@ -5,8 +5,10 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Team;
 use App\Models\User;
+use App\Services\TeamAccess;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 
 class TeamController extends Controller
@@ -102,11 +104,20 @@ class TeamController extends Controller
             'status' => ['sometimes', 'required', 'string', 'max:50'],
         ]);
 
-        $team->update($validated);
-        $team->load('project:id,name');
-        $team->loadCount('users');
+        return DB::transaction(function () use ($team, $validated) {
+            $team = Team::whereKey($team->id)->lockForUpdate()->firstOrFail();
+            if (array_key_exists('project_id', $validated) && (string) $validated['project_id'] !== (string) $team->project_id) {
+                abort_if($team->poleAssignments()->where('status', 'active')->exists(), 409, 'Cabut penugasan aktif sebelum memindahkan proyek tim. Data penugasan tetap disimpan.');
+            }
+            $team->update($validated);
+            foreach ($team->users as $member) {
+                app(TeamAccess::class)->grantProjects($team, $member);
+            }
+            $team->load('project:id,name');
+            $team->loadCount('users');
 
-        return response()->json($team);
+            return response()->json($team);
+        });
     }
 
     public function addMember(
@@ -122,15 +133,14 @@ class TeamController extends Controller
 
         $user = User::findOrFail($validated['user_id']);
 
-        $team->users()->syncWithoutDetaching([
-            $user->id => [
-                'role' => $validated['role'] ?? null,
-            ],
-        ]);
+        return DB::transaction(function () use ($team, $user, $validated) {
+            $team = Team::whereKey($team->id)->lockForUpdate()->firstOrFail();
+            $team->users()->syncWithoutDetaching([$user->id => ['role' => $validated['role'] ?? null]]);
+            app(TeamAccess::class)->grantProjects($team, $user);
+            $team->load('users:id,name,email,role,status');
 
-        $team->load('users:id,name,email,role,status');
-
-        return response()->json($team);
+            return response()->json($team);
+        });
     }
 
     public function removeMember(
@@ -139,7 +149,11 @@ class TeamController extends Controller
     ): JsonResponse {
         $this->authorize('manageMembers', $team);
 
-        $removed = $team->users()->detach($user->id);
+        $removed = DB::transaction(function () use ($team, $user) {
+            $team = Team::whereKey($team->id)->lockForUpdate()->firstOrFail();
+
+            return $team->users()->detach($user->id);
+        });
 
         if ($removed === 0) {
             return response()->json([

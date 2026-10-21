@@ -234,7 +234,9 @@ class User extends Authenticatable
             ->pluck('pole_id');
 
         $viaTeam = DB::table('pole_assignments')
+            ->join('teams', 'teams.id', '=', 'pole_assignments.team_id')
             ->join('team_members', 'team_members.team_id', '=', 'pole_assignments.team_id')
+            ->where('teams.status', 'active')
             ->where('pole_assignments.status', PoleAssignment::STATUS_ACTIVE)
             ->where('team_members.user_id', $this->getKey())
             ->pluck('pole_assignments.pole_id');

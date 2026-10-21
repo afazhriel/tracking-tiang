@@ -4,9 +4,9 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Invitation;
-use App\Models\ProjectUser;
 use App\Models\Team;
 use App\Models\User;
+use App\Services\TeamAccess;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -294,10 +294,8 @@ class InvitationController extends Controller
      */
     private function attachUserToTeam(User $user, int $teamId): void
     {
-        $team = Team::findOrFail($teamId);
-        if ($team->project_id !== null) {
-            ProjectUser::firstOrCreate(['project_id' => $team->project_id, 'user_id' => $user->id], ['role' => $user->role]);
-        }
+        $team = Team::whereKey($teamId)->lockForUpdate()->firstOrFail();
+        app(TeamAccess::class)->grantProjects($team, $user);
         DB::table('team_members')->updateOrInsert(
             ['team_id' => $teamId, 'user_id' => $user->id],
             ['created_at' => now(), 'updated_at' => now()],
