@@ -318,6 +318,25 @@ exec /usr/bin/tar "$@"
     def test_health_rejects_a_login_redirect_instead_of_the_actual_page(self):
         self.assert_failed_health_preserves_recovery('redirect')
 
+    def test_vps_audit_ssh_command_uses_server_checkout(self):
+        import yaml
+        workflow = yaml.safe_load((SCRIPT.parents[1] / '.github/workflows/check-vps.yml').read_text())
+        step = next(step for step in workflow['jobs']['check']['steps']
+                    if step.get('name') == 'Read-only production configuration and data audit')
+        assignment = next(line.strip() for line in step['run'].splitlines()
+                          if line.strip().startswith('remote_command='))
+        checkout = self.base / 'checkout-with-spaces'
+        checkout.mkdir()
+        target = self.base / 'audit-cwd'
+        self.command('docker', 'pwd > "$TEST_CWD_FILE"\n')
+        result = subprocess.run(['bash', '-c', assignment + '\n'
+                                 'printf -v escaped_command "%q" "$remote_command"\n'
+                                 'bash -c "bash -c $escaped_command" < /dev/null'],
+                                env={**self.env, 'DEPLOY_REPO': str(checkout),
+                                     'TEST_CWD_FILE': str(target)}, capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(target.read_text().strip(), str(checkout))
+
     def test_ssh_bootstrap_preserves_payload_and_arguments(self):
         workflow = SCRIPT.parents[1] / '.github/workflows/deploy.yml'
         assignment = next(line.strip() for line in workflow.read_text().splitlines()
