@@ -47,5 +47,10 @@ cp "$workspace/uploads.tar.gz" "$backup/backend.tar.gz"
 tar -czf "$backup/frontend.tar.gz" -C "$workspace" uploads.sha256
 (cd "$backup"; sha256sum backend.tar.gz frontend.tar.gz database.dump > SHA256SUMS)
 printf 'Synthetic backup complete.\n' > "$backup/COMPLETE"
-bash deploy/verify-production-backup.sh "$backup"
+if ! bash deploy/verify-production-backup.sh "$backup"; then
+  # This directory contains only the guarded synthetic fixtures created above.
+  # Production helper output remains private; never use this CI harness on VPS.
+  cat "$backup/restore-private.log" >&2
+  exit 1
+fi
 test -s "$backup/RESTORE_VERIFIED"
