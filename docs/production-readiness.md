@@ -73,7 +73,8 @@ penulisan lokal maksimal 25 MiB; stress multi-worker belum dilakukan.
    dengan jumlah anggota tim; jangan memberi bypass rutin.
 2. Pause `DEPLOY_ENABLED=false` oleh pemilik sebelum merge rangkaian PR agar commit
    antara tidak langsung deploy. Merge/rebase retarget dilakukan pemilik: #1 → #2
-   → #3 → PR upload. Setelah base berubah, jalankan check pada commit terbaru.
+   → #3 → #4 (upload) → #5 (akun). Setelah PR sebelumnya masuk main, ubah base PR berikutnya ke main dan jalankan
+   check pada commit terbaru. Tidak perlu force push.
 3. Periksa API_UPSTREAM_ORIGIN di environment build VPS (bukan IP HTTP), routing
    nginx /api langsung FPM, TLS/hairpin dari VPS, root SSH/key/known-hosts dan izin
    backup. Jangan arahkan origin ke Next sendiri. Nilai secrets tidak dibaca di audit.
@@ -87,3 +88,46 @@ penulisan lokal maksimal 25 MiB; stress multi-worker belum dilakukan.
    langkah tersebut belum tuntas, hasil CI hijau berarti siap review, bukan READY
    untuk produksi. Jika gagal, ikuti journal dan rencana pemulihan, jangan menghapus
    journal lalu mengulang atau menjalankan migrate:rollback secara membabi buta.
+
+
+## Tambahan perlindungan akun (PR #5)
+
+Temuan High yang dibuktikan sebelum perbaikan: admin terakhir bisa dibuat pending;
+dua penonaktifan bersamaan sama-sama membalas 200 sehingga seluruh admin menjadi
+nonaktif. Update role/status kini mengunci kumpulan admin dengan urutan tetap dan
+memeriksa ulang target dalam transaksi. Pending termasuk kehilangan akses aktif;
+role/status yang ditolak mengembalikan field error yang sesuai. Pesan status PIC
+pending diperbaiki agar tidak menyatakan akun sudah aktif.
+
+Accept undangan sebelumnya membuat akun/membership sebelum penandaan accepted,
+sehingga error meninggalkan akun aktif tanpa penerimaan yang lengkap. Seluruh
+pembuatan akun, membership, accepted state dan token sekarang satu transaksi,
+dengan pemeriksaan ulang token/status di bawah row lock yang juga dipakai revoke.
+Explicit expired/unknown status ditolak. Undangan ke tim juga memberi membership
+project tim, sesuai tujuan undangan, tanpa mengubah akun/password yang sudah ada.
+
+Tes concurrency menjalankan dua proses API Laravel terpisah pada PostgreSQL uji,
+bukan hanya mock/simulasi satu proses: dua suspension harus menyisakan satu admin;
+accept/revoke hanya boleh menghasilkan salah satu urutan serial yang konsisten.
+Fixture/worker dibatasi guard APP_ENV=testing dan nama/host database CI. Tidak ada
+akun atau token produksi dibuat/dicetak. Skenario penambahan anggota ke tim tanpa
+project sesudah assignment/perpindahan tim masih membutuhkan pengujian lanjutan;
+perubahan ini tidak mengklaim semua kemungkinan alur organisasi sudah diaudit.
+
+
+## Verifikasi gabungan pada branch akun
+
+Pengujian terbaru sesudah seluruh perubahan source di atas: **166 Unit/Feature /
+518 assertions**, **5 migration / 763 assertions**, **14 frontend tests**, Pint
+**115 file**, lint tanpa warning dan Next production build lulus. Dua proses API
+terpisah digunakan untuk masing-masing race admin dan accept/revoke undangan.
+Tes deployment 15 kasus lulus pada PR #3 dan dipakai ulang oleh quality gates.
+Image PHP produksi dibangun dan parser HTTP lokal lima berkas 5 MiB lulus.
+
+Tidak ada migration baru, penggantian dependency/lockfile atau force push pada
+tahap hardening ini. PR #1/#2 dipertahankan; PR #3 deployment/transport, PR #4
+upload, PR #5 integritas akun adalah perubahan tambahan yang dapat ditinjau
+terpisah. Semua PR tetap memerlukan review pemilik. Main dan VPS tetap pada
+keadaan sebelumnya; status NOT READY tidak berubah sampai langkah aktivasi di
+atas selesai. Konfigurasi Capacitor HTTPS baru berlaku pada APK hasil build baru,
+dan perangkat lama mungkin perlu login kembali setelah perpindahan origin.

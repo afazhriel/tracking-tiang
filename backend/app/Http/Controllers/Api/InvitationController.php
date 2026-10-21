@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Invitation;
+use App\Models\ProjectUser;
+use App\Models\Team;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -152,49 +154,55 @@ class InvitationController extends Controller
             'password' => ['required', 'confirmed', Password::min(8)],
         ]);
 
-        /* Kalau akun dengan email ini sudah ada, jangan reset
-           password-nya — itu jadi celah takeover: siapa pun yang punya
-           token (mis. forwarded) bisa mengambil alih akun orang. */
-        if (DB::table('users')->where('email', $invitation->email)->exists()) {
-            throw ValidationException::withMessages([
-                'email' => ['Email ini sudah terdaftar. Silakan masuk.'],
+        return DB::transaction(function () use ($token, $validated) {
+            $invitation = Invitation::where('token_hash', Invitation::hashToken($token))->lockForUpdate()->firstOrFail();
+            if ($reason = $invitation->unusableReason()) {
+                return response()->json(['message' => $reason], 403);
+            }
+            /* Kalau akun dengan email ini sudah ada, jangan reset
+               password-nya — itu jadi celah takeover: siapa pun yang punya
+               token (mis. forwarded) bisa mengambil alih akun orang. */
+            if (DB::table('users')->where('email', $invitation->email)->exists()) {
+                throw ValidationException::withMessages([
+                    'email' => ['Email ini sudah terdaftar. Silakan masuk.'],
+                ]);
+            }
+
+            $user = User::create([
+                'name' => $validated['name'],
+                'email' => $invitation->email,
+                'password' => $validated['password'],
+                'role' => $invitation->role,
+                'status' => User::STATUS_ACTIVE,
             ]);
-        }
 
-        $user = User::create([
-            'name' => $validated['name'],
-            'email' => $invitation->email,
-            'password' => $validated['password'],
-            'role' => $invitation->role,
-            'status' => User::STATUS_ACTIVE,
-        ]);
+            /* Keanggotaan ditambahkan di sini dari undangan, supaya
+               akun yang baru dibuat langsung punya akses yang diharapkan
+               admin — tanpa perlu langkah manual tambahan. */
+            if ($invitation->team_id) {
+                $this->attachUserToTeam($user, (int) $invitation->team_id);
+            }
 
-        /* Keanggotaan ditambahkan di sini dari undangan, supaya
-           akun yang baru dibuat langsung punya akses yang diharapkan
-           admin — tanpa perlu langkah manual tambahan. */
-        if ($invitation->team_id) {
-            $this->attachUserToTeam($user, (int) $invitation->team_id);
-        }
+            if ($invitation->project_id) {
+                DB::table('project_user')->updateOrInsert(
+                    ['project_id' => $invitation->project_id, 'user_id' => $user->id],
+                    ['role' => $invitation->role, 'created_at' => now(), 'updated_at' => now()],
+                );
+            }
 
-        if ($invitation->project_id) {
-            DB::table('project_user')->updateOrInsert(
-                ['project_id' => $invitation->project_id, 'user_id' => $user->id],
-                ['role' => $invitation->role, 'created_at' => now(), 'updated_at' => now()],
-            );
-        }
+            $invitation->markAccepted((int) $user->id);
 
-        $invitation->markAccepted((int) $user->id);
-
-        /* Token dikembalikan di sini supaya user tidak perlu login
-           kedua kali setelah accept. Bentuknya sama dengan
-           `POST /api/login` supaya frontend bisa memakai satu
-           handler untuk keduanya. */
-        return response()->json([
-            'message' => 'Akun berhasil dibuat.',
-            'token' => $user->createToken('web')->plainTextToken,
-            'token_type' => 'Bearer',
-            'user' => $user->fresh()->toAuthPayload(),
-        ], 201);
+            /* Token dikembalikan di sini supaya user tidak perlu login
+               kedua kali setelah accept. Bentuknya sama dengan
+               `POST /api/login` supaya frontend bisa memakai satu
+               handler untuk keduanya. */
+            return response()->json([
+                'message' => 'Akun berhasil dibuat.',
+                'token' => $user->createToken('web')->plainTextToken,
+                'token_type' => 'Bearer',
+                'user' => $user->fresh()->toAuthPayload(),
+            ], 201);
+        });
     }
 
     /**
@@ -204,20 +212,22 @@ class InvitationController extends Controller
     {
         $this->authorize('create', User::class);
 
-        $model = Invitation::findOrFail($invitation);
+        return DB::transaction(function () use ($invitation) {
+            $model = Invitation::whereKey($invitation)->lockForUpdate()->firstOrFail();
 
-        if ($model->status === Invitation::STATUS_ACCEPTED) {
-            throw ValidationException::withMessages([
-                'status' => ['Undangan yang sudah dipakai tidak bisa dicabut.'],
+            if ($model->status === Invitation::STATUS_ACCEPTED) {
+                throw ValidationException::withMessages([
+                    'status' => ['Undangan yang sudah dipakai tidak bisa dicabut.'],
+                ]);
+            }
+
+            $model->markRevoked();
+
+            return response()->json([
+                'message' => 'Undangan dicabut.',
+                'data' => $model->fresh()->toAdminPayload(),
             ]);
-        }
-
-        $model->markRevoked();
-
-        return response()->json([
-            'message' => 'Undangan dicabut.',
-            'data' => $model->fresh()->toAdminPayload(),
-        ]);
+        });
     }
 
     /**
@@ -284,6 +294,10 @@ class InvitationController extends Controller
      */
     private function attachUserToTeam(User $user, int $teamId): void
     {
+        $team = Team::findOrFail($teamId);
+        if ($team->project_id !== null) {
+            ProjectUser::firstOrCreate(['project_id' => $team->project_id, 'user_id' => $user->id], ['role' => $user->role]);
+        }
         DB::table('team_members')->updateOrInsert(
             ['team_id' => $teamId, 'user_id' => $user->id],
             ['created_at' => now(), 'updated_at' => now()],

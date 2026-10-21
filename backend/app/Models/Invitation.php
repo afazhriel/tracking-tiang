@@ -120,7 +120,8 @@ class Invitation extends Model
         return match (true) {
             $this->status === self::STATUS_ACCEPTED => 'Undangan sudah pernah digunakan.',
             $this->status === self::STATUS_REVOKED => 'Undangan telah dicabut.',
-            $this->isExpired() => 'Undangan sudah kedaluwarsa.',
+            $this->status === self::STATUS_EXPIRED || $this->isExpired() => 'Undangan sudah kedaluwarsa.',
+            $this->status !== self::STATUS_PENDING => 'Undangan tidak aktif.',
             default => null,
         };
     }
