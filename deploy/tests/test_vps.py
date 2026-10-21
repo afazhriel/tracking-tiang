@@ -34,6 +34,7 @@ class DeployTests(unittest.TestCase):
             TEST_ALREADY_DOWN='0',
             TEST_BACKEND_RUNNING='true',
             TEST_HEALTH_FAILURE='',
+            TEST_CORRUPT_ARCHIVE='0',
         )
         self.git(self.repo, 'init', '-b', 'main')
         self.git(self.repo, 'config', 'user.name', 'Deployment Test')
@@ -109,7 +110,16 @@ printf '%s' "$body" > "$output"
 printf '%s' "$status"
 ''')
         self.command('rsync', 'exit 0\n')
-        self.command('tar', 'exec /usr/bin/tar "$@"\n')
+        self.command('tar', '''
+if [ "$TEST_CORRUPT_ARCHIVE" = 1 ]; then
+  previous=''
+  for argument in "$@"; do
+    if [ "$previous" = -czf ]; then printf 'corrupt archive' > "$argument"; exit 0; fi
+    previous="$argument"
+  done
+fi
+exec /usr/bin/tar "$@"
+''')
 
     @staticmethod
     def git(directory, *args):
@@ -209,6 +219,20 @@ printf '%s' "$status"
         self.assertLess(dump, start)
         self.assertLess(archive, start)
         self.assertLess(migration, resume)
+        self.assertIn('PGOPTIONS=-c lock_timeout=5s -c statement_timeout=300s', calls)
+        backup = next((self.base / 'backups').iterdir())
+        self.assertTrue((backup / 'COMPLETE').is_file())
+        checksum = subprocess.run(['sha256sum', '--check', '--status', 'SHA256SUMS'], cwd=backup)
+        self.assertEqual(checksum.returncode, 0)
+
+    def test_corrupt_archives_stop_before_source_change_or_migration(self):
+        self.env['TEST_CORRUPT_ARCHIVE'] = '1'
+        result = self.deploy()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual((self.repo / 'backend/app.php').read_text(), 'local backend\n')
+        self.assertNotIn('php artisan migrate', self.call_log.read_text())
+        self.assertIn('php artisan up', self.call_log.read_text())
+        self.assertFalse(any((self.base / 'backups').glob('*/COMPLETE')))
 
     def test_failed_migration_blocks_a_retry_before_any_service_or_database_calls(self):
         self.env['TEST_FAIL_MIGRATION'] = '1'
