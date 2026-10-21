@@ -240,7 +240,6 @@ jobs:
       DB_USERNAME: ci
       DB_PASSWORD: ci-only-password
       DB_URL: ''
-      CI_POSTGRES_CONTAINER: ${{ job.services.postgres.id }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -259,6 +258,7 @@ jobs:
           php backend/tests/Support/prepare-recovery.php > "$RUNNER_TEMP/recovery-files.txt"
       - name: Restore dump and uploads into fresh isolated targets
         env:
+          CI_POSTGRES_CONTAINER: ${{ job.services.postgres.id }}
           CI_RECOVERY_FILES: ${{ runner.temp }}/recovery-files.txt
         run: bash ci/verify-recovery.sh
 
