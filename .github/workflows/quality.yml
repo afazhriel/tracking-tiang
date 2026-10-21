@@ -165,7 +165,7 @@ jobs:
         with:
           python-version: '3.12'
       - run: pip install -r deploy/tests/requirements.txt
-      - run: bash -n deploy/vps.sh deploy/backup-vps.sh deploy/check-vps.sh
+      - run: bash -n deploy/vps.sh deploy/backup-vps.sh deploy/check-vps.sh deploy/verify-production-backup.sh
       - run: python3 -m unittest discover -s deploy/tests -v
       - run: node --test ci/tests/*.test.mjs
 
