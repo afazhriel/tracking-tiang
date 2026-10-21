@@ -2,7 +2,7 @@
   "appId": "com.trackingtiang.app",
   "appName": "Tracking Tiang",
   "server": {
-    "url": "http://pjl.ituiot.com",
-    "cleartext": true
+    "url": "https://pjl.ituiot.com",
+    "cleartext": false
   }
 }

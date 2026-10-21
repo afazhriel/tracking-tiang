@@ -159,3 +159,9 @@ origin HTTPS/TLS dari VPS, graceful-stop signal PHP-FPM, worker eksternal, ruang
 disk, izin backup serta prosedur restore. Resume deploy dan eksekusi produksi
 memerlukan persetujuan pemilik. Detail protection/environment/secrets tidak dapat
 dikelola oleh kredensial workspace (403); tidak ada secrets yang dibaca/dicetak.
+
+Konfigurasi Capacitor remote-WebView juga memakai HTTPS pada domain yang sama,
+dengan cleartext=false. App ID/navigasi/arsitektur remote-WebView tetap dipertahankan;
+ini baru berlaku pada build APK berikutnya. APK yang sudah terpasang tidak berubah
+dan masih memerlukan pembaruan berizin serta tes perangkat. Ini bukan integrasi
+static-export/plugin native dari branch review.
