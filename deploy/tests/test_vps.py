@@ -30,6 +30,10 @@ class DeployTests(unittest.TestCase):
             DEPLOY_BACKUPS=str(self.base / 'backups'),
             CALL_LOG=str(self.call_log),
             TEST_FAIL_DB='0',
+            TEST_FAIL_MIGRATION='0',
+            TEST_ALREADY_DOWN='0',
+            TEST_BACKEND_RUNNING='true',
+            TEST_HEALTH_FAILURE='',
         )
         self.git(self.repo, 'init', '-b', 'main')
         self.git(self.repo, 'config', 'user.name', 'Deployment Test')
@@ -70,11 +74,14 @@ class DeployTests(unittest.TestCase):
         (self.repo / 'unrelated-tool.txt').write_text('keep unrelated file\n')
         self.command('docker', '''
 case "$*" in
+  *isDownForMaintenance*) [ "$TEST_ALREADY_DOWN" != 1 ] || exit 1 ;;
+  *"php artisan migrate"*) [ "$TEST_FAIL_MIGRATION" != 1 ] || exit 1 ;;
   *pg_dump*)
     if [ "$TEST_FAIL_DB" = 1 ]; then exit 1; fi
     printf 'test database archive'
     ;;
   *pg_restore*) cat >/dev/null ;;
+  *State.Running*) printf '%s\n' "$TEST_BACKEND_RUNNING" ;;
   inspect*) printf 'test-image-id\n' ;;
 esac
 ''')
@@ -83,8 +90,26 @@ if [ "$1" = ci ]; then mkdir -p node_modules; fi
 if [ "$1" = run ]; then mkdir -p .next; printf 'new build\n' > .next/BUILD_ID; fi
 ''')
         self.command('systemctl', 'exit 0\n')
-        self.command('curl', 'exit 0\n')
+        self.command('curl', r'''
+output=''
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --output) output="$2"; shift 2 ;;
+    *) url="$1"; shift ;;
+  esac
+done
+status=200
+body='<html>Login</html>'
+case "$url" in
+  */api/regions/provinces) body='[]'; [ "$TEST_HEALTH_FAILURE" != html ] || body='<html>Fallback</html>' ;;
+  */api/me) status=401; body='{"message":"Unauthenticated."}'; [ "$TEST_HEALTH_FAILURE" != auth ] || status=200 ;;
+  */login) [ "$TEST_HEALTH_FAILURE" != redirect ] || status=302 ;;
+esac
+printf '%s' "$body" > "$output"
+printf '%s' "$status"
+''')
         self.command('rsync', 'exit 0\n')
+        self.command('tar', 'exec /usr/bin/tar "$@"\n')
 
     @staticmethod
     def git(directory, *args):
@@ -119,6 +144,8 @@ if [ "$1" = run ]; then mkdir -p .next; printf 'new build\n' > .next/BUILD_ID; f
         self.assertEqual((self.frontend / '.next/BUILD_ID').read_text(), 'new build\n')
         self.assertTrue(list((self.base / 'backups').glob('*/database.dump')))
         self.assertTrue(list((self.base / 'backups').glob('*/backend.tar.gz')))
+        self.assertFalse((self.repo / '.git/tracking-deploy-pending').exists())
+        self.assertFalse(list((self.base / 'builds').glob('build.*')))
         # A subsequent docs-only deployment must not rebuild or restart services.
         self.call_log.write_text('')
         result = self.deploy(mode='')
@@ -135,13 +162,88 @@ if [ "$1" = run ]; then mkdir -p .next; printf 'new build\n' > .next/BUILD_ID; f
         self.assertEqual((self.repo / 'backend/app.php').read_text(), 'local backend\n')
         self.assertEqual((self.frontend / 'app.js').read_text(), 'local frontend\n')
         self.assertTrue((self.repo / 'backend/custom.php').exists())
-        self.assertNotIn('systemctl stop', self.call_log.read_text())
+        calls = self.call_log.read_text()
+        self.assertNotIn('systemctl stop', calls)
+        self.assertIn('docker compose start backend', calls)
+        self.assertIn('php artisan up', calls)
+        self.assertFalse((self.repo / '.git/tracking-deploy-pending').exists())
 
     def test_routine_deploy_rejects_manual_source_changes(self):
         result = self.deploy(mode='')
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('local changes', result.stderr)
         self.assertFalse(self.call_log.exists())
+
+    def test_standalone_backup_refuses_live_writes_and_accepts_a_drained_backend(self):
+        backup_script = SCRIPT.with_name('backup-vps.sh')
+        result = subprocess.run(['bash', str(backup_script)], env=self.env, capture_output=True, text=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('gracefully stopped', result.stderr)
+        self.assertNotIn('pg_dump', self.call_log.read_text())
+        self.env['TEST_BACKEND_RUNNING'] = 'false'
+        result = subprocess.run(['bash', str(backup_script)], env=self.env, capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue(list((self.base / 'backups').glob('*/database.dump')))
+        self.assertTrue((self.repo / 'backend/storage/upload.txt').exists())
+
+    def test_operator_maintenance_is_not_overridden(self):
+        self.env['TEST_ALREADY_DOWN'] = '1'
+        result = self.deploy()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertNotIn('php artisan up', self.call_log.read_text())
+        self.assertFalse((self.repo / '.git/tracking-deploy-pending').exists())
+        self.assertEqual((self.repo / 'backend/app.php').read_text(), 'local backend\n')
+
+    def test_backup_occurs_after_http_drain_and_before_source_or_schema_change(self):
+        result = self.deploy()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        calls = self.call_log.read_text()
+        stop = calls.index('docker compose stop --timeout 120 backend')
+        dump = calls.index('pg_dump')
+        archive = calls.index('/backend.tar.gz')
+        start = calls.index('docker compose up -d')
+        migration = calls.index('php artisan migrate --force')
+        resume = calls.index('php artisan up')
+        self.assertLess(stop, dump)
+        self.assertLess(stop, archive)
+        self.assertLess(dump, start)
+        self.assertLess(archive, start)
+        self.assertLess(migration, resume)
+
+    def test_failed_migration_blocks_a_retry_before_any_service_or_database_calls(self):
+        self.env['TEST_FAIL_MIGRATION'] = '1'
+        result = self.deploy()
+        self.assertNotEqual(result.returncode, 0)
+        marker = self.repo / '.git/tracking-deploy-pending'
+        self.assertTrue(marker.exists())
+        stages = list((self.base / 'builds').glob('build.*'))
+        self.assertEqual(len(stages), 1)
+        self.assertTrue((stages[0] / 'frontend/.next/BUILD_ID').exists())
+        calls = self.call_log.read_text()
+        retry = self.deploy(mode='')
+        self.assertNotEqual(retry.returncode, 0)
+        self.assertIn('needs recovery review', retry.stderr)
+        self.assertEqual(self.call_log.read_text(), calls)
+        self.assertTrue((self.repo / 'backend/storage/upload.txt').exists())
+
+    def assert_failed_health_preserves_recovery(self, failure):
+        self.env['TEST_HEALTH_FAILURE'] = failure
+        result = self.deploy()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('Health check failed', result.stderr)
+        self.assertEqual((self.frontend / '.next/BUILD_ID').read_text(), 'old build\n')
+        self.assertTrue((self.repo / '.git/tracking-deploy-pending').exists())
+        self.assertTrue(list((self.base / 'builds').glob('*/failed-.next/BUILD_ID')))
+        self.assertTrue((self.repo / 'backend/storage/upload.txt').exists())
+
+    def test_health_rejects_html_in_place_of_regions_json(self):
+        self.assert_failed_health_preserves_recovery('html')
+
+    def test_health_rejects_an_unauthenticated_endpoint_returning_200(self):
+        self.assert_failed_health_preserves_recovery('auth')
+
+    def test_health_rejects_a_login_redirect_instead_of_the_actual_page(self):
+        self.assert_failed_health_preserves_recovery('redirect')
 
     def test_ssh_bootstrap_preserves_payload_and_arguments(self):
         workflow = SCRIPT.parents[1] / '.github/workflows/deploy.yml'

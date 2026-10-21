@@ -26,6 +26,11 @@ cd "$repo"
 test -f backend/.env
 test -d backend/storage
 test -d "$frontend"
+recovery_marker=$(git rev-parse --git-path tracking-deploy-pending)
+if [[ -f "$recovery_marker" ]]; then
+  echo "An earlier deployment needs recovery review: $recovery_marker. No deployment was started." >&2
+  exit 1
+fi
 if [[ "$mode" != --replace-vps ]] && [[ -n "$(git status --porcelain -- backend docker-compose.yml)" ]]; then
   echo 'Backend source has local changes. Reconcile and back them up before deploying.' >&2
   exit 1
@@ -33,6 +38,8 @@ fi
 systemctl cat "$service" >/dev/null
 docker compose config --quiet
 docker compose exec -T backend php -v >/dev/null < /dev/null
+# Refuse to override maintenance deliberately enabled by an operator.
+docker compose exec -T backend php -r 'try { $app=require "bootstrap/app.php"; $app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap(); exit($app->isDownForMaintenance() ? 1 : 0); } catch (Throwable $e) { fwrite(STDERR, "Backend preflight failed.\n"); exit(1); }' < /dev/null
 # Avoid overwriting a frontend checkout with local source modifications.
 frontend_repo=$(git -C "$frontend" rev-parse --show-toplevel)
 if [[ "$mode" != --replace-vps ]] && [[ -n "$(git -C "$frontend_repo" status --porcelain -- frontend)" ]]; then
@@ -61,10 +68,41 @@ fi
 
 check_health() {
   systemctl is-active --quiet "$service"
-  for path in /login /api/regions/provinces; do
-    curl --fail --silent --show-error --connect-timeout 10 --max-time 30 \
-      --retry 8 --retry-delay 3 --retry-connrefused "$url$path" -o /dev/null
+  local body status path expected kind
+  body=$(mktemp)
+  for kind in page regions auth; do
+    case "$kind" in
+      page) path=/login; expected=200 ;;
+      regions) path=/api/regions/provinces; expected=200 ;;
+      auth) path=/api/me; expected=401 ;;
+    esac
+    if ! status=$(curl --silent --show-error --connect-timeout 10 --max-time 30 \
+      --retry 8 --retry-delay 3 --retry-connrefused --output "$body" --write-out '%{http_code}' "$url$path"); then
+      rm -f "$body"
+      return 1
+    fi
+    if [[ "$status" != "$expected" ]]; then
+      echo "Health check failed: $path returned HTTP $status (expected $expected)." >&2
+      rm -f "$body"
+      return 1
+    fi
+    if ! node - "$body" "$kind" <<'NODE'
+const fs = require('node:fs');
+const [file, kind] = process.argv.slice(2);
+if (kind !== 'page') {
+  try {
+    const data = JSON.parse(fs.readFileSync(file, 'utf8'));
+    if (kind === 'regions' ? !Array.isArray(data) : data?.message !== 'Unauthenticated.') process.exit(1);
+  } catch { process.exit(1); }
+}
+NODE
+    then
+      echo "Health check failed: $path did not return the expected API contract." >&2
+      rm -f "$body"
+      return 1
+    fi
   done
+  rm -f "$body"
 }
 # Workflow/docs-only changes need no application rebuild or service restart.
 if [[ -z "$mode" ]] && git diff --quiet HEAD "$sha" -- backend docker-compose.yml \
@@ -78,7 +116,16 @@ fi
 
 mkdir -p "${DEPLOY_BUILD_ROOT:-/opt/tracking-tiang-builds}"
 stage=$(mktemp -d "${DEPLOY_BUILD_ROOT:-/opt/tracking-tiang-builds}/build.XXXXXX")
-trap 'rm -rf "$stage"' EXIT
+live_change_started=0
+cleanup() {
+  local status=$?
+  if [[ "$status" = 0 ]] || { [[ "$live_change_started" = 0 ]] && [[ ! -f "$recovery_marker" ]]; }; then
+    rm -rf "$stage"
+  else
+    echo "Retained deployment artifacts for recovery: $stage" >&2
+  fi
+}
+trap cleanup EXIT
 git archive "$sha" frontend backend | tar -x -C "$stage"
 # Preserve server-specific build configuration without printing its contents.
 for envfile in .env .env.local .env.production .env.production.local; do
@@ -100,21 +147,24 @@ git -C "$frontend_repo" diff --binary > "$backup/frontend-working.patch"
 git -C "$frontend_repo" diff --cached --binary > "$backup/frontend-index.patch"
 cp docker-compose.yml "$backup/docker-compose.yml"
 docker inspect tracking-tiang-backend --format '{{.Image}}' > "$backup/php-image-id"
-tar --exclude=node_modules --exclude=.git --exclude=.gradle --exclude=./.next/cache \
-  --exclude=./android/app/build --exclude=./android/build \
-  -czf "$backup/frontend.tar.gz" -C "$frontend" .
-tar --exclude=vendor --exclude=backend/storage/logs --exclude=backend/storage/framework \
-  -czf "$backup/backend.tar.gz" backend
-# Backup must succeed before database migrations or source changes.
-docker compose exec -T postgres sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc' > "$backup/database.dump" < /dev/null
-test -s "$backup/database.dump"
-docker compose exec -T postgres pg_restore --list < "$backup/database.dump" > /dev/null
-
-# From here failures can require operator recovery; print the backup location.
+# Restore the old runtime only while source/schema are still unchanged.
 frontend_swapping=0
+backend_paused=0
 on_error() {
   status=$?
   trap - ERR
+  printf 'state=failed\n' >> "$recovery_marker"
+  if [[ "$live_change_started" = 0 && "$backend_paused" = 1 ]]; then
+    if docker compose start backend && docker compose exec -T backend php artisan up < /dev/null; then
+      rm -f "$recovery_marker"
+    else
+      echo 'Old backend could not be resumed; recovery review is required.' >&2
+    fi
+  elif [[ "$live_change_started" = 1 ]]; then
+    # Fail closed after schema/source changes: do not allow further HTTP writes
+    # and do not roll back the database or automatically revert backend code.
+    docker compose exec -T backend php artisan down --retry=60 < /dev/null || true
+  fi
   if [[ "$frontend_swapping" = 1 ]]; then
     for item in .next node_modules; do
       if [[ -d "$stage/previous-$item" ]]; then
@@ -130,6 +180,25 @@ on_error() {
   exit "$status"
 }
 trap on_error ERR
+# Journal BEFORE changing source: an interrupted rollout cannot silently become
+# a docs-only retry that skips dependency installation and migrations.
+printf 'sha=%s\nbackup=%s\nstage=%s\nstate=preparing-backup\n' "$sha" "$backup" "$stage" > "$recovery_marker"
+backend_paused=1
+docker compose exec -T backend php artisan down --retry=60 < /dev/null
+# Official php:fpm uses SIGQUIT. Drain in-flight requests before the DB/file snapshot.
+docker compose stop --timeout 120 backend
+tar --exclude=node_modules --exclude=.git --exclude=.gradle --exclude=./.next/cache \
+  --exclude=./android/app/build --exclude=./android/build \
+  -czf "$backup/frontend.tar.gz" -C "$frontend" .
+tar --exclude=vendor --exclude=backend/storage/logs --exclude=backend/storage/framework \
+  -czf "$backup/backend.tar.gz" backend
+# Backup must succeed before database migrations or source changes.
+docker compose exec -T postgres sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc' > "$backup/database.dump" < /dev/null
+test -s "$backup/database.dump"
+docker compose exec -T postgres pg_restore --list < "$backup/database.dump" > /dev/null
+
+live_change_started=1
+printf 'state=changing-source\n' >> "$recovery_marker"
 if [[ "$mode" = --replace-vps ]]; then
   # Explicit first-run choice by the owner; backups above must succeed first.
   git checkout --force --detach "$sha"
@@ -147,6 +216,7 @@ docker compose exec -T backend php artisan optimize:clear < /dev/null
 docker compose exec -T backend php artisan config:cache < /dev/null
 docker compose exec -T backend php artisan queue:restart < /dev/null
 docker compose restart backend
+docker compose exec -T backend php artisan up < /dev/null
 
 # Only stop the frontend after the replacement build is ready.
 systemctl stop "$service"
@@ -158,6 +228,7 @@ for item in .next node_modules; do
   mv "$stage/frontend/$item" "$frontend/$item"
 done
 systemctl start "$service"
-frontend_swapping=0
 check_health
+frontend_swapping=0
+rm -f "$recovery_marker"
 echo "Deployed $sha. Recovery files: $backup"

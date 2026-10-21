@@ -19,7 +19,7 @@ export default defineConfig([
   ]),
 
   {
-    files: ['tests/**/*.mjs'],
+    files: ['tests/**/*.mjs', 'lib/upstream.mjs', 'next.config.mjs'],
     extends: [js.configs.recommended],
     languageOptions: { globals: globals.node },
   },
