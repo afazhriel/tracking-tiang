@@ -106,6 +106,8 @@ class LegacyPoleWorkItemsTest extends TestCase
     {
         [$progress, $history] = $this->records();
         $copy = $this->pole->workItems()->create(['project_id' => $this->project->id, 'source_item_id' => $this->template->id, 'name' => 'Manual name', 'weight_percent' => 100]);
+        $this->getJson($this->url)->assertOk()->assertJsonCount(2, 'data')->assertJsonPath('meta.needs_reconciliation', true);
+        $this->assertDatabaseCount('work_items', 2);
         $this->patchJson($this->url.'/'.$copy->id, ['sequence' => 2])->assertOk();
         $this->assertSame(1, $this->pole->workItems()->count());
         $this->assertSame($copy->id, $progress->fresh()->work_item_id);

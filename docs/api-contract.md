@@ -79,9 +79,11 @@ project sudah terdaftar, sehingga ketiadaan alternatif ini berbeda dari gap waji
 
 ### Pekerjaan per tiang dan kompatibilitas data
 
-GET per tiang mengembalikan `{data:[workItem],meta:{total_weight,is_balanced,inherited}}`.
+GET per tiang mengembalikan `{data:[workItem],meta:{total_weight,is_balanced,inherited,needs_reconciliation,can_manage}}`.
 Tiang lama tanpa scoped item/penanda kustomisasi membaca template secara virtual;
-GET tidak menulis ke database. Tiang baru mendapat salinan template dalam transaksi
+GET tidak menulis ke database. Pada partial backfill, item legacy yang masih punya
+referensi ikut dikirim dan needs_reconciliation=true; tidak disembunyikan dari
+daftar. can_manage mencerminkan policy updateProgress untuk tombol editor. Tiang baru mendapat salinan template dalam transaksi
 pembuatan tiang. POST menambah item, PUT memerlukan name + weight_percent, PATCH
 menerima sebagian field. Name unik di kelompok yang sama (project template atau
 satu pole), weight_percent 0–100, sequence >=0 (null menjadi 0), durasi >=0,

@@ -57,6 +57,8 @@ update, delete, rename atau drop di up(). Migration historis tidak diedit.
 
 Down kedua migration sengaja mempertahankan schema/data. Jika aplikasi perlu
 dikembalikan, pulihkan kode/image sesuai prosedur deploy dan biarkan kolom tambahan.
+Versi kode untuk pemulihan harus memahami scoped items; kode lama yang hanya
+membaca template belum tentu menampilkan data per tiang dengan benar.
 Jangan menjalankan rollback migration lama 2026_10_17 pada produksi: down lama bisa
 menghapus item manual. CI menguji fresh install, schema GitHub lama, tambahan
 historis, partial backfill, item manual, inbox yang sudah dibaca, dan panggilan
@@ -64,7 +66,9 @@ up/down baru berulang pada PostgreSQL terisolasi.
 
 Saat pengguna secara eksplisit mengubah pekerjaan satu tiang, template lama yang
 masih dipakai progres/histori/foto ditautkan ke salinan tiang dalam transaksi yang
-sama. Jika validasi gagal, seluruh penyalinan/penautan dibatalkan. Jika template dan
+sama. Pembacaan partial backfill juga menampilkan item legacy yang masih memiliki
+referensi, tanpa mutasi saat GET. Editor memakai izin can_manage dari policy tiang.
+Jika validasi gagal, seluruh penyalinan/penautan dibatalkan. Jika template dan
 salinan memiliki dua state progres, respons 409 mempertahankan keduanya untuk
 rekonsiliasi manual di tahap berikutnya. Item manual tidak dihapus oleh apply-template.
 

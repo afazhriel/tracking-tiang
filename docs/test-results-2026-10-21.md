@@ -6,7 +6,7 @@ SSH, migration produksi, merge main, penghapusan data pengguna, atau deploy VPS.
 
 | Pemeriksaan aktual | Hasil |
 | --- | --- |
-| Laravel Unit + Feature, PHP 8.4.26 / PostgreSQL 18 | 151 tes, 430 assertions, lulus; fail-on-warning/risky aktif |
+| Laravel Unit + Feature, PHP 8.4.26 / PostgreSQL 18 | 151 tes, 438 assertions, lulus; fail-on-warning/risky aktif |
 | Kompatibilitas migration PostgreSQL terpisah | 5 tes, 742 assertions, lulus; fail-on-warning/risky/skipped aktif |
 | Kebijakan migration AST terhadap base PR #1 | Lulus; dua migration baru additive; tidak mengubah migration historis |
 | Laravel Pint --test | Lulus, 109 file |

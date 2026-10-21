@@ -36,7 +36,6 @@ import { StatCard, StatCardGrid } from '../../../../components/ui/stat-card'
 import { Table, TableWrap, Td, Th, Tr } from '../../../../components/ui/table'
 import { ErrorNotice, SkeletonRows } from '../../../../components/ui/states'
 import { useProject } from '../../../../lib/project-context'
-import { useCurrentUser } from '../../../../lib/use-current-user'
 import {
   api,
   normalizePole,
@@ -435,9 +434,6 @@ function PekerjaanTiangContent() {
   const poleId = params?.id ?? searchParams?.get('pole') ?? null
   const { projectId } = useProject()
 
-  const currentUser = useCurrentUser()
-  const isAdmin = currentUser?.role === 'admin'
-
   const [createOpen, setCreateOpen] = useState(false)
   const [editing, setEditing] = useState(null)
   const [deletingId, setDeletingId] = useState(null)
@@ -482,6 +478,7 @@ function PekerjaanTiangContent() {
   } = useResource(itemsLoader, [projectId, poleId], { enabled })
 
   const workItems = useMemo(() => data?.items ?? [], [data])
+  const canManage = data?.meta?.can_manage === true
 
   const totalWeight = useMemo(
     () => workItems.reduce((sum, item) => sum + Number(item.weight || 0), 0),
@@ -492,7 +489,7 @@ function PekerjaanTiangContent() {
   const disabledCount = workItems.filter((item) => item.isActive === false).length
 
   async function handleDelete(workItem) {
-    if (!enabled) return
+    if (!enabled || !canManage) return
 
     setDeletingId(workItem.id)
     setActionError(null)
@@ -508,7 +505,7 @@ function PekerjaanTiangContent() {
   }
 
   async function handleApplyTemplate() {
-    if (!enabled || applying) return
+    if (!enabled || !canManage || applying) return
 
     setApplying(true)
     setActionError(null)
@@ -539,14 +536,14 @@ function PekerjaanTiangContent() {
               variant="primary"
               icon={Plus}
               onClick={() => setCreateOpen(true)}
-              disabled={!enabled}
+              disabled={!enabled || !canManage}
             >
               Tambah Item
             </ActionButton>
 
-            {!isAdmin && (
+            {!loading && !canManage && (
               <Badge className="bg-neutral-100 text-neutral-500 ring-neutral-500/20">
-                Hanya admin
+                Hanya lihat
               </Badge>
             )}
           </>
@@ -582,13 +579,20 @@ function PekerjaanTiangContent() {
           value={
             loading
               ? '…'
-              : String(workItems.filter((item) => item.sourceItemId).length)
+              : String(workItems.filter((item) => item.sourceItemId || item.poleId === null).length)
           }
           hint="Item yang berasal dari template project"
           Icon={ClipboardList}
           tone="blue"
         />
       </StatCardGrid>
+
+      {data?.meta?.needs_reconciliation && (
+        <div role="status" className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+          Sebagian progres lama masih memakai daftar pekerjaan sebelumnya. Catatan dan foto tetap tersedia.
+          Terapkan template untuk menyelaraskan; konflik progres akan ditampilkan tanpa menghapus catatan.
+        </div>
+      )}
 
       {(error || actionError) && (
         <ErrorNotice
@@ -610,7 +614,7 @@ function PekerjaanTiangContent() {
             <div>
               <CardTitle>Daftar Item Pekerjaan Tiang</CardTitle>
               <CardDescription>
-                Sumber data: GET /api/projects/{'{id}'}/poles/{'{pole}'}/work-items
+                Perubahan daftar ini hanya berlaku untuk tiang yang dipilih.
               </CardDescription>
             </div>
           </div>
@@ -629,7 +633,7 @@ function PekerjaanTiangContent() {
             <ActionButton
               onClick={handleApplyTemplate}
               icon={Wand2}
-              disabled={applying || loading}
+              disabled={applying || loading || !canManage}
             >
               {applying ? 'Menerapkan...' : 'Terapkan Template'}
             </ActionButton>
@@ -691,12 +695,12 @@ function PekerjaanTiangContent() {
                       <Td align="center">
                         <Badge
                           className={
-                            item.sourceItemId
+                            (item.sourceItemId || item.poleId === null)
                               ? 'bg-lagoon-50 text-lagoon-700 ring-lagoon-600/20'
                               : 'bg-neutral-100 text-neutral-500 ring-neutral-500/20'
                           }
                         >
-                          {item.sourceItemId ? 'Template' : 'Khusus'}
+                          {item.sourceItemId || item.poleId === null ? 'Template' : 'Khusus'}
                         </Badge>
                       </Td>
 
@@ -717,6 +721,7 @@ function PekerjaanTiangContent() {
                           <button
                             type="button"
                             onClick={() => setEditing(item)}
+                            disabled={!canManage}
                             aria-label={`Ubah ${item.name}`}
                             title="Ubah"
                             className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-neutral-200 text-neutral-500 transition-colors hover:bg-canvas hover:text-neutral-800"
@@ -727,7 +732,7 @@ function PekerjaanTiangContent() {
                           <button
                             type="button"
                             onClick={() => handleDelete(item)}
-                            disabled={deletingId === item.id}
+                            disabled={deletingId === item.id || !canManage}
                             aria-label={`Hapus ${item.name}`}
                             title="Hapus"
                             className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-clay-200 text-clay-600 transition-colors hover:bg-clay-50 disabled:opacity-50"
@@ -752,7 +757,7 @@ function PekerjaanTiangContent() {
                     variant="primary"
                     icon={Plus}
                     onClick={() => setCreateOpen(true)}
-                    disabled={!enabled}
+                    disabled={!enabled || !canManage}
                   >
                     Tambah Item
                   </ActionButton>

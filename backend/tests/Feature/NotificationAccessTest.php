@@ -34,6 +34,8 @@ class NotificationAccessTest extends TestCase
             $this->assertDatabaseMissing('notifications', ['user_id' => $user->id]);
         }
         $this->assertLessThanOrEqual(255, mb_strlen(Notification::first()->title));
+        $this->actingAs($manager, 'sanctum')->getJson("/api/projects/{$project->id}/poles/{$pole->id}/work-items")->assertOk()->assertJsonPath('meta.can_manage', false);
+        $this->actingAs($assigned, 'sanctum')->getJson("/api/projects/{$project->id}/poles/{$pole->id}/work-items")->assertOk()->assertJsonPath('meta.can_manage', true);
         $this->actingAs($unassigned, 'sanctum')->getJson("/api/projects/{$project->id}/activities?pole_id={$pole->id}")->assertForbidden();
         $this->getJson("/api/projects/{$project->id}/activities")->assertOk()->assertJsonCount(0, 'data');
         $this->getJson("/api/projects/{$project->id}/poles/{$pole->id}/curve")->assertForbidden();

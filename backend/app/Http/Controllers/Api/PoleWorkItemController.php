@@ -20,10 +20,13 @@ class PoleWorkItemController extends Controller
     {
         $this->scope($project, $pole, 'view');
         $items = $this->items->visible($pole);
+        $inherited = ! $pole->workItems()->exists() && $pole->work_items_customized_at === null;
 
         return response()->json(['data' => $items, 'meta' => [
             ...$this->items->meta($items),
-            'inherited' => ! $pole->workItems()->exists() && $pole->work_items_customized_at === null,
+            'inherited' => $inherited,
+            'needs_reconciliation' => ! $inherited && $items->contains(fn ($item) => $item->pole_id === null),
+            'can_manage' => request()->user()->can('updateProgress', $pole),
         ]]);
     }
 
