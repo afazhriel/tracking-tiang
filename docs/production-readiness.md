@@ -2,6 +2,9 @@
 
 Status saat menyiapkan PR tambahan: **NOT READY untuk aktivasi produksi**.
 Main c547c48 belum berisi quality gates dan GitHub melaporkan protected=false.
+Environment production juga belum punya reviewer rules/deployment branch policy;
+metadata ini dapat dibaca, sedangkan detail branch protection/secrets mengembalikan
+403. Tidak ada pengaturan produksi yang diubah.
 PR #1 (0c0c4b2) dan #2 (4b70d91) tetap terbuka, mergeable dan checks hijau.
 PR #3 memperkuat deployment/proxy; PR upload berbasis #3. Tidak ada perubahan main,
 akses SSH, perubahan konfigurasi VPS, deploy, migration atau restore produksi.
@@ -69,7 +72,10 @@ penulisan lokal maksimal 25 MiB; stress multi-worker belum dilakukan.
 
 1. Pemilik mengaktifkan required PR, **Quality gate**, branch up to date, review
    conversations, larangan force push/delete, serta production environment main-only.
-   Detail setting tidak dapat diubah workspace (403). Sesuaikan approval reviewer
+   Detail branch protection/secrets mengembalikan 403. Metadata environment dapat
+   dibaca: production belum punya protection rules atau deployment branch policy.
+   Konfigurasinya tidak diubah karena batasan perubahan produksi dari pemilik.
+   Sesuaikan approval reviewer
    dengan jumlah anggota tim; jangan memberi bypass rutin.
 2. Pause `DEPLOY_ENABLED=false` oleh pemilik sebelum merge rangkaian PR agar commit
    antara tidak langsung deploy. Merge/rebase retarget dilakukan pemilik: #1 → #2

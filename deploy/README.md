@@ -157,8 +157,10 @@ Sebelum merge produksi: aktifkan branch protection/required PR dan `Quality gate
 pause deploy `DEPLOY_ENABLED=false` selama penggabungan rangkaian PR, periksa vhost,
 origin HTTPS/TLS dari VPS, graceful-stop signal PHP-FPM, worker eksternal, ruang
 disk, izin backup serta prosedur restore. Resume deploy dan eksekusi produksi
-memerlukan persetujuan pemilik. Detail protection/environment/secrets tidak dapat
-dikelola oleh kredensial workspace (403); tidak ada secrets yang dibaca/dicetak.
+memerlukan persetujuan pemilik. Detail branch protection dan daftar metadata secrets mengembalikan 403. Metadata
+environment production dapat dibaca: belum ada protection rules/branch policy.
+Konfigurasi environment tidak diubah karena batasan pemilik; tidak ada nilai
+secrets yang dibaca/dicetak.
 
 Konfigurasi Capacitor remote-WebView juga memakai HTTPS pada domain yang sama,
 dengan cleartext=false. App ID/navigasi/arsitektur remote-WebView tetap dipertahankan;
