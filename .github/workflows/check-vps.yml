@@ -95,6 +95,15 @@ jobs:
           ssh -i ~/.ssh/deploy_key -p "${VPS_PORT:-22}" \
             -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=20 \
             "$VPS_USER@$VPS_HOST" "bash -c $escaped_command" < deploy/audit-vps.php
+      - name: Inspect active Nginx site configuration without revealing secrets
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_PORT: ${{ secrets.VPS_PORT }}
+        run: |
+          ssh -i ~/.ssh/deploy_key -p "${VPS_PORT:-22}" \
+            -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=20 \
+            "$VPS_USER@$VPS_HOST" 'bash -s' < deploy/inspect-nginx-vps.sh
       - name: Back up live application on VPS
         if: inputs.backup == true
         env:
