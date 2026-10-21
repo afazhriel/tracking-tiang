@@ -28,6 +28,23 @@ class TeamController extends Controller
             $query->where('status', $request->string('status')->toString());
         }
 
+        /*
+         * Selain admin/supervisor (PIC), daftar hanya menampilkan tim
+         * dari project yang boleh diakses — sejalan dengan `TeamPolicy@view`.
+         * Tanpa ini, PIC bisa melihat seluruh tim lintas project.
+         */
+        $user = $request->user();
+
+        if ($user !== null && ! $user->isAdmin() && ! $user->isSupervisor()) {
+            $projectIds = $user->accessibleProjectIds() ?? [];
+
+            if ($projectIds === []) {
+                $query->whereRaw('1 = 0');
+            } else {
+                $query->whereIn('project_id', $projectIds);
+            }
+        }
+
         return response()->json($query->get());
     }
 

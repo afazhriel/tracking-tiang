@@ -5,14 +5,20 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Pole;
 use App\Models\PoleAssignment;
+use App\Models\ProjectUser;
 use App\Models\Team;
 use App\Models\User;
+use App\Services\NotificationService;
+use App\Services\PoleWorkItems;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 
 class PoleAssignmentController extends Controller
 {
+    public function __construct(private PoleWorkItems $items, private NotificationService $notifications) {}
+
     public function index(User $user): JsonResponse
     {
         abort_unless($this->isAdmin(request()), 403, 'Forbidden.');
@@ -21,7 +27,7 @@ class PoleAssignmentController extends Controller
             ->where('user_id', $user->id)
             ->where('status', PoleAssignment::STATUS_ACTIVE)
             ->with([
-                'pole:id,project_id,name,code',
+                'pole:id,project_id,pole_code,address',
                 'team:id,name,code',
                 'assigner:id,name,email',
             ])
@@ -51,39 +57,27 @@ class PoleAssignmentController extends Controller
             ], 422);
         }
 
-        $existing = PoleAssignment::query()
-            ->where('pole_id', $pole->id)
-            ->where('user_id', $user->id)
-            ->first();
+        abort_if($team && $team->project_id !== null && (int) $team->project_id !== (int) $pole->project_id, 422, 'Tim dan tiang harus berasal dari proyek yang sama.');
 
-        if ($existing) {
-            $existing->update([
-                'team_id' => $team?->id,
-                'assigned_by' => $request->user()->id,
-                'assigned_at' => Carbon::now(),
-                'status' => PoleAssignment::STATUS_ACTIVE,
-            ]);
+        return DB::transaction(function () use ($request, $user, $pole, $team) {
+            $this->items->lock($pole);
+            $existing = PoleAssignment::where('pole_id', $pole->id)->where('user_id', $user->id)->first();
+            abort_if($team && PoleAssignment::where('pole_id', $pole->id)->where('team_id', $team->id)->when($existing, fn ($q) => $q->where('id', '!=', $existing->id))->exists(), 409, 'Tim sudah ditugaskan ke tiang ini.');
+            $assignment = PoleAssignment::updateOrCreate(
+                ['pole_id' => $pole->id, 'user_id' => $user->id],
+                ['team_id' => $team?->id, 'assigned_by' => $request->user()->id, 'assigned_at' => Carbon::now(), 'status' => PoleAssignment::STATUS_ACTIVE]
+            );
+            $recipients = collect([$user])->merge($team?->users ?? []);
+            foreach ($recipients as $member) {
+                ProjectUser::firstOrCreate(['project_id' => $pole->project_id, 'user_id' => $member->id], ['role' => $member->role]);
+            }
+            if ($user->isActive()) {
+                $this->notifications->send($user->id, $pole->project_id, 'sistem', "Anda ditugaskan ke {$pole->pole_code}", 'Tiang ini kini menjadi bagian dari tugas lapangan Anda.', "/tiang/{$pole->id}", ['pole_id' => $pole->id]);
+            }
+            $assignment->load(['pole:id,project_id,pole_code,address', 'user:id,name,email,role,status', 'team:id,name,code', 'assigner:id,name,email']);
 
-            $assignment = $existing;
-        } else {
-            $assignment = PoleAssignment::create([
-                'pole_id' => $pole->id,
-                'user_id' => $user->id,
-                'team_id' => $team?->id,
-                'assigned_by' => $request->user()->id,
-                'assigned_at' => Carbon::now(),
-                'status' => PoleAssignment::STATUS_ACTIVE,
-            ]);
-        }
-
-        $assignment->load([
-            'pole:id,project_id,name,code',
-            'user:id,name,email,role,status',
-            'team:id,name,code',
-            'assigner:id,name,email',
-        ]);
-
-        return response()->json($assignment, $existing ? 200 : 201);
+            return response()->json($assignment, $existing ? 200 : 201);
+        });
     }
 
     public function destroy(

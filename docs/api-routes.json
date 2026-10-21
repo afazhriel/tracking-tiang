@@ -60,6 +60,24 @@
     "active_user": true
   },
   {
+    "method": "POST",
+    "path": "/api/notifications/read-all",
+    "authenticated": true,
+    "active_user": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/notifications/unread-count",
+    "authenticated": true,
+    "active_user": true
+  },
+  {
+    "method": "POST",
+    "path": "/api/notifications/{notification}/read",
+    "authenticated": true,
+    "active_user": true
+  },
+  {
     "method": "GET",
     "path": "/api/photos/{ulid}",
     "authenticated": false,
@@ -127,6 +145,12 @@
   },
   {
     "method": "GET",
+    "path": "/api/projects/{project}/poles/{pole}/curve",
+    "authenticated": true,
+    "active_user": true
+  },
+  {
+    "method": "GET",
     "path": "/api/projects/{project}/poles/{pole}/progress",
     "authenticated": true,
     "active_user": true
@@ -134,6 +158,42 @@
   {
     "method": "POST",
     "path": "/api/projects/{project}/poles/{pole}/progress",
+    "authenticated": true,
+    "active_user": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/projects/{project}/poles/{pole}/work-items",
+    "authenticated": true,
+    "active_user": true
+  },
+  {
+    "method": "POST",
+    "path": "/api/projects/{project}/poles/{pole}/work-items",
+    "authenticated": true,
+    "active_user": true
+  },
+  {
+    "method": "POST",
+    "path": "/api/projects/{project}/poles/{pole}/work-items/apply-template",
+    "authenticated": true,
+    "active_user": true
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/projects/{project}/poles/{pole}/work-items/{workItem}",
+    "authenticated": true,
+    "active_user": true
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/projects/{project}/poles/{pole}/work-items/{workItem}",
+    "authenticated": true,
+    "active_user": true
+  },
+  {
+    "method": "PUT",
+    "path": "/api/projects/{project}/poles/{pole}/work-items/{workItem}",
     "authenticated": true,
     "active_user": true
   },

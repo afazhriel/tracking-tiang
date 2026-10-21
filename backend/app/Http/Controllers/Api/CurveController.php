@@ -21,10 +21,8 @@ class CurveController extends Controller
 
     public function poleCurve(Project $project, Pole $pole): JsonResponse
     {
-        $this->authorize('view', $project);
-
-        // Ensure pole belongs to project
         abort_unless((int) $pole->project_id === (int) $project->id, 404);
+        $this->authorize('view', $pole);
 
         return $this->buildCurveResponse($project, $pole);
     }
@@ -181,7 +179,7 @@ class CurveController extends Controller
         }
 
         $histories = $historiesQuery
-            ->orderBy('recorded_at')
+            ->orderBy('recorded_at')->orderBy('id')
             ->get();
 
         /*
@@ -204,7 +202,7 @@ class CurveController extends Controller
                 $currentState[$history->pole_id][$history->work_item_id] = [
                     'progress_percent' => (float) $history->progress_percent,
                     'work_item_id' => $history->work_item_id,
-                    'weight_percent' => (float) ($history->workItem->weight_percent ?? 0),
+                    'weight_percent' => (float) ($history->weight_percent_snapshot ?? $history->workItem->weight_percent ?? 0),
                 ];
             }
 
@@ -248,9 +246,9 @@ class CurveController extends Controller
                 : 0;
         } else {
             // All poles progress (project level)
-            $registeredPoles = $project->poles()->count();
-
             $totalPoleProgress = 0;
+
+            $project->load('poles.workProgress.workItem');
 
             foreach ($project->poles as $p) {
                 $p->loadMissing('workProgress.workItem');

@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\PhotoController;
 use App\Http\Controllers\Api\PoleAssignmentController;
 use App\Http\Controllers\Api\PoleController;
+use App\Http\Controllers\Api\PoleWorkItemController;
 use App\Http\Controllers\Api\ProgressController;
 use App\Http\Controllers\Api\ProjectController;
 use App\Http\Controllers\Api\RegionController;
@@ -23,14 +24,14 @@ use Illuminate\Support\Facades\Route;
 |--------------------------------------------------------------------------
 */
 
-Route::post('/login', [AuthController::class, 'login']);
+Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:login');
 
 /*
  * Pendaftaran mandiri (self sign-up).
  * Akun dibuat dengan status `pending` + role default (pic);
  * admin menyetujui lewat `PATCH /api/users/{user}/status`.
  */
-Route::post('/register', [AuthController::class, 'register']);
+Route::post('/register', [AuthController::class, 'register'])->middleware('throttle:login');
 
 /*
  * Invitation preview/accept.
@@ -113,19 +114,31 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
     Route::patch('/projects/{project}/work-items/{workItem}', [WorkItemController::class, 'update']);
     Route::delete('/projects/{project}/work-items/{workItem}', [WorkItemController::class, 'destroy']);
 
+    /* Pekerjaan independen per tiang. */
+    Route::get('/projects/{project}/poles/{pole}/work-items', [PoleWorkItemController::class, 'index']);
+    Route::post('/projects/{project}/poles/{pole}/work-items', [PoleWorkItemController::class, 'store']);
+    Route::post('/projects/{project}/poles/{pole}/work-items/apply-template', [PoleWorkItemController::class, 'applyTemplate']);
+    Route::put('/projects/{project}/poles/{pole}/work-items/{workItem}', [PoleWorkItemController::class, 'update']);
+    Route::patch('/projects/{project}/poles/{pole}/work-items/{workItem}', [PoleWorkItemController::class, 'update']);
+    Route::delete('/projects/{project}/poles/{pole}/work-items/{workItem}', [PoleWorkItemController::class, 'destroy']);
+
     /* Progress */
     Route::get('/projects/{project}/poles/{pole}/progress', [ProgressController::class, 'index']);
     Route::post('/projects/{project}/poles/{pole}/progress', [ProgressController::class, 'store']);
 
     /* Kurva S */
     Route::get('/projects/{project}/curve', [CurveController::class, 'show']);
+    Route::get('/projects/{project}/poles/{pole}/curve', [CurveController::class, 'poleCurve']);
 
     /* Aktivitas lapangan — bersumber dari histori progress tiang. */
     Route::get('/projects/{project}/activities', [ActivityController::class, 'index']);
 
-    /* Notifikasi — disintesis dari progress & histori yang ada. */
-    Route::get('/projects/{project}/notifications', [NotificationController::class, 'index']);
+    /* Notifikasi tersimpan milik pengguna. */
+    Route::get('/projects/{project}/notifications', [NotificationController::class, 'projectIndex']);
     Route::get('/notifications', [NotificationController::class, 'index']);
+    Route::get('/notifications/unread-count', [NotificationController::class, 'unreadCount']);
+    Route::post('/notifications/read-all', [NotificationController::class, 'markAllRead']);
+    Route::post('/notifications/{notification}/read', [NotificationController::class, 'markRead']);
 
     /*
      * Team management.

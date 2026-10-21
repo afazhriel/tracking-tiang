@@ -139,7 +139,7 @@ function PekerjaanContent() {
   const itemsLoader = useCallback(async () => {
     if (!projectId) return { items: [], meta: null }
 
-    const payload = await api.listWorkItems(projectId)
+    const payload = await api.listWorkItemsAggregate(projectId)
 
     return {
       items: unwrapList(payload).map(normalizeWorkItem),
@@ -220,10 +220,12 @@ function PekerjaanContent() {
     [backendDenominator, progressByWorkItem, registeredPoleCount]
   )
 
-  const hasProgressData = hasBackendAggregate || hasSynced
+  const hasProgressData = itemsData?.meta?.actual_current_percent != null || hasBackendAggregate || hasSynced
 
   const overallProgress = useMemo(() => {
     if (!hasProgressData) return null
+
+    if (itemsData?.meta?.actual_current_percent != null) return Number(itemsData.meta.actual_current_percent)
 
     if (hasBackendAggregate) {
       const total = workItems.reduce((sum, item) => {
@@ -248,7 +250,7 @@ function PekerjaanContent() {
     const weight = active.reduce((sum, item) => sum + item.weight, 0)
 
     return weight ? total / weight : null
-  }, [hasBackendAggregate, hasProgressData, progressByWorkItem, workItems])
+  }, [hasBackendAggregate, hasProgressData, itemsData, progressByWorkItem, workItems])
 
   const activeCount = workItems.filter((item) => {
     const value = progressValue(item)

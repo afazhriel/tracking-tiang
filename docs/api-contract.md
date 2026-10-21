@@ -2,7 +2,7 @@
 
 Base path `/api`. Kirim `Accept: application/json`; JSON request memakai
 `Content-Type: application/json`. Endpoint protected memerlukan
-`Authorization: Bearer <token>` dan akun aktif. Daftar lengkap 56 kombinasi
+`Authorization: Bearer <token>` dan akun aktif. Daftar lengkap 66 kombinasi
 method/path beserta auth/active policy ada di [api-routes.json](api-routes.json).
 `ApiContractTest` memeriksa inventaris terhadap route Laravel dan memastikan
 seluruh 46 endpoint protected mengembalikan 401 tanpa token.
@@ -31,9 +31,9 @@ seluruh 46 endpoint protected mengembalikan 401 tanpa token.
 | Pekerjaan proyek | GET/POST .../work-items; GET/PUT/PATCH/DELETE .../work-items/{workItem}; POST .../work-items/normalize | name,weight_percent,sequence,jadwal; bobot dinormalisasi; index memberi actual_progress/weighted_contribution dan meta bobot |
 | Progres | GET/POST .../poles/{pole}/progress | work_item_id dan progress_percent 0–100; started_at/completed_at/notes opsional; POST memperbarui state dan menambah histori |
 | Foto | multipart pada POST progress; GET /photos/{ulid} | maksimal 5 foto, jpg/jpeg/png/webp, 5120 KB per foto; respons memuat photos; GET mengembalikan file/gambar, bukan JSON |
-| Kurva S | GET /projects/{project}/curve | `{project,planned_curve,actual_curve,actual_current_percent,registered_poles}`; menangani schema lama tanpa pole_id dan schema tambahan lama |
+| Kurva S | GET /projects/{project}/curve; GET .../poles/{pole}/curve | `{project,planned_curve,actual_curve,actual_current_percent,registered_poles}`; menangani schema lama tanpa pole_id dan schema tambahan lama |
 | Aktivitas | GET /projects/{project}/activities | filter pole_id; histori mencakup foto; route terikat project dan authorization |
-| Notifikasi | GET /notifications; GET /projects/{project}/notifications | `{data,meta:{total,unread,project}}`; implementasi saat ini masih sintetis, bukan inbox tersimpan |
+| Notifikasi | GET /notifications; GET /projects/{project}/notifications | `{data,meta:{total,unread,project}}`; inbox tersimpan milik user yang login; pagination limit 1–100 (default 50), page >=1 |
 | Tim | GET/POST /teams; GET/PUT/PATCH /teams/{team}; POST /teams/{team}/members; DELETE .../members/{user} | name/code/project_id/status; anggota dikirim user_id; list array langsung; hak akses melalui TeamPolicy |
 | Penugasan | GET/POST /users/{user}/poles; DELETE .../poles/{pole} | Penugasan tiang ke pengguna; validasi/otorisasi pada controller |
 | Wilayah | GET /regions/provinces; GET /regions/provinces/{province}/regencies; GET /regions/regencies/{regency}/districts; GET /regions/districts/{district}/villages | Publik, array id/nama, ID wilayah string; data master perlu disiapkan tersendiri |
@@ -57,9 +57,9 @@ ke signed URL/akses privat memerlukan keputusan kontrak tersendiri.
 Ada regression test perubahan akun, multipart, validasi Laravel, pilihan project
 notifikasi dan akses PIC ke project notifikasi sendiri/penolakan project lain.
 
-## Gap yang harus diselesaikan pada tahap API
+## Endpoint per tiang dan inbox yang telah direkonsiliasi
 
-Helper frontend menargetkan sembilan kombinasi method/path yang belum terdaftar:
+Sembilan kombinasi berikut sudah tersedia pada branch review dan diintegrasikan setelah diperiksa. PATCH pekerjaan per tiang juga didukung:
 
 | Method | Path relatif terhadap /api |
 | --- | --- |
@@ -77,23 +77,102 @@ Tiga URL fallback juga belum terdaftar: GET .../poles/{pole}/activities,
 GET .../activity-logs dan GET /activities. Fallback primer aktivitas berbasis
 project sudah terdaftar, sehingga ketiadaan alternatif ini berbeda dari gap wajib.
 
-Pekerjaan per tiang memerlukan model/relasi dan migration yang konsisten antara
-instalasi baru dan schema lama. Sekadar menambahkan route tidak cukup:
-CurveController::poleCurve sudah ada tetapi relasi Pole::workItems belum ada.
-Parameter scope=project/aggregate saat ini belum membedakan query backend.
+### Pekerjaan per tiang dan kompatibilitas data
 
-Notifikasi sintetis menandai tiga histori terbaru sebagai unread berdasarkan
-posisi, bukan status baca pengguna. Frontend badge memanggil unread-count yang
-belum ada. Tahap API perlu inbox per pengguna, pembatasan scope, dan test
-cross-user untuk mark-read/count, sekaligus mempertahankan data notifications lama.
+GET per tiang mengembalikan `{data:[workItem],meta:{total_weight,is_balanced,inherited}}`.
+Tiang lama tanpa scoped item/penanda kustomisasi membaca template secara virtual;
+GET tidak menulis ke database. Tiang baru mendapat salinan template dalam transaksi
+pembuatan tiang. POST menambah item, PUT memerlukan name + weight_percent, PATCH
+menerima sebagian field. Name unik di kelompok yang sama (project template atau
+satu pole), weight_percent 0–100, sequence >=0 (null menjadi 0), durasi >=0,
+bulan rencana 1–60 dengan akhir >= awal, is_active boolean. Field scope/project
+atau source dari klien diabaikan; server menentukan parent dan sumber.
+
+Perubahan scope tiang memakai policy updateProgress; pembacaan memakai view tiang.
+Item project/pole yang tidak cocok mengembalikan 404; izin gagal 403; validasi 422.
+Item dengan progres, histori atau foto tidak bisa dihapus (409); template dengan
+salinan juga dilindungi. Menonaktifkan item mempertahankan data. Normalisasi
+melibatkan seluruh item kelompok, sesuai perilaku sebelumnya; is_active mengatur
+visibilitas pekerjaan berjalan, bukan menghapus kontribusi historis.
+
+Saat edit eksplisit pada tiang lama, service menyalin/menautkan progres, histori dan
+foto secara atomik. Partial backfill diperiksa per tiang. Dua state progres untuk
+template/salinan tidak ditimpa: 409, data tetap ada. Apply-template menambah sumber
+yang belum ada dan menyegarkan salinan tanpa record; item manual dan item lama tidak
+dihapus. Seluruh bobot kelompok dinormalisasi kembali ke 100%; snapshot bobot
+menjaga titik histori sebelum perubahan. Menghapus item terakhir yang belum punya
+record meninggalkan daftar kosong, tanpa mewarisi template kembali.
+
+GET project work-items menerima scope=project (default), aggregate atau pole
+(dengan pole_id wajib). Project/aggregate menampilkan satu baris per template,
+termasuk progres legacy dan scoped copies. weighted_contribution memakai bobot
+item aktual, bukan bobot template dikali rata-rata persentase. Meta memuat
+progress_denominator, custom_weighted_contribution dan actual_current_percent.
+Kontribusi template + custom sama dengan progres proyek Kurva S; UI memakai total
+backend. Data pekerjaan custom dikelola pada halaman tiang, bukan dihapus dari data.
+
+POST progress menerima template ID untuk tiang legacy. Setelah dikustomisasi,
+ID template dipetakan ke salinan milik tiang itu. ID item tiang lain ditolak 404;
+konflik partial backfill 409. Histori baru menyimpan snapshot bobot. Perubahan
+pekerjaan/progres diserialisasikan dengan lock project lalu pole di transaksi.
+Foto tetap disimpan setelah transaksi progres, mengikuti kontrak sebelumnya;
+kegagalan storage dapat meninggalkan progres tanpa foto dan harus ditangani klien.
+
+Kurva S project mempertahankan angka agregat seluruh proyek, sedangkan route tiang
+menggunakan izin view tiang. Aktualitas histori memakai snapshot bila tersedia;
+actual_current_percent memakai bobot terkini, sehingga bisa berbeda setelah bobot
+diubah. Penolakan akses berlaku pula pada filter aktivitas pole_id; daftar aktivitas
+hanya memuat tiang yang dapat dilihat user.
+
+### Inbox tersimpan
+
+GET /notifications menampilkan seluruh inbox pribadi, tidak hanya project pertama.
+GET scoped project memeriksa izin proyek dan memfilter project_id. Meta total
+menghitung seluruh hasil, unread menghitung seluruh hasil belum dibaca, dan page/
+per_page menunjukkan pagination. Urutan created_at DESC, id DESC.
+
+- GET /notifications/unread-count → `{data:{unread},meta:{unread}}` pribadi.
+- POST /notifications/{notification}/read → `{message,data:notification}`;
+  idempotent, timestamp lama dipertahankan; milik user lain 403, tidak ada 404.
+- POST /notifications/read-all → `{message,data:{updated}}`; body project_id
+  opsional membatasi satu proyek dengan policy view. Tanpa project_id mencakup
+  seluruh inbox sendiri. Tidak mengubah notifikasi user lain atau timestamp read lama.
+
+Payload notification: id numerik, category/title/description/href/data,
+created_at/read_at ISO atau null, dan is_read boolean. Progres membuat
+notifikasi hanya untuk penerima aktif yang memiliki akses view ke tiang, kecuali
+pelaku. Selesai 100% seluruh bobot tiang menambah kategori aktivitas. Membaca daftar
+tidak membuat notifikasi sintetis atau mengubah status baca. Inbox lama dipertahankan
+migration; histori lama tidak dibroadcast ulang. Tidak ada email/push eksternal dari
+NotificationService.
+
+### Penugasan dan pembatasan request
+
+Assignment admin memeriksa proyek tim sesuai proyek tiang. Response memuat
+pole.id/project_id/pole_code/address, tidak memakai kolom name/code yang tidak ada.
+Assignment dan penambahan keanggotaan proyek berlangsung dalam satu transaksi;
+role pivot yang sudah ada tidak ditimpa. Pencabutan assignment mengubah status
+menjadi revoked; record tidak dihapus, dan keanggotaan proyek tetap berdiri sendiri.
+Penugasan team/pole yang sudah dimiliki record lain menghasilkan 409, bukan error DB.
+
+Login/register dibatasi lima request/IP/menit dan sepuluh/email/menit; seluruh API
+120 request/user atau IP/menit. Batas terlampaui 429 dengan Retry-After. Token/session
+native tetap bearer; perubahan Android/CORS lebih luas dipisah ke tahap berikutnya.
 
 ## Batas audit tahap ini
 
-Inventaris dilakukan dari route Laravel, helper API dan seluruh sumber frontend
-app/components/lib/src, termasuk pembacaan manual fetch dengan URL variabel.
-Pengujian auth mencakup semua route terdaftar; pengujian bisnis existing mencakup
-registrasi/role/profil, province assignment, progres/foto dan normalisasi bobot.
-Ini belum membuktikan semua alur UI/role setiap fitur secara end-to-end. CRUD tim,
-undangan, skenario lintas-project, dan fitur per tiang/inbox perlu perluasan test
-pada tahap API. Source Vite legacy juga masih berada di src/, sementara produksi
-menggunakan Next.js. Audit tidak mengirim request ke VPS atau database produksi.
+Inventaris mencakup route Laravel serta helper/pemanggilan frontend. Tes kontrak
+memeriksa semua 66 method/path, middleware auth/active dan 401 tanpa token; frontend
+memeriksa sembilan helper yang sebelumnya belum tersedia terhadap inventaris yang
+sama. Tes bisnis mencakup auth/profil/approval, wilayah penugasan, progres/foto,
+normalisasi/Kurva S, CRUD per tiang, legacy/partial backfill, notifikasi dan alur
+project–team–assignment. Tes tersebut tidak membuktikan seluruh UI secara end-to-end.
+
+Tiga URL fallback aktivitas di atas tetap tidak diperlukan karena URL primer sudah
+valid. Belum ada uji lengkap semua skenario undangan, perpindahan tim antar proyek,
+concurrency multi-worker/beban, private photo URL atau perangkat Android. Source
+Vite legacy tetap tersimpan, sedangkan build produksi memakai Next.js. Perubahan
+mobile/Android dan dependency plugin dari branch review dipisahkan agar tidak
+tercampur dengan perbaikan integritas ini. Tidak ada request ke VPS atau database
+produksi dalam audit/tahap pengujian ini. Lihat reconciliation-2026-10-21.md untuk
+keputusan source, risiko, dan urutan PR.

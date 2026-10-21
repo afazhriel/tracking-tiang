@@ -6,6 +6,10 @@ use App\Http\Controllers\Controller;
 use App\Models\Pole;
 use App\Models\Project;
 use App\Models\Region;
+use App\Models\User;
+use App\Services\PoleVisibility;
+use App\Services\PoleWorkItems;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -37,7 +41,11 @@ class PoleController extends Controller
                     $inner->whereRaw('LOWER(pole_code) LIKE ?', [$term])
                         ->orWhereRaw('LOWER(address) LIKE ?', [$term]);
                 });
-            })
+            });
+
+        $this->scopeVisiblePoles($poles, $request->user(), 'poles');
+
+        $poles = $poles
             ->orderBy('province_id')
             ->orderBy('pole_code')
             ->paginate($perPage);
@@ -46,11 +54,27 @@ class PoleController extends Controller
     }
 
     /**
+     * Batasi daftar tiang sesuai hak akses user.
+     *
+     * Admin/Supervisor bebas (seluruh tiang pada project). Selain itu
+     * (PIC) hanya tiang di provinsi yang ditugaskan atau tiang yang
+     * ditugaskan langsung/lewat timnya — sejalan dengan `PolePolicy@view`.
+     *
+     * @param  Builder<Pole>|\Illuminate\Database\Query\Builder  $query
+     */
+    private function scopeVisiblePoles($query, ?User $user, string $table = 'poles'): void
+    {
+        if ($user !== null) {
+            PoleVisibility::apply($query, $user, $table);
+        }
+    }
+
+    /**
      * Ringkasan jumlah tiang + rata-rata progress per provinsi.
      *
      * Dipakai halaman Tiang untuk grup/filter per provinsi.
      */
-    public function summary(Project $project): JsonResponse
+    public function summary(Request $request, Project $project): JsonResponse
     {
         $this->authorize('view', $project);
 
@@ -59,7 +83,11 @@ class PoleController extends Controller
         $perPole = DB::table('poles')
             ->leftJoin('pole_work_progress as pwp', 'pwp.pole_id', '=', 'poles.id')
             ->leftJoin('work_items as wi', 'wi.id', '=', 'pwp.work_item_id')
-            ->where('poles.project_id', $project->id)
+            ->where('poles.project_id', $project->id);
+
+        $this->scopeVisiblePoles($perPole, $request->user(), 'poles');
+
+        $perPole = $perPole
             ->groupBy('poles.id', 'poles.province_id')
             ->select(
                 'poles.province_id',
@@ -238,7 +266,13 @@ class PoleController extends Controller
             }
         }
 
-        $pole = Pole::create($validated);
+        $pole = DB::transaction(function () use ($project, $validated) {
+            Project::whereKey($project->id)->lockForUpdate()->firstOrFail();
+            $pole = Pole::create($validated);
+            app(PoleWorkItems::class)->materialize($pole);
+
+            return $pole;
+        });
 
         return response()->json([
             'message' => 'Tiang berhasil dibuat.',

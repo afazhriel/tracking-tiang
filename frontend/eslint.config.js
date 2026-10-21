@@ -56,4 +56,10 @@ export default defineConfig([
       'react-refresh/only-export-components': 'off',
     },
   },
+  {
+    files: ['app/**/page.{js,jsx}'],
+    rules: {
+      'react-refresh/only-export-components': ['error', { allowExportNames: ['generateStaticParams', 'metadata', 'generateMetadata'] }],
+    },
+  },
 ])
