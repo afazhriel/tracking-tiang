@@ -79,7 +79,7 @@ penulisan lokal maksimal 25 MiB; stress multi-worker belum dilakukan.
    dengan jumlah anggota tim; jangan memberi bypass rutin.
 2. Pause `DEPLOY_ENABLED=false` oleh pemilik sebelum merge rangkaian PR agar commit
    antara tidak langsung deploy. Merge/rebase retarget dilakukan pemilik: #1 → #2
-   → #3 → #4 (upload) → #5 (akun). Setelah PR sebelumnya masuk main, ubah base PR berikutnya ke main dan jalankan
+   → #3 → #4 (upload) → #5 (akun) → #6 (total legacy). Setelah PR sebelumnya masuk main, ubah base PR berikutnya ke main dan jalankan
    check pada commit terbaru. Tidak perlu force push.
 3. Periksa API_UPSTREAM_ORIGIN di environment build VPS (bukan IP HTTP), routing
    nginx /api langsung FPM, TLS/hairpin dari VPS, root SSH/key/known-hosts dan izin
@@ -137,3 +137,31 @@ terpisah. Semua PR tetap memerlukan review pemilik. Main dan VPS tetap pada
 keadaan sebelumnya; status NOT READY tidak berubah sampai langkah aktivasi di
 atas selesai. Konfigurasi Capacitor HTTPS baru berlaku pada APK hasil build baru,
 dan perangkat lama mungkin perlu login kembali setelah perpindahan origin.
+
+## Tambahan integritas total legacy (PR #6)
+
+Temuan High: guard penulisan sudah menolak konflik template/salinan, tetapi GET
+agregat masih menjumlahkan kedua state. Dua progres 75% dan 90% dari sumber sama
+dapat menghasilkan total 165%. ProgressIntegrity kini mengembalikan 409 pada GET
+progress, summary, project work-items/aggregate dan Kurva S yang ambigu. Policy
+tetap diperiksa terlebih dahulu; summary PIC hanya memeriksa tiang yang terlihat.
+Daftar pekerjaan per tiang tetap dapat dibaca untuk rekonsiliasi. Tidak ada state,
+histori, pekerjaan manual atau referensi foto yang ditimpa/dihapus.
+
+Kasus berbeda: jika hanya histori yang sebagian dipindahkan, Kurva S sebelumnya
+mempertahankan state lama dan salinan sekaligus. Timeline kini memakai sumber
+pekerjaan yang sama dan urutan recorded_at/id, sehingga 75% lalu 90% menghasilkan
+90%, bukan 165%, tanpa menghapus histori atau mengganti snapshot bobot.
+
+File: services/ProgressIntegrity.php, empat controller API (Curve, Pole, Progress,
+WorkItem), tests/Feature/AmbiguousProgressTest.php serta dua dokumen ini. Tujuh
+regression tests mencakup lima endpoint, timeline parsial dan scope summary PIC.
+Konflik data produksi yang memang sudah ada tetap perlu keputusan rekonsiliasi
+pemilik; PR ini sengaja tidak memilih angka atau menjalankan backfill otomatis.
+
+Verifikasi gabungan terbaru: **173 Unit/Feature / 540 assertions**, **5 migration /
+763 assertions**, Pint **117 file** lulus lokal pada PostgreSQL terisolasi. Source
+frontend/deployment tidak berubah dari tahap sebelumnya (14 tes frontend, 15 tes
+deployment, ESLint dan build lulus); quality gates PR tetap menjalankan semuanya
+pada commit gabungan terbaru. Tidak ada migration atau dependency baru. Urutan
+review enam PR di atas wajib disertai CI ulang setelah retarget ke main.

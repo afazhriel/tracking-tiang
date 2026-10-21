@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Pole;
 use App\Models\PoleProgressHistory;
 use App\Models\Project;
+use App\Services\ProgressIntegrity;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Schema;
@@ -60,6 +61,8 @@ class CurveController extends Controller
 
     private function buildCurveResponse(Project $project, ?Pole $pole = null): JsonResponse
     {
+        app(ProgressIntegrity::class)->assertUnambiguous($project, $pole);
+
         /*
          * Rencana untuk kurva proyek memakai item TEMPLATE (`pole_id`
          * NULL) supaya rencana tidak berlipat sejumlah tiang. Rencana
@@ -199,7 +202,7 @@ class CurveController extends Controller
 
         foreach ($historiesByDate as $date => $dailyHistories) {
             foreach ($dailyHistories as $history) {
-                $currentState[$history->pole_id][$history->work_item_id] = [
+                $currentState[$history->pole_id][$history->workItem?->source_item_id ?? $history->work_item_id] = [
                     'progress_percent' => (float) $history->progress_percent,
                     'work_item_id' => $history->work_item_id,
                     'weight_percent' => (float) ($history->weight_percent_snapshot ?? $history->workItem->weight_percent ?? 0),

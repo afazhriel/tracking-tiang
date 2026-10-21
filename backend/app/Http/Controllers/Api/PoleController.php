@@ -9,6 +9,7 @@ use App\Models\Region;
 use App\Models\User;
 use App\Services\PoleVisibility;
 use App\Services\PoleWorkItems;
+use App\Services\ProgressIntegrity;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -77,6 +78,7 @@ class PoleController extends Controller
     public function summary(Request $request, Project $project): JsonResponse
     {
         $this->authorize('view', $project);
+        app(ProgressIntegrity::class)->assertUnambiguous($project, viewer: $request->user());
 
         /* Satu query: hitung progress berbobot per tiang, lalu
            dikelompokkan per provinsi di PHP. */
