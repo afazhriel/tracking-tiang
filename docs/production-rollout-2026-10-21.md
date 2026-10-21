@@ -65,3 +65,13 @@ Inventaris worker/scheduler dan validasi backup/file tetap diperlukan.
    deployment diaktifkan kembali. Jangan mengaktifkan workflow hanya karena CI hijau.
 
 Status aktivasi tetap **NOT READY** sampai bukti operasional di atas lengkap.
+
+## Diagnostik tanpa mutasi
+
+Check VPS menjalankan audit konfigurasi/data melalui PHP di container aktif.
+Transaksi PostgreSQL dipaksa READ ONLY, query dibatasi timeout 5 detik/lock 1 detik.
+Hasil hanya boolean/jumlah: environment, debug, HTTPS, batas PHP, jumlah record,
+admin aktif, kolom scope dan konflik progres bila skema mendukung, serta sampel
+maksimal 1.000 referensi foto lokal. Baris pengguna, token, password, path foto dan
+error SQL tidak dipublikasikan. Sampel terpotong dilaporkan, bukan dianggap audit
+penuh. Script ini tidak menjalankan migration, backfill, atau perubahan file.
