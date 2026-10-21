@@ -12,6 +12,8 @@ on:
 
 permissions:
   contents: read
+  deployments: read
+  actions: read
 
 concurrency:
   group: production-vps
@@ -34,6 +36,13 @@ jobs:
           persist-credentials: false
       - name: Validate deployment scripts
         run: bash -n deploy/vps.sh
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify production protections before SSH
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node ci/check-production-policy.mjs
       - name: Configure SSH
         env:
           SSH_KEY: ${{ secrets.VPS_SSH_KEY }}

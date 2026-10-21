@@ -167,3 +167,23 @@ dengan cleartext=false. App ID/navigasi/arsitektur remote-WebView tetap dipertah
 ini baru berlaku pada build APK berikutnya. APK yang sudah terpasang tidak berubah
 dan masih memerlukan pembaruan berizin serta tes perangkat. Ini bukan integrasi
 static-export/plugin native dari branch review.
+
+## Gerbang produksi dan pembuktian restore
+
+PR #9 menambahkan pemeriksaan read-only metadata main/environment dan SHA terbaru
+sebelum secrets SSH dimuat. Main harus protected, environment membutuhkan reviewer
+dan policy branch yang membatasi main/protected branches. Metadata 403 atau setting
+kosong menghentikan proses. Required PR/Quality gate tetap harus diperiksa pemilik
+karena detail admin belum bisa dibaca. Tidak ada setting GitHub/VPS diubah oleh PR.
+
+Backup kini memiliki SHA256SUMS dan COMPLETE setelah kedua arsip tar serta katalog
+dump valid. COMPLETE bukan bukti restore penuh. Verifikasi checksum sebelum
+rehearsal pemulihan dan pertahankan backup privat/offsite. Kegagalan validasi arsip
+menghentikan rollout sebelum source/migration. Migration dibatasi lock_timeout 5s
+dan statement_timeout 300s; timeout mempertahankan maintenance/journal agar operator
+memeriksa, tanpa rollback database otomatis.
+
+Quality gate juga mewajibkan restore PostgreSQL 18 nyata serta hash upload fixture
+lama/privat ke target baru yang terisolasi. Ini tidak menjalankan restore/SSH atau
+mengakses data VPS. Lihat [langkah aktivasi](../docs/activation-checklist.md) untuk
+urutan review, Nginx /storage, HTTPS/Set-Cookie, APK dan preflight yang diperlukan.

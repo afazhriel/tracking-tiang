@@ -17,7 +17,7 @@ frontend=${DEPLOY_FRONTEND:-/opt/tracking-tiang/frontend-next/frontend}
 service=${DEPLOY_SERVICE:-tracking-tiang-next}
 url=${DEPLOY_URL:-https://pjl.ituiot.com}
 
-for cmd in git docker npm node rsync curl flock systemctl tar; do
+for cmd in git docker npm node rsync curl flock systemctl tar sha256sum; do
   command -v "$cmd" >/dev/null || { echo "Missing command: $cmd" >&2; exit 1; }
 done
 exec 9> /tmp/tracking-tiang-deploy.lock
@@ -196,6 +196,10 @@ tar --exclude=vendor --exclude=backend/storage/logs --exclude=backend/storage/fr
 docker compose exec -T postgres sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc' > "$backup/database.dump" < /dev/null
 test -s "$backup/database.dump"
 docker compose exec -T postgres pg_restore --list < "$backup/database.dump" > /dev/null
+tar -tzf "$backup/backend.tar.gz" > /dev/null
+tar -tzf "$backup/frontend.tar.gz" > /dev/null
+(cd "$backup"; sha256sum backend.tar.gz frontend.tar.gz database.dump > SHA256SUMS)
+printf 'Archive structure and dump catalog verified.\n' > "$backup/COMPLETE"
 
 live_change_started=1
 printf 'state=changing-source\n' >> "$recovery_marker"
@@ -211,7 +215,9 @@ else
 fi
 docker compose up -d --no-deps --force-recreate backend
 docker compose exec -T backend composer install --no-dev --prefer-dist --no-interaction --optimize-autoloader < /dev/null
-docker compose exec -T backend php artisan migrate --force < /dev/null
+# Refuse to hold production DDL locks indefinitely. A timeout leaves maintenance
+# and the recovery journal in place; an operator must assess the failure.
+docker compose exec -T -e 'PGOPTIONS=-c lock_timeout=5s -c statement_timeout=300s' backend php artisan migrate --force < /dev/null
 docker compose exec -T backend php artisan optimize:clear < /dev/null
 docker compose exec -T backend php artisan config:cache < /dev/null
 docker compose exec -T backend php artisan queue:restart < /dev/null

@@ -35,4 +35,8 @@ docker compose exec -T postgres sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES
   > "$backup/database.dump" < /dev/null
 test -s "$backup/database.dump"
 docker compose exec -T postgres pg_restore --list < "$backup/database.dump" > /dev/null
+tar -tzf "$backup/backend.tar.gz" > /dev/null
+tar -tzf "$backup/frontend.tar.gz" > /dev/null
+(cd "$backup"; sha256sum backend.tar.gz frontend.tar.gz database.dump > SHA256SUMS)
+printf 'Archive structure and dump catalog verified.\n' > "$backup/COMPLETE"
 printf 'BACKUP_COMPLETE %s\n' "$backup"

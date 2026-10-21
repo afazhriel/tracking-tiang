@@ -224,3 +224,38 @@ playwright-core dipin; metadata dependency lama tetap dipertahankan. Job browser
 terisolasi PostgreSQL 18 kini menjadi dependency wajib Quality gate, tanpa secrets
 atau environment produksi. Review setelah #7; semua perubahan masih memerlukan
 merge oleh pemilik dan CI ulang pada target main. Status produksi belum berubah.
+
+## Pemulihan dan gerbang produksi (PR #9)
+
+Deployment memeriksa main protected, SHA tepat dan reviewer/branch policy
+environment sebelum memuat secrets SSH. Metadata tak terbaca atau setting belum
+lengkap menghentikan proses. Metadata GitHub saat ini membuktikan gate menolak
+main belum protected, reviewer kosong dan branch policy kosong. Detail required
+PR/Quality gate tetap perlu verifikasi pemilik karena API admin 403; tidak ada
+setting GitHub yang diubah.
+
+Backup otomatis/manual memvalidasi struktur tar serta katalog dump, menyimpan
+SHA256SUMS lalu COMPLETE sebelum selesai atau mengubah source. Arsip rusak
+dibuktikan menghentikan rollout dan membiarkan source lama aktif. Migration
+mendapat PGOPTIONS lock_timeout=5s/statement_timeout=300s; nilai ini terverifikasi
+melalui koneksi Laravel PostgreSQL uji, dengan compatibility suite memakai batas
+sama. Timeout memerlukan penilaian operator; tidak ada rollback DB otomatis.
+
+Job recovery wajib menjalankan dump/restore PostgreSQL 18 ke database baru,
+membandingkan 10 tabel, sequence ID dan bytes file public/private. Fixture mencakup
+partial backfill ganda, histori snapshot, item manual, role pivot lama, referensi
+foto dan notifikasi sudah dibaca. createdb menolak nama yang sudah ada; restore
+tidak memakai --clean/DROP. Tool dikunci ke Docker lokal, ID container postgres:18,
+database CI dan direktori fixture. Bootstrap memakai IsolatedDatabase sebelum
+migrate:fresh. Jangan gunakan untuk restore produksi. File dipulihkan ke folder
+sementara baru, data/file sumber tidak ditimpa.
+
+Validasi lokal: restore nyata lulus, 5 tes policy, 19 deployment/safety tests,
+5 migration / 763 assertions dengan timeout, Pint 125 file dan bash syntax.
+Source backend/frontend tetap PR #8: 196 tes / 674 assertions, 21 frontend unit
+tests dan enam kelompok browser smoke yang juga dijalankan ulang CI. CI membuktikan
+format/fixture, belum backup/offsite VPS atau kapasitas/durasi lock data produksi.
+Lihat [langkah aktivasi](activation-checklist.md) untuk urutan #1–#9, perlindungan
+GitHub, Nginx/cookie, APK HTTPS, worker, restore backup nyata dan persetujuan rollout.
+Status aktivasi tetap NOT READY sampai langkah operasional selesai; source siap
+review. Tidak ada migration/schema/dependency aplikasi baru pada PR #9.

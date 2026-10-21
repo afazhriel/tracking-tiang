@@ -32,6 +32,12 @@ class QualityGateTests(unittest.TestCase):
             self.assertNotIn('environment', job)
             self.assertNotIn('continue-on-error', job)
 
+    def test_production_policy_is_verified_before_any_ssh_secret_is_loaded(self):
+        steps = self.deploy['jobs']['deploy']['steps']
+        policy = next(i for i, step in enumerate(steps) if step.get('run') == 'node ci/check-production-policy.mjs')
+        ssh = next(i for i, step in enumerate(steps) if step.get('name') == 'Configure SSH')
+        self.assertLess(policy, ssh)
+
     def test_vps_diagnostics_are_main_only(self):
         workflow = yaml.safe_load((ROOT / '.github/workflows/check-vps.yml').read_text())
         self.assertIn("github.ref == 'refs/heads/main'", workflow['jobs']['check']['if'])
