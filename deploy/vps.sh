@@ -134,6 +134,9 @@ for envfile in .env .env.local .env.production .env.production.local; do
   fi
 done
 (umask 022; cd "$stage/frontend" && npm ci && npm run build)
+# Ship only runtime dependencies after the build; native CLI and audit/test tools
+# must not be installed in the active web service's dependency tree.
+(umask 022; cd "$stage/frontend" && npm prune --omit=dev --ignore-scripts --no-audit --no-fund)
 # Build PHP image before touching the live source.
 docker build -t tracking-tiang-php:latest -f "$stage/backend/Dockerfile" "$stage/backend"
 

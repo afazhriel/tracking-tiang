@@ -259,3 +259,36 @@ Lihat [langkah aktivasi](activation-checklist.md) untuk urutan #1–#9, perlindu
 GitHub, Nginx/cookie, APK HTTPS, worker, restore backup nyata dan persetujuan rollout.
 Status aktivasi tetap NOT READY sampai langkah operasional selesai; source siap
 review. Tidak ada migration/schema/dependency aplikasi baru pada PR #9.
+
+## Dependency dan runtime produksi (PR #10)
+
+Audit npm produksi awal menemukan tiga Moderate dari Capacitor CLI → xcode →
+uuid. Audit termasuk dev juga menemukan High pada Vite 8.3.2 dan temuan turunan
+plugin React. Vite dipin ke 8.3.4 yang sudah ditambal. uuid dipin 11.1.1 melalui
+override khusus xcode untuk GHSA-w5hq-g745-h8pq; tidak memakai override global.
+Caller xcode hanya memakai API CommonJS v4. Regression test menjalankan generator
+ID project xcode sebenarnya 1.000 kali dengan ID lama pada fixture dan memastikan
+format/keunikan; startup Capacitor CLI 8.5.2 juga lulus. Ini bukan build iOS/APK.
+Resolver juga memperbarui patch postcss 8.5.28→8.5.31 dan nanoid 3.3.19→3.3.20;
+build dan browser diuji dengan lockfile hasil tersebut, tanpa force audit fix.
+Override perlu ditinjau ulang ketika upstream xcode memperbarui dependency-nya.
+
+Capacitor CLI dipindah ke devDependencies. Staging melakukan npm prune --omit=dev
+sesudah build dan sebelum menyentuh layanan aktif. Job browser menggunakan hasil
+prune yang sama, memeriksa CLI/Vite/ESLint/Playwright tidak ada di runtime; driver
+penguji dipisah ke folder sementara. Fallback frontend lama tetap menyimpan build
+dan node_modules yang cocok, sesuai prosedur PR #3. APK/build developer tetap
+menggunakan npm ci lengkap, jadi tooling native tidak dihapus dari pengembangan.
+
+Hasil lokal: npm audit termasuk dev **0 advisory**, audit npm produksi **0**,
+Composer --locked --no-dev **0 advisory / 0 abandoned package**. Frontend **22 tes**
+(termasuk integrasi xcode/uuid), lint, Next production build, versi CLI serta enam
+kelompok Chromium sesudah prune lulus. Deployment **19 tes**, policy **5 tes** dan
+syntax lulus. CI wajib menjalankan audit Composer dan npm; kegagalan menghentikan
+Quality gate. Backend/migration tetap source #9 dan dijalankan ulang pada CI.
+
+Urutan review menjadi #1 sampai #10. Main/VPS tetap belum diubah. Audit bersih
+berlaku untuk snapshot advisory saat pengujian, bukan jaminan terhadap temuan baru.
+SDK Android tidak terkonfigurasi pada workspace; APK/perangkat fisik tetap belum
+diuji. Langkah operasional pada activation-checklist.md masih diperlukan sebelum
+status produksi dapat READY. Source perbaikan siap ditinjau sesudah CI terbaru hijau.

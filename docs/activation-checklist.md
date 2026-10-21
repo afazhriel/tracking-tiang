@@ -35,16 +35,18 @@ read milik GITHUB_TOKEN sebelum melanjutkan.
 
 ## 3. Review dan gabungkan berurutan
 
-Urutan: **#1 → #2 → #3 → #4 → #5 → #6 → #7 → #8 → #9**. PR bertumpuk agar
+Urutan: **#1 → #2 → #3 → #4 → #5 → #6 → #7 → #8 → #9 → #10**. PR bertumpuk agar
 pekerjaan tidak diulang. Setelah satu masuk main, pemilik mengubah base PR
 berikutnya ke main dan menunggu CI commit terbaru sebelum merge. Jangan merge
 branch review/sinkronisasi langsung, force push atau menghapus migration lama.
 Agent belum diberi izin melakukan merge.
 
 Quality gate wajib mencakup Laravel/Pint, compatibility migration PostgreSQL,
-frontend unit/lint/build, deployment/policy tests, Chromium desktop/viewport
+frontend unit/lint/build, audit dependency PHP/npm, deployment/policy tests, Chromium desktop/viewport
 ponsel, serta pemulihan PostgreSQL/upload terisolasi. Gagal/cancelled/skipped
-menghentikan deploy. CI harus diulang sesudah retarget.
+menghentikan deploy. CI harus diulang sesudah retarget. Browser smoke memakai
+node_modules runtime sesudah prune; CLI native, Vite, ESLint dan test driver
+tidak ikut dipasang pada layanan web aktif. Tool browser penguji berada terpisah.
 
 ## 4. Preflight VPS dan aplikasi
 

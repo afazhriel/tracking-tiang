@@ -187,3 +187,9 @@ Quality gate juga mewajibkan restore PostgreSQL 18 nyata serta hash upload fixtu
 lama/privat ke target baru yang terisolasi. Ini tidak menjalankan restore/SSH atau
 mengakses data VPS. Lihat [langkah aktivasi](../docs/activation-checklist.md) untuk
 urutan review, Nginx /storage, HTTPS/Set-Cookie, APK dan preflight yang diperlukan.
+
+PR #10 membersihkan devDependencies dari stage frontend sesudah build. Hanya
+node_modules runtime yang ditukar ke layanan aktif; native CLI dan tool lint/test
+tetap tersedia di lingkungan pengembangan/CI lengkap. Chromium menguji hasil
+prune, dengan driver terpisah; audit dependency PHP/npm juga wajib sebelum deploy.
+Patch Vite dan override uuid khusus xcode dicatat di production-readiness.md.

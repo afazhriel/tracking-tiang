@@ -219,6 +219,8 @@ exec /usr/bin/tar "$@"
         self.assertLess(dump, start)
         self.assertLess(archive, start)
         self.assertLess(migration, resume)
+        self.assertLess(calls.index('npm run build'), calls.index('npm prune --omit=dev'))
+        self.assertLess(calls.index('npm prune --omit=dev'), stop)
         self.assertIn('PGOPTIONS=-c lock_timeout=5s -c statement_timeout=300s', calls)
         backup = next((self.base / 'backups').iterdir())
         self.assertTrue((backup / 'COMPLETE').is_file())

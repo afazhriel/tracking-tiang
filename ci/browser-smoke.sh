@@ -4,6 +4,9 @@ set -Eeuo pipefail
 export APP_ENV=testing APP_URL=http://localhost:3186
 export BROWSER_FIXTURE_FILE="${RUNNER_TEMP:-/tmp}/tracking-browser-fixture.json"
 export CHROME_BIN="${CHROME_BIN:-$(command -v google-chrome || command -v chromium)}"
+for package in '@capacitor/cli' vite eslint playwright-core; do
+  [[ ! -f "frontend/node_modules/$package/package.json" ]] || { echo "Development tool remains in runtime: $package" >&2; exit 1; }
+done
 php backend/tests/Support/prepare-browser.php > "$BROWSER_FIXTURE_FILE"
 php -S 127.0.0.1:3185 -t backend/public > "${RUNNER_TEMP:-/tmp}/tracking-browser-php.log" 2>&1 &
 backend_pid=$!

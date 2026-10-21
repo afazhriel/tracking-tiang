@@ -55,6 +55,8 @@ jobs:
         run: composer install --no-interaction --prefer-dist --no-progress
       - name: Laravel Pint
         run: vendor/bin/pint --test
+      - name: Audit locked production PHP dependencies
+        run: composer audit --locked --no-dev --no-interaction
       - name: Laravel unit and feature tests on PostgreSQL
         run: php artisan test --testsuite=Unit,Feature --fail-on-warning --fail-on-risky
 
@@ -141,6 +143,9 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci --no-audit --no-fund
+      - run: npm audit --audit-level=high
+      - run: npm audit --omit=dev --audit-level=moderate
+      - run: npx --no-install cap --version
       - run: npm run lint -- --max-warnings=0
       - run: npm test
       - run: npm run build
@@ -212,7 +217,11 @@ jobs:
           composer install --working-dir=backend --no-interaction --prefer-dist --no-progress
           npm ci --prefix frontend --no-audit --no-fund
           npm run build --prefix frontend
+          cp -a frontend/node_modules/playwright-core "$RUNNER_TEMP/playwright-core"
+          npm prune --prefix frontend --omit=dev --ignore-scripts --no-audit --no-fund
       - name: Exercise real browser login, media, CSRF, upgrade and logout
+        env:
+          CI_PLAYWRIGHT_MODULE: ${{ runner.temp }}/playwright-core/index.mjs
         run: bash ci/browser-smoke.sh
 
   recovery:
