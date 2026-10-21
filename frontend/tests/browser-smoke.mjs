@@ -1,7 +1,7 @@
 /* global document -- callbacks evaluated inside Chromium */
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
-import { chromium } from 'playwright-core'
+const { chromium } = await import(process.env.CI_PLAYWRIGHT_MODULE || 'playwright-core')
 
 const baseURL = 'http://localhost:3186'
 const fixture = JSON.parse(await readFile(process.env.BROWSER_FIXTURE_FILE, 'utf8'))
