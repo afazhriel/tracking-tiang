@@ -22,7 +22,7 @@ class PendingPhotos
         // Track before writing, including partially written files when an adapter returns false.
         $this->paths[] = $path;
         try {
-            $disk = Storage::disk('public');
+            $disk = Storage::disk('media');
             if ($disk->putFileAs($directory, $file, $name) !== $path
                 || ! $disk->exists($path) || $disk->size($path) !== $file->getSize()) {
                 throw new PhotoStorageFailed;
@@ -37,26 +37,31 @@ class PendingPhotos
     public function discardUnreferenced(): void
     {
         foreach ($this->paths as $path) {
-            $this->discardIfUnreferenced($path);
+            $this->discardIfUnreferenced($path, 'media');
         }
     }
 
     public function discardRetiredAvatar(?string $path): void
     {
-        if ($path !== null && str_starts_with($path, 'avatars/')) {
-            $this->discardIfUnreferenced($path);
+        if ($path !== null && (str_starts_with($path, 'avatars/') || str_starts_with($path, 'private-media/avatars/'))) {
+            $this->discardIfUnreferenced($path, self::avatarDisk($path));
         }
     }
 
-    private function discardIfUnreferenced(string $path): void
+    public static function avatarDisk(string $path): string
+    {
+        return str_starts_with($path, 'private-media/avatars/') ? 'media' : 'public';
+    }
+
+    private function discardIfUnreferenced(string $path, string $disk): void
     {
         try {
             // A commit/network error can have an uncertain outcome. Retain files if the
             // database is unavailable or any committed metadata still references them.
-            if (ProgressPhoto::where('path', $path)->where(fn ($query) => $query->where('disk', 'public')->orWhereNull('disk'))->exists() || User::where('avatar', $path)->exists()) {
+            if (ProgressPhoto::where('path', $path)->where(fn ($query) => $query->where('disk', $disk)->when($disk === 'public', fn ($query) => $query->orWhereNull('disk')))->exists() || User::where('avatar', $path)->exists()) {
                 return;
             }
-            if (! Storage::disk('public')->delete($path)) {
+            if (! Storage::disk($disk)->delete($path)) {
                 Log::warning('Unreferenced upload cleanup deferred.');
             }
         } catch (Throwable) {

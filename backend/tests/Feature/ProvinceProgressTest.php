@@ -225,6 +225,7 @@ class ProvinceProgressTest extends TestCase
     public function test_progress_upload_stores_photo_and_serves_it(): void
     {
         Storage::fake('public');
+        Storage::fake('media');
 
         $project = $this->makeProject();
         $workItem = $this->makeWorkItem($project);
@@ -247,7 +248,9 @@ class ProvinceProgressTest extends TestCase
         $photo = ProgressPhoto::first();
         $this->assertNotNull($photo);
         $this->assertSame($pole->id, $photo->pole_id);
-        Storage::disk('public')->assertExists($photo->path);
+        $this->assertSame('media', $photo->disk);
+        Storage::disk('media')->assertExists($photo->path);
+        Storage::disk('public')->assertMissing($photo->path);
 
         $this->assertDatabaseHas('progress_photos', [
             'pole_id' => $pole->id,
@@ -260,12 +263,13 @@ class ProvinceProgressTest extends TestCase
 
     public function test_unknown_photo_returns_404(): void
     {
-        $this->get('/api/photos/01ARZ3NDEKTSV4RRFFQ69G5FAV')->assertStatus(404);
+        $this->actingAs(User::factory()->admin()->create(), 'sanctum')->get('/api/photos/01ARZ3NDEKTSV4RRFFQ69G5FAV')->assertStatus(404);
     }
 
     public function test_activity_includes_uploaded_photos(): void
     {
         Storage::fake('public');
+        Storage::fake('media');
 
         $project = $this->makeProject();
         $workItem = $this->makeWorkItem($project);

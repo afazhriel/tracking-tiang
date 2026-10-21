@@ -6,8 +6,8 @@
  *
  * - Base URL memakai proxy rewrite Next.js yang SUDAH ADA
  *   (`/api/*` -> API_UPSTREAM_ORIGIN pada next.config.mjs).
- * - Auth token tetap memakai key yang sudah dipakai login page:
- *   `tracking_tiang_token` (di Circuit via header Authorization: Bearer).
+ * - Browser memakai cookie HttpOnly; key tracking_tiang_token menyimpan
+ *   penanda sesi non-rahasia. Token browser lama dipindahkan dahulu.
  * - Tidak ada base URL hardcoded di halaman mana pun.
  * =========================================================
  */
@@ -15,6 +15,42 @@
 export const TOKEN_KEY = 'tracking_tiang_token'
 export const USER_KEY = 'tracking_tiang_user'
 export const AUTH_CHANGED_EVENT = 'tracking_tiang:auth-changed'
+const COOKIE_MARKER = 'cookie:'
+
+export function storeBrowserSession(user) {
+  window.localStorage.setItem(TOKEN_KEY, `${COOKIE_MARKER}${crypto.randomUUID()}`)
+  setStoredUser(user)
+}
+
+const upgrades = new Map()
+
+async function upgradeBrowserSession(token) {
+  if (upgrades.has(token)) return upgrades.get(token)
+  const promise = (async () => {
+    let response
+    try {
+      response = await fetch('/api/browser-session', {
+        method: 'POST', credentials: 'same-origin',
+        headers: { Accept: 'application/json', Authorization: `Bearer ${token}`, 'X-Tracking-Client': 'browser' },
+      })
+    } catch (cause) {
+      throw new ApiError('Sesi belum dapat diamankan. Periksa koneksi lalu coba lagi.', { cause })
+    }
+    if (!response.ok) {
+      if (response.status === 401) clearAuth()
+      throw new ApiError('Sesi belum dapat diverifikasi. Silakan masuk kembali.', { status: response.status })
+    }
+    const payload = await response.json().catch(() => null)
+    if (!payload?.authenticated || payload.token_type !== 'Cookie') throw new ApiError('Respons sesi tidak valid.')
+    if (getToken() !== token) {
+      clearAuth()
+      throw new ApiError('Sesi berubah. Silakan masuk kembali.', { status: 401 })
+    }
+    storeBrowserSession(getStoredUser())
+  })().finally(() => upgrades.delete(token))
+  upgrades.set(token, promise)
+  return promise
+}
 
 export class ApiError extends Error {
   constructor(message, { status = 0, url = '', cause = null, outcomeUnknown = false } = {}) {
@@ -135,9 +171,22 @@ export async function apiRequest(
   path,
   { method = 'GET', body, signal, headers = {}, auth = true, query } = {}
 ) {
+  const browser = typeof window !== 'undefined' && Boolean(window.location?.origin)
+  if (browser && window.isSecureContext === false) {
+    throw new ApiError('Gunakan alamat HTTPS aplikasi untuk masuk dengan aman.')
+  }
+  if (auth && (/^[a-z][a-z\d+.-]*:/i.test(path) || path.startsWith('//'))) {
+    throw new ApiError('Alamat API di luar aplikasi ditolak.')
+  }
+  let token = auth ? getToken() : null
+  if (browser && token && !token.startsWith(COOKIE_MARKER)) {
+    await upgradeBrowserSession(token)
+    token = getToken()
+  }
   const requestHeaders = {
     Accept: 'application/json',
     ...headers,
+    ...(browser ? { 'X-Tracking-Client': 'browser' } : {}),
   }
 
   /* FormData untuk upload multipart (mis. foto progress). Browser
@@ -151,16 +200,14 @@ export async function apiRequest(
   }
 
   if (auth) {
-    const token = getToken()
-
-    if (token) {
+    if (token && !token.startsWith(COOKIE_MARKER)) {
       requestHeaders.Authorization = `Bearer ${token}`
     }
   }
 
   const isMutation = !['GET', 'HEAD'].includes(method.toUpperCase())
   const url = buildUrl(path, query)
-  const inflightKey = JSON.stringify([url, requestHeaders])
+  const inflightKey = JSON.stringify([url, requestHeaders, auth ? token : null])
 
   const isShared = method === 'GET' && !signal && !body
   const existing = isShared ? inflight.get(inflightKey) : null
@@ -173,6 +220,7 @@ export async function apiRequest(
     try {
       response = await fetch(url, {
         method,
+        credentials: 'same-origin',
         headers: requestHeaders,
         signal,
         body:
@@ -207,6 +255,7 @@ export async function apiRequest(
     }
 
     if (!response.ok) {
+      if (auth && response.status === 401) clearAuth()
       const error = new ApiError(
         payload?.message || `Permintaan gagal (HTTP ${response.status}).`,
         { status: response.status, url, outcomeUnknown: isMutation && response.status >= 500 && payload?.saved !== false }

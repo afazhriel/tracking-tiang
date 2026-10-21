@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
+import { apiRequest, storeBrowserSession } from '../../../lib/api'
 import {
   ArrowLeft,
   Eye,
@@ -19,8 +20,8 @@ import {
  * dengan dashboard: kertas hangat, aksen terracotta, satu sentuhan
  * lagoon untuk penanda "data".
  *
- * Logika auth tidak diubah: token tetap disimpan di localStorage
- * dengan key yang sama, lalu full-reload ke /dashboard.
+ * Browser memakai cookie HttpOnly. LocalStorage hanya memuat penanda
+ * sesi dan profil, lalu full-reload ke /dashboard.
  */
 export function Component() {
   const [showPassword, setShowPassword] = useState(false)
@@ -36,35 +37,20 @@ export function Component() {
     setError('')
 
     try {
-      const response = await fetch('/api/login', {
+      const data = await apiRequest('/api/login', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Accept: 'application/json',
-        },
-        body: JSON.stringify({
+        auth: false,
+        body: {
           email,
           password,
-        }),
+        },
       })
-
-      const data = await response.json()
-
-      if (!response.ok) {
-        setError(data.message || 'Login gagal.')
-        return
-      }
-
-      localStorage.setItem('tracking_tiang_token', data.token)
-      localStorage.setItem(
-        'tracking_tiang_user',
-        JSON.stringify(data.user)
-      )
+      if (!data.authenticated || data.token_type !== 'Cookie') throw new Error('Sesi belum dapat diverifikasi.')
+      storeBrowserSession(data.user)
 
       window.location.href = '/dashboard'
     } catch (err) {
-      console.error(err)
-      setError('Tidak dapat terhubung ke server.')
+      setError(err.message || 'Tidak dapat terhubung ke server.')
     } finally {
       setLoading(false)
     }

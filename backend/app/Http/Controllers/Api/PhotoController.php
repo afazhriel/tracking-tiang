@@ -10,9 +10,8 @@ use Symfony\Component\HttpFoundation\BinaryFileResponse;
 /**
  * Menyajikan file foto progress.
  *
- * Route ini PUBLIC (di luar auth) karena tag `<img>` di browser tidak
- * bisa mengirim header Authorization. URL memakai ULID acak yang
- * tidak bisa ditebak, jadi berfungsi seperti "capability URL".
+ * Route memerlukan Sanctum + active dan policy tiang. Browser mengirim
+ * cookie HttpOnly saat memuat gambar; klien native memakai bearer.
  *
  * Tidak butuh `storage:link` maupun location nginx baru: file dibaca
  * langsung dari disk `public` dan disajikan lewat response Laravel.
@@ -22,6 +21,7 @@ class PhotoController extends Controller
     public function show(string $ulid): BinaryFileResponse
     {
         $photo = ProgressPhoto::where('ulid', $ulid)->firstOrFail();
+        $this->authorize('view', $photo->pole);
 
         $disk = Storage::disk($photo->disk ?: 'public');
 
@@ -32,21 +32,22 @@ class PhotoController extends Controller
          * dikirim klien saat upload. Fallback ke `mime_type` tersimpan
          * hanya bila deteksi gagal.
          */
-        $mime = $disk->mimeType($photo->path)
-            ?: ($photo->mime_type ?: 'application/octet-stream');
+        $mime = $disk->mimeType($photo->path);
+        abort_unless(in_array($mime, ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/bmp', 'image/x-ms-bmp'], true), 415, 'Berkas bukan gambar yang didukung.');
 
         $response = response()->file($disk->path($photo->path), [
             'Content-Type' => $mime,
             'X-Content-Type-Options' => 'nosniff',
+            'Cross-Origin-Resource-Policy' => 'same-origin',
         ]);
 
         /*
          * `response()->file()` default menandai response `public`.
          * Paksa `private` supaya foto tidak disimpan di cache bersama,
-         * lalu beri TTL pendek.
+         * dan larang penyimpanan supaya pencabutan izin berlaku berikutnya.
          */
         $response->setPrivate();
-        $response->setMaxAge(3600);
+        $response->headers->set('Cache-Control', 'private, no-store');
 
         return $response;
     }

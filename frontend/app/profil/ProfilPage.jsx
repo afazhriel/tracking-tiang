@@ -705,11 +705,8 @@ function ProfilContent() {
           <CardHeader>
             <CardTitle>Keamanan Sesi</CardTitle>
             <CardDescription>
-              Token bearer disimpan di localStorage dan dikirim sebagai header
-              <code className="mx-1 rounded bg-neutral-100 px-1.5 py-0.5 text-[11px] text-neutral-600">
-                Authorization
-              </code>
-              pada setiap request.
+              Sesi perangkat ini berlaku maksimal 12 jam. Masuk kembali jika
+              sesi berakhir. Foto hanya dapat dibuka sesuai hak akses akun.
             </CardDescription>
           </CardHeader>
 
@@ -719,7 +716,7 @@ function ProfilContent() {
 
               <div className="min-w-0">
                 <p className="text-sm font-medium text-neutral-800">
-                  Token tersimpan di perangkat ini
+                  Sesi perangkat ini
                 </p>
                 <p className="mt-0.5 text-xs leading-5 text-neutral-500">
                   Tombol <strong>Keluar</strong> menutup sesi perangkat ini
@@ -734,12 +731,11 @@ function ProfilContent() {
 
               <div className="min-w-0">
                 <p className="text-sm font-medium text-neutral-800">
-                  Autentikasi berbasis token
+                  Perlindungan akun
                 </p>
                 <p className="mt-0.5 text-xs leading-5 text-neutral-500">
-                  Belum ada verifikasi sesi dari server saat halaman dibuka —
-                  halaman internal hanya memeriksa keberadaan token. Request API
-                  yang ditolak backend (401) akan tampil sebagai error notice.
+                  Server memeriksa sesi dan izin setiap permintaan. Sesi yang
+                  tidak berlaku akan mengarahkan Anda untuk masuk kembali.
                 </p>
               </div>
             </div>

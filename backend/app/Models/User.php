@@ -294,9 +294,9 @@ class User extends Authenticatable
     /**
      * URL foto profil, atau null kalau belum ada.
      *
-     * Disajikan lewat endpoint public `GET /api/user/avatar/{user}`
-     * (pola yang sama dengan foto progress) karena `<img>` di browser
-     * tidak bisa menyertakan header Authorization. `?v=` memakai
+     * Disajikan lewat endpoint berizin `GET /api/user/avatar/{user}`.
+     * Browser mengirim cookie HttpOnly. URL relatif mempertahankan origin.
+     * `?v=` memakai
      * timestamp update supaya foto baru tidak kena cache browser.
      */
     public function avatarUrl(): ?string
@@ -305,7 +305,7 @@ class User extends Authenticatable
             return null;
         }
 
-        return url('/api/user/avatar/'.$this->id).'?v='.($this->updated_at?->getTimestamp() ?? 0);
+        return '/api/user/avatar/'.$this->id.'?v='.($this->updated_at?->getTimestamp() ?? 0);
     }
 
     /**

@@ -30,6 +30,7 @@ class AtomicUploadTest extends TestCase
     {
         parent::setUp();
         Storage::fake('public');
+        Storage::fake('media');
         config(['app.debug' => false]);
         $this->actingAs(User::factory()->admin()->create(), 'sanctum');
         User::factory()->admin()->create();
@@ -56,14 +57,15 @@ class AtomicUploadTest extends TestCase
         $this->assertDatabaseCount('progress_photos', 1);
         $this->assertDatabaseCount('notifications', 0);
         $this->assertSame(['progress-photos/old.png'], Storage::disk('public')->allFiles());
+        $this->assertSame([], Storage::disk('media')->allFiles());
     }
 
     public function test_storage_false_does_not_commit_progress_or_a_photo_with_an_invalid_path(): void
     {
-        $disk = Storage::disk('public');
+        $disk = Storage::disk('media');
         $proxy = Mockery::mock($disk);
         $proxy->shouldReceive('putFileAs')->andReturn(false);
-        Storage::set('public', $proxy);
+        Storage::set('media', $proxy);
         $this->postJson($this->url, ['work_item_id' => $this->itemId, 'progress_percent' => 80, 'photos' => [$this->upload()]])
             ->assertStatus(503)->assertJsonPath('saved', false);
         $this->assertOriginalRecords();
@@ -71,7 +73,7 @@ class AtomicUploadTest extends TestCase
 
     public function test_failure_of_second_photo_removes_only_new_files_and_rolls_back_all_related_records(): void
     {
-        $disk = Storage::disk('public');
+        $disk = Storage::disk('media');
         $proxy = Mockery::mock($disk);
         $calls = 0;
         $proxy->shouldReceive('putFileAs')->andReturnUsing(function ($directory, $file, $name = null, $options = []) use ($disk, &$calls) {
@@ -83,7 +85,7 @@ class AtomicUploadTest extends TestCase
 
             return $disk->putFileAs($directory, $file, $name, $options);
         });
-        Storage::set('public', $proxy);
+        Storage::set('media', $proxy);
         $this->postJson($this->url, ['work_item_id' => $this->itemId, 'progress_percent' => 80, 'photos' => [$this->upload(), $this->upload()]])
             ->assertStatus(503)->assertJsonPath('saved', false);
         $this->assertOriginalRecords();
@@ -119,7 +121,8 @@ class AtomicUploadTest extends TestCase
         $this->assertDatabaseCount('pole_progress_histories', 2);
         $this->assertDatabaseCount('notifications', 1);
         $this->assertDatabaseCount('progress_photos', 3);
-        $this->assertCount(3, Storage::disk('public')->allFiles());
+        $this->assertCount(1, Storage::disk('public')->allFiles());
+        $this->assertCount(2, Storage::disk('media')->allFiles());
         $histories = ProgressPhoto::whereIn('id', array_column($response->json('photos'), 'id'))->pluck('progress_history_id')->unique();
         $this->assertCount(1, $histories);
     }
@@ -137,9 +140,9 @@ class AtomicUploadTest extends TestCase
     {
         $user = User::factory()->pic()->create(['avatar' => 'avatars/original.png']);
         Storage::disk('public')->put($user->avatar, 'original avatar');
-        $proxy = Mockery::mock(Storage::disk('public'));
+        $proxy = Mockery::mock(Storage::disk('media'));
         $proxy->shouldReceive('putFileAs')->andReturn(false);
-        Storage::set('public', $proxy);
+        Storage::set('media', $proxy);
         $this->actingAs($user, 'sanctum')->postJson('/api/user/avatar', ['avatar' => $this->upload()])->assertStatus(503)->assertJsonPath('saved', false);
         $this->assertSame('avatars/original.png', $user->fresh()->avatar);
         Storage::disk('public')->assertExists('avatars/original.png');

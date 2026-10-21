@@ -62,29 +62,24 @@ Route::get('/regions/regencies/{regency}/districts', [RegionController::class, '
 Route::get('/regions/districts/{district}/villages', [RegionController::class, 'villages']);
 
 /*
- * Foto progress.
- * Public dengan ULID acak (img di browser tidak bisa kirim header
- * Authorization). Lihat PhotoController.
- */
-Route::get('/photos/{ulid}', [PhotoController::class, 'show']);
-
-/*
- * Avatar user — public karena `<img>` tidak bisa kirim header
- * Authorization. Lihat `UserProfileController::showAvatar`.
- */
-Route::get('/user/avatar/{user}', [UserProfileController::class, 'showAvatar']);
-
-/*
 |--------------------------------------------------------------------------
 | Protected routes
 |--------------------------------------------------------------------------
 */
 
-Route::middleware(['auth:sanctum', 'active'])->group(function () {
-
-    /* Auth */
+Route::middleware('auth:sanctum')->group(function () {
+    // Inactive users must still be able to end their own sessions.
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::post('/logout-all', [UserProfileController::class, 'logoutAll']);
+});
+
+Route::middleware(['auth:sanctum', 'active'])->group(function () {
+
+    Route::get('/photos/{ulid}', [PhotoController::class, 'show']);
+    Route::get('/user/avatar/{user}', [UserProfileController::class, 'showAvatar']);
+    Route::post('/browser-session', [AuthController::class, 'browserSession']);
+
+    /* Auth */
     Route::get('/me', [AuthController::class, 'me']);
 
     /* Profil sendiri — selalu menempel pada user yang login. */
