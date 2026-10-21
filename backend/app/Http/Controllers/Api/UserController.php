@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
@@ -91,9 +92,7 @@ class UserController extends Controller
             'role' => ['sometimes', 'required', Rule::in(User::roles())],
         ]);
 
-        $this->guardLastAdmin($user, $validated['role'] ?? null);
-
-        $user->fill($validated)->save();
+        $user = $this->persistAccountChange($user, $validated);
 
         return response()->json([
             'message' => 'User berhasil diperbarui.',
@@ -116,14 +115,14 @@ class UserController extends Controller
             'status' => ['required', Rule::in(User::statuses())],
         ]);
 
-        $this->guardLastAdmin($user, null, $validated['status']);
-
-        $user->forceFill(['status' => $validated['status']])->save();
+        $user = $this->persistAccountChange($user, $validated);
 
         return response()->json([
-            'message' => $validated['status'] === User::STATUS_SUSPENDED
-                ? 'Akun dinonaktifkan.'
-                : 'Akun diaktifkan kembali.',
+            'message' => match ($validated['status']) {
+                User::STATUS_SUSPENDED => 'Akun dinonaktifkan.',
+                User::STATUS_PENDING => 'Akun menunggu persetujuan.',
+                default => 'Akun diaktifkan kembali.',
+            },
             'data' => $user->fresh()->toAuthPayload(),
         ]);
     }
@@ -152,6 +151,20 @@ class UserController extends Controller
         ]);
     }
 
+    private function persistAccountChange(User $target, array $values): User
+    {
+        return DB::transaction(function () use ($target, $values) {
+            // Lock the shared admin set in a stable order before counting. Locking
+            // only the target allows two different admins to disable themselves.
+            User::where('role', User::ROLE_ADMIN)->orderBy('id')->lockForUpdate()->get(['id']);
+            $user = User::whereKey($target->id)->lockForUpdate()->firstOrFail();
+            $this->guardLastAdmin($user, $values['role'] ?? null, $values['status'] ?? null);
+            $user->fill($values)->save();
+
+            return $user;
+        });
+    }
+
     /**
      * Cegah admin terakhir mengunci dirinya sendiri keluar.
      *
@@ -165,7 +178,7 @@ class UserController extends Controller
         }
 
         $losesAdmin = ($newRole !== null && $newRole !== User::ROLE_ADMIN)
-            || ($newStatus === User::STATUS_SUSPENDED);
+            || ($newStatus !== null && $newStatus !== User::STATUS_ACTIVE);
 
         if (! $losesAdmin) {
             return;
@@ -178,7 +191,7 @@ class UserController extends Controller
 
         if ($otherAdmins === 0) {
             throw ValidationException::withMessages([
-                'role' => ['Tidak bisa: ini satu-satunya admin yang masih aktif.'],
+                $newStatus !== null ? 'status' : 'role' => ['Tidak bisa: ini satu-satunya admin yang masih aktif.'],
             ]);
         }
     }

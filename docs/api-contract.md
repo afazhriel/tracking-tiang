@@ -187,3 +187,19 @@ mobile/Android dan dependency plugin dari branch review dipisahkan agar tidak
 tercampur dengan perbaikan integritas ini. Tidak ada request ke VPS atau database
 produksi dalam audit/tahap pengujian ini. Lihat reconciliation-2026-10-21.md untuk
 keputusan source, risiko, dan urutan PR.
+
+
+### Integritas akun dan undangan
+
+Update role/status admin memeriksa ulang di bawah lock transaksi. Admin aktif
+terakhir tidak boleh diturunkan role, suspended atau pending (422, field role/status
+sesuai request). Dua request bersamaan diserialisasi agar setidaknya satu admin
+aktif tetap tersedia. Status pending pada PIC tetap diperbolehkan.
+
+Accept dan revoke undangan berbagi row lock. Pembuatan user, keanggotaan, status
+accepted dan token berada pada satu transaksi. Expired/revoked/accepted/unknown
+status ditolak; pemeriksaan diulang setelah lock diperoleh. Jika revoke menang,
+accept ditolak 403; jika accept menang, revoke ditolak 422. Error persistence tidak
+meninggalkan akun aktif setengah jadi. Team-only invitation memberi membership
+project tim; explicit project membership tetap didukung. Akun dengan email yang
+sudah ada tetap ditolak, tanpa reset password.
