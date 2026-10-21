@@ -4,7 +4,7 @@ const nextConfig = {
     return [
       {
         source: '/api/:path*',
-        destination: 'http://187.77.112.247/api/:path*',
+        destination: `${(process.env.API_UPSTREAM_ORIGIN || 'http://187.77.112.247').replace(/\/+$/, '')}/api/:path*`,
       },
     ]
   },

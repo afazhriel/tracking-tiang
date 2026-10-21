@@ -39,7 +39,7 @@ class ProvinceProgressTest extends TestCase
     private function makeProject(string $code = 'PRJ-1'): Project
     {
         return Project::create([
-            'name' => 'Proyek ' . $code,
+            'name' => 'Proyek '.$code,
             'code' => $code,
             'status' => 'active',
         ]);
@@ -306,4 +306,3 @@ class ProvinceProgressTest extends TestCase
         $this->assertSame(1, $byProvince['33']['pole_count']);
     }
 }
-

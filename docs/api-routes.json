@@ -1,0 +1,338 @@
+[
+  {
+    "method": "GET",
+    "path": "/api/invitations",
+    "authenticated": true,
+    "active_user": true
+  },
+  {
+    "method": "POST",
+    "path": "/api/invitations",
+    "authenticated": true,
+    "active_user": true
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/invitations/{invitation}",
+    "authenticated": true,
+    "active_user": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/invitations/{token}",
+    "authenticated": false,
+    "active_user": false
+  },
+  {
+    "method": "POST",
+    "path": "/api/invitations/{token}/accept",
+    "authenticated": false,
+    "active_user": false
+  },
+  {
+    "method": "POST",
+    "path": "/api/login",
+    "authenticated": false,
+    "active_user": false
+  },
+  {
+    "method": "POST",
+    "path": "/api/logout",
+    "authenticated": true,
+    "active_user": true
+  },
+  {
+    "method": "POST",
+    "path": "/api/logout-all",
+    "authenticated": true,
+    "active_user": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/me",
+    "authenticated": true,
+    "active_user": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/notifications",
+    "authenticated": true,
+    "active_user": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/photos/{ulid}",
+    "authenticated": false,
+    "active_user": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/projects",
+    "authenticated": true,
+    "active_user": true
+  },
+  {
+    "method": "POST",
+    "path": "/api/projects",
+    "authenticated": true,
+    "active_user": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/projects/{project}",
+    "authenticated": true,
+    "active_user": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/projects/{project}/activities",
+    "authenticated": true,
+    "active_user": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/projects/{project}/curve",
+    "authenticated": true,
+    "active_user": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/projects/{project}/notifications",
+    "authenticated": true,
+    "active_user": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/projects/{project}/poles",
+    "authenticated": true,
+    "active_user": true
+  },
+  {
+    "method": "POST",
+    "path": "/api/projects/{project}/poles",
+    "authenticated": true,
+    "active_user": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/projects/{project}/poles/summary",
+    "authenticated": true,
+    "active_user": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/projects/{project}/poles/{pole}",
+    "authenticated": true,
+    "active_user": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/projects/{project}/poles/{pole}/progress",
+    "authenticated": true,
+    "active_user": true
+  },
+  {
+    "method": "POST",
+    "path": "/api/projects/{project}/poles/{pole}/progress",
+    "authenticated": true,
+    "active_user": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/projects/{project}/work-items",
+    "authenticated": true,
+    "active_user": true
+  },
+  {
+    "method": "POST",
+    "path": "/api/projects/{project}/work-items",
+    "authenticated": true,
+    "active_user": true
+  },
+  {
+    "method": "POST",
+    "path": "/api/projects/{project}/work-items/normalize",
+    "authenticated": true,
+    "active_user": true
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/projects/{project}/work-items/{workItem}",
+    "authenticated": true,
+    "active_user": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/projects/{project}/work-items/{workItem}",
+    "authenticated": true,
+    "active_user": true
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/projects/{project}/work-items/{workItem}",
+    "authenticated": true,
+    "active_user": true
+  },
+  {
+    "method": "PUT",
+    "path": "/api/projects/{project}/work-items/{workItem}",
+    "authenticated": true,
+    "active_user": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/regions/districts/{district}/villages",
+    "authenticated": false,
+    "active_user": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/regions/provinces",
+    "authenticated": false,
+    "active_user": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/regions/provinces/{province}/regencies",
+    "authenticated": false,
+    "active_user": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/regions/regencies/{regency}/districts",
+    "authenticated": false,
+    "active_user": false
+  },
+  {
+    "method": "POST",
+    "path": "/api/register",
+    "authenticated": false,
+    "active_user": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/teams",
+    "authenticated": true,
+    "active_user": true
+  },
+  {
+    "method": "POST",
+    "path": "/api/teams",
+    "authenticated": true,
+    "active_user": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/teams/{team}",
+    "authenticated": true,
+    "active_user": true
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/teams/{team}",
+    "authenticated": true,
+    "active_user": true
+  },
+  {
+    "method": "PUT",
+    "path": "/api/teams/{team}",
+    "authenticated": true,
+    "active_user": true
+  },
+  {
+    "method": "POST",
+    "path": "/api/teams/{team}/members",
+    "authenticated": true,
+    "active_user": true
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/teams/{team}/members/{user}",
+    "authenticated": true,
+    "active_user": true
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/user/avatar",
+    "authenticated": true,
+    "active_user": true
+  },
+  {
+    "method": "POST",
+    "path": "/api/user/avatar",
+    "authenticated": true,
+    "active_user": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/user/avatar/{user}",
+    "authenticated": false,
+    "active_user": false
+  },
+  {
+    "method": "PUT",
+    "path": "/api/user/password",
+    "authenticated": true,
+    "active_user": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/user/profile",
+    "authenticated": true,
+    "active_user": true
+  },
+  {
+    "method": "PUT",
+    "path": "/api/user/profile",
+    "authenticated": true,
+    "active_user": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/users",
+    "authenticated": true,
+    "active_user": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/users/{user}",
+    "authenticated": true,
+    "active_user": true
+  },
+  {
+    "method": "PUT",
+    "path": "/api/users/{user}",
+    "authenticated": true,
+    "active_user": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/users/{user}/poles",
+    "authenticated": true,
+    "active_user": true
+  },
+  {
+    "method": "POST",
+    "path": "/api/users/{user}/poles",
+    "authenticated": true,
+    "active_user": true
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/users/{user}/poles/{pole}",
+    "authenticated": true,
+    "active_user": true
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/users/{user}/provinces",
+    "authenticated": true,
+    "active_user": true
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/users/{user}/status",
+    "authenticated": true,
+    "active_user": true
+  }
+]

@@ -121,7 +121,8 @@ function buildUrl(path, query) {
  * Without this, several pages call the same endpoint at once
  * (ProjectProvider + page loader, or a page rendered twice during
  * Strict Mode). One in-flight promise per URL is enough and it does
- * not cache results, so data is never stale.
+ * not cache results, so data is never stale. Headers are part of the
+ * key so switching accounts cannot reuse another user's response.
  */
 const inflight = new Map()
 
@@ -157,9 +158,10 @@ export async function apiRequest(
   }
 
   const url = buildUrl(path, query)
+  const inflightKey = JSON.stringify([url, requestHeaders])
 
   const isShared = method === 'GET' && !signal && !body
-  const existing = isShared ? inflight.get(url) : null
+  const existing = isShared ? inflight.get(inflightKey) : null
 
   if (existing) return existing
 
@@ -222,10 +224,10 @@ export async function apiRequest(
   if (!isShared) return run()
 
   const promise = run().finally(() => {
-    inflight.delete(url)
+    inflight.delete(inflightKey)
   })
 
-  inflight.set(url, promise)
+  inflight.set(inflightKey, promise)
 
   return promise
 }
@@ -585,7 +587,7 @@ export const api = {
       options
     ),
   listNotifications: (projectId, options) =>
-    apiRequest('/api/notifications', options),
+    apiRequest(projectId ? `/api/projects/${projectId}/notifications` : '/api/notifications', options),
   getUnreadNotificationCount: (options) =>
     apiRequest('/api/notifications/unread-count', options),
   markNotificationRead: (notificationId, options) =>

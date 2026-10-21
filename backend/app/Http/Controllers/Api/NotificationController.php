@@ -9,6 +9,7 @@ use App\Models\Project;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 
 /**
  * Notifikasi sistem — dibangun dari data progress yang ada.
@@ -59,47 +60,47 @@ class NotificationController extends Controller
         return response()->json([
             'data' => $sorted,
             'meta' => [
-                'total'   => $sorted->count(),
-                'unread'  => $sorted->where('is_read', false)->count(),
+                'total' => $sorted->count(),
+                'unread' => $sorted->where('is_read', false)->count(),
                 'project' => $resolvedProject?->id,
             ],
         ]);
     }
 
     /** Notifikasi dari 10 update progress terbaru. */
-    private function progressNotifications(Project $project): \Illuminate\Support\Collection
+    private function progressNotifications(Project $project): Collection
     {
         $histories = PoleProgressHistory::with([
-                'pole:id,pole_code',
-                'workItem:id,name',
-                'recordedBy:id,name',
-            ])
+            'pole:id,pole_code',
+            'workItem:id,name',
+            'recordedBy:id,name',
+        ])
             ->whereHas('pole', fn ($q) => $q->where('project_id', $project->id))
             ->orderByDesc('recorded_at')
             ->limit(10)
             ->get();
 
         return $histories->map(function (PoleProgressHistory $history, int $index) {
-            $poleCode  = $history->pole?->pole_code ?? "Tiang #{$history->pole_id}";
-            $itemName  = $history->workItem?->name ?? 'Pekerjaan';
-            $userName  = $history->recordedBy?->name ?? 'Tim lapangan';
-            $progress  = number_format((float) $history->progress_percent, 0);
+            $poleCode = $history->pole?->pole_code ?? "Tiang #{$history->pole_id}";
+            $itemName = $history->workItem?->name ?? 'Pekerjaan';
+            $userName = $history->recordedBy?->name ?? 'Tim lapangan';
+            $progress = number_format((float) $history->progress_percent, 0);
 
             return [
-                'id'          => "progress-{$history->id}",
-                'title'       => "Progress {$poleCode} diperbarui",
+                'id' => "progress-{$history->id}",
+                'title' => "Progress {$poleCode} diperbarui",
                 'description' => "{$userName} memperbarui {$itemName} ke {$progress}%.",
-                'category'    => 'progress',
-                'created_at'  => $history->recorded_at?->toIso8601String(),
-                'read_at'     => null,
-                'is_read'     => $index >= 3,   // tiga terbaru dianggap belum dibaca
-                'href'        => "/tiang/{$history->pole_id}",
+                'category' => 'progress',
+                'created_at' => $history->recorded_at?->toIso8601String(),
+                'read_at' => null,
+                'is_read' => $index >= 3,   // tiga terbaru dianggap belum dibaca
+                'href' => "/tiang/{$history->pole_id}",
             ];
         });
     }
 
     /** Notifikasi tiang yang sudah selesai 100% (maks 10). */
-    private function completionNotifications(Project $project): \Illuminate\Support\Collection
+    private function completionNotifications(Project $project): Collection
     {
         /* Tiang selesai = semua progress item bobotnya 100%. Sebagai
            proxy sederhana: cari pole_work_progress dengan progress 100
@@ -116,14 +117,14 @@ class NotificationController extends Controller
             $poleCode = $progress->pole?->pole_code ?? "Tiang #{$progress->pole_id}";
 
             return [
-                'id'          => "done-{$progress->id}",
-                'title'       => "{$poleCode} mencapai 100%",
+                'id' => "done-{$progress->id}",
+                'title' => "{$poleCode} mencapai 100%",
                 'description' => "Item pekerjaan pada {$poleCode} sudah diselesaikan.",
-                'category'    => 'aktivitas',
-                'created_at'  => $progress->updated_at?->toIso8601String(),
-                'read_at'     => null,
-                'is_read'     => true,
-                'href'        => "/tiang/{$progress->pole_id}",
+                'category' => 'aktivitas',
+                'created_at' => $progress->updated_at?->toIso8601String(),
+                'read_at' => null,
+                'is_read' => true,
+                'href' => "/tiang/{$progress->pole_id}",
             ];
         });
     }

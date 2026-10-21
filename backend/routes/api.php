@@ -6,14 +6,14 @@ use App\Http\Controllers\Api\CurveController;
 use App\Http\Controllers\Api\InvitationController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\PhotoController;
+use App\Http\Controllers\Api\PoleAssignmentController;
 use App\Http\Controllers\Api\PoleController;
 use App\Http\Controllers\Api\ProgressController;
 use App\Http\Controllers\Api\ProjectController;
-use App\Http\Controllers\Api\PoleAssignmentController;
 use App\Http\Controllers\Api\RegionController;
+use App\Http\Controllers\Api\TeamController;
 use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\UserProfileController;
-use App\Http\Controllers\Api\TeamController;
 use App\Http\Controllers\Api\WorkItemController;
 use Illuminate\Support\Facades\Route;
 
