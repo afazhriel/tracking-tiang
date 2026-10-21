@@ -30,6 +30,7 @@ class DeployTests(unittest.TestCase):
             DEPLOY_BACKUPS=str(self.base / 'backups'),
             CALL_LOG=str(self.call_log),
             TEST_FAIL_DB='0',
+            TEST_FAIL_RESTORE='0',
             TEST_FAIL_MIGRATION='0',
             TEST_ALREADY_DOWN='0',
             TEST_BACKEND_RUNNING='true',
@@ -43,6 +44,7 @@ class DeployTests(unittest.TestCase):
             '.gitignore': '.env\nstorage/\nvendor/\nnode_modules/\n.next/\n',
             'backend/app.php': 'github backend\n',
             'backend/Dockerfile': 'FROM scratch\n',
+            'deploy/verify-production-backup.sh': SCRIPT.with_name('verify-production-backup.sh').read_text(),
             'frontend/package.json': '{}\n',
             'frontend/app.js': 'github frontend\n',
             'docker-compose.yml': 'services: {}\n',
@@ -75,6 +77,9 @@ class DeployTests(unittest.TestCase):
         (self.repo / 'unrelated-tool.txt').write_text('keep unrelated file\n')
         self.command('docker', '''
 case "$*" in
+  *" run --detach "*) printf '%064d\\n' 0 ;;
+  *"pg_restore --exit-on-error"*) cat >/dev/null; if [ "$TEST_FAIL_RESTORE" = 1 ]; then echo PRIVATE_RESTORE_DETAIL >&2; exit 1; fi ;;
+  *"SELECT count(*) FROM public.migrations"*) printf '21\\n' ;;
   *isDownForMaintenance*) [ "$TEST_ALREADY_DOWN" != 1 ] || exit 1 ;;
   *"php artisan migrate"*) [ "$TEST_FAIL_MIGRATION" != 1 ] || exit 1 ;;
   *pg_dump*)
@@ -178,6 +183,45 @@ exec /usr/bin/tar "$@"
         self.assertIn('php artisan up', calls)
         self.assertFalse((self.repo / '.git/tracking-deploy-pending').exists())
 
+    def test_failed_real_restore_resumes_old_backend_without_production_migration(self):
+        self.env['TEST_FAIL_RESTORE'] = '1'
+        result = self.deploy()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual((self.repo / 'backend/app.php').read_text(), 'local backend\n')
+        calls = self.call_log.read_text()
+        self.assertNotIn('php artisan migrate', calls)
+        self.assertIn('docker compose start backend', calls)
+        self.assertIn('php artisan up', calls)
+        self.assertIn('rm --force --volumes', calls)
+        self.assertFalse((self.repo / '.git/tracking-deploy-pending').exists())
+        self.assertFalse(any((self.base / 'backups').glob('*/RESTORE_VERIFIED')))
+        self.assertNotIn('PRIVATE_RESTORE_DETAIL', result.stderr + result.stdout)
+        self.assertIn('PRIVATE_RESTORE_DETAIL', next((self.base / 'backups').glob('*/restore-private.log')).read_text())
+
+    def test_corrupt_backup_invalidates_old_restore_marker_before_container_creation(self):
+        self.assertEqual(self.deploy().returncode, 0)
+        backup = next((self.base / 'backups').iterdir())
+        self.assertTrue((backup / 'RESTORE_VERIFIED').is_file())
+        (backup / 'database.dump').write_text('corrupted after previous verification')
+        self.call_log.write_text('')
+        result = subprocess.run(['bash', str(SCRIPT.with_name('verify-production-backup.sh')), str(backup)],
+                                env=self.env, capture_output=True, text=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertFalse((backup / 'RESTORE_VERIFIED').exists())
+        self.assertEqual(self.call_log.read_text(), '')
+
+    def test_manifest_cannot_select_a_file_outside_the_backup(self):
+        self.assertEqual(self.deploy().returncode, 0)
+        backup = next((self.base / 'backups').iterdir())
+        manifest = backup / 'SHA256SUMS'
+        manifest.write_text(manifest.read_text().replace('database.dump', '../database.dump'))
+        self.call_log.write_text('')
+        result = subprocess.run(['bash', str(SCRIPT.with_name('verify-production-backup.sh')), str(backup)],
+                                env=self.env, capture_output=True, text=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertFalse((backup / 'RESTORE_VERIFIED').exists())
+        self.assertEqual(self.call_log.read_text(), '')
+
     def test_routine_deploy_rejects_manual_source_changes(self):
         result = self.deploy(mode='')
         self.assertNotEqual(result.returncode, 0)
@@ -217,6 +261,9 @@ exec /usr/bin/tar "$@"
         self.assertLess(stop, dump)
         self.assertLess(stop, archive)
         self.assertLess(dump, start)
+        self.assertLess(calls.index('pg_restore --exit-on-error'), start)
+        self.assertIn('--network none --memory 1g --cpus 1', calls)
+        self.assertIn('docker --host=unix:///var/run/docker.sock rm --force --volumes', calls)
         self.assertLess(archive, start)
         self.assertLess(migration, resume)
         self.assertLess(calls.index('npm run build'), calls.index('npm prune --omit=dev'))
@@ -270,6 +317,25 @@ exec /usr/bin/tar "$@"
 
     def test_health_rejects_a_login_redirect_instead_of_the_actual_page(self):
         self.assert_failed_health_preserves_recovery('redirect')
+
+    def test_vps_audit_ssh_command_uses_server_checkout(self):
+        import yaml
+        workflow = yaml.safe_load((SCRIPT.parents[1] / '.github/workflows/check-vps.yml').read_text())
+        step = next(step for step in workflow['jobs']['check']['steps']
+                    if step.get('name') == 'Read-only production configuration and data audit')
+        assignment = next(line.strip() for line in step['run'].splitlines()
+                          if line.strip().startswith('remote_command='))
+        checkout = self.base / 'checkout-with-spaces'
+        checkout.mkdir()
+        target = self.base / 'audit-cwd'
+        self.command('docker', 'pwd > "$TEST_CWD_FILE"\n')
+        result = subprocess.run(['bash', '-c', assignment + '\n'
+                                 'printf -v escaped_command "%q" "$remote_command"\n'
+                                 'bash -c "bash -c $escaped_command" < /dev/null'],
+                                env={**self.env, 'DEPLOY_REPO': str(checkout),
+                                     'TEST_CWD_FILE': str(target)}, capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(target.read_text().strip(), str(checkout))
 
     def test_ssh_bootstrap_preserves_payload_and_arguments(self):
         workflow = SCRIPT.parents[1] / '.github/workflows/deploy.yml'

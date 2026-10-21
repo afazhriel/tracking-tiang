@@ -165,7 +165,7 @@ jobs:
         with:
           python-version: '3.12'
       - run: pip install -r deploy/tests/requirements.txt
-      - run: bash -n deploy/vps.sh deploy/backup-vps.sh deploy/check-vps.sh
+      - run: bash -n deploy/vps.sh deploy/backup-vps.sh deploy/check-vps.sh deploy/verify-production-backup.sh
       - run: python3 -m unittest discover -s deploy/tests -v
       - run: node --test ci/tests/*.test.mjs
 
@@ -265,6 +265,7 @@ jobs:
           cp backend/.env.example backend/.env
           composer install --working-dir=backend --no-interaction --prefer-dist --no-progress
           php backend/tests/Support/prepare-recovery.php > "$RUNNER_TEMP/recovery-files.txt"
+          (cd backend; php ../deploy/audit-vps.php)
       - name: Restore dump and uploads into fresh isolated targets
         env:
           CI_POSTGRES_CONTAINER: ${{ job.services.postgres.id }}
