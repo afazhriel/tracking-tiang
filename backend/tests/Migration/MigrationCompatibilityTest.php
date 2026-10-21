@@ -45,10 +45,7 @@ class MigrationCompatibilityTest extends TestCase
         $this->seedLegacyRecords();
 
         if ($productionDrift) {
-            $this->artisan('migrate', [
-                '--path' => base_path('tests/Fixtures/production-migrations'),
-                '--realpath' => true, '--force' => true,
-            ])->assertSuccessful();
+            $this->installHistoricalExtensions(backfill: true);
             DB::table('notifications')->insert([
                 'user_id' => DB::table('users')->where('email', 'legacy@example.test')->value('id'),
                 'title' => 'Notifikasi lama', 'description' => 'Pertahankan isi notifikasi',
@@ -92,9 +89,7 @@ class MigrationCompatibilityTest extends TestCase
         $this->assertNotFalse($base);
         $this->artisan('migrate:fresh', ['--path' => $base, '--realpath' => true, '--force' => true])->assertSuccessful();
         $this->seedLegacyRecords();
-        foreach (['2026_10_17_000001_add_pole_and_source_to_work_items_table.php', '2026_10_17_000002_create_notifications_table.php'] as $name) {
-            $this->artisan('migrate', ['--path' => base_path('tests/Fixtures/production-migrations/'.$name), '--realpath' => true, '--force' => true])->assertSuccessful();
-        }
+        $this->installHistoricalExtensions(backfill: false);
         $template = DB::table('work_items')->first();
         $pole = DB::table('poles')->first();
         DB::table('work_items')->insert([
@@ -155,6 +150,23 @@ class MigrationCompatibilityTest extends TestCase
                 unlink($file);
             }
             rmdir($path);
+        }
+    }
+
+    private function installHistoricalExtensions(bool $backfill): void
+    {
+        // The PR base can already contain additive replacements for these
+        // historical extensions. Never replay their unconditional ALTER TABLE.
+        $fixtures = [
+            '2026_10_14_092909_add_weight_snapshot_to_pole_progress_histories_table.php' => ! Schema::hasColumn('pole_progress_histories', 'weight_percent_snapshot'),
+            '2026_10_17_000001_add_pole_and_source_to_work_items_table.php' => ! Schema::hasColumn('work_items', 'pole_id'),
+            '2026_10_17_000002_create_notifications_table.php' => ! Schema::hasTable('notifications'),
+            '2026_10_17_000003_backfill_pole_work_items.php' => $backfill,
+        ];
+        foreach ($fixtures as $name => $needed) {
+            if ($needed) {
+                $this->artisan('migrate', ['--path' => base_path('tests/Fixtures/production-migrations/'.$name), '--realpath' => true, '--force' => true])->assertSuccessful();
+            }
         }
     }
 
