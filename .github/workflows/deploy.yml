@@ -30,6 +30,8 @@ jobs:
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - name: Validate deployment scripts
         run: bash -n deploy/vps.sh
       - name: Configure SSH
@@ -55,7 +57,7 @@ jobs:
           [[ "$VPS_HOST" =~ ^[a-zA-Z0-9.-]+$ ]]
           [[ "$VPS_USER" =~ ^[a-zA-Z_][a-zA-Z0-9_-]*$ ]]
           port="${VPS_PORT:-22}"
-          [[ "$port" =~ ^[0-9]+$ ]]
+          [[ "$port" =~ ^[0-9]{1,5}$ ]] && (( 10#$port >= 1 && 10#$port <= 65535 ))
           mode=''
           if [[ "$REPLACE_VPS" = true ]]; then
             mode=--replace-vps
@@ -65,7 +67,7 @@ jobs:
           remote_command='script=$(mktemp); trap '\''rm -f "$script"'\'' EXIT; cat > "$script"; bash "$script" "$@" < /dev/null'
           printf -v escaped_command '%q' "$remote_command"
           ssh -i ~/.ssh/deploy_key -p "$port" \
-            -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=20 \
+            -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=20 \
             "$VPS_USER@$VPS_HOST" "bash -c $escaped_command -- '$GITHUB_SHA' '$mode'" < deploy/vps.sh
       - name: Remove SSH key
         if: always()

@@ -2,13 +2,20 @@
 # Read live application data into a private, server-local recovery directory.
 set -Eeuo pipefail
 umask 077
-if [[ -f /etc/tracking-tiang-deploy.conf ]]; then
-  source /etc/tracking-tiang-deploy.conf
+configuration=${DEPLOY_CONFIG:-/etc/tracking-tiang-deploy.conf}
+if [[ -f "$configuration" ]]; then
+  source "$configuration"
 fi
 repo=${DEPLOY_REPO:-/opt/tracking-tiang}
 frontend=${DEPLOY_FRONTEND:-/opt/tracking-tiang/frontend-next/frontend}
 exec 9> /tmp/tracking-tiang-deploy.lock
 flock -n 9 || { echo 'Another deployment/backup is running' >&2; exit 1; }
+# An online DB dump plus a later file archive cannot guarantee matching uploads.
+# This helper does not stop production itself: an operator must approve/drain it.
+if [[ "$(docker inspect tracking-tiang-backend --format '{{.State.Running}}')" != false ]]; then
+  echo 'Consistent backup requires the backend to be gracefully stopped first; no backup was taken.' >&2
+  exit 1
+fi
 backup="${DEPLOY_BACKUPS:-/opt/tracking-tiang-deploy-backups}/before-activation-$(date -u +%Y%m%dT%H%M%SZ)"
 mkdir -p "$backup"
 cd "$repo"

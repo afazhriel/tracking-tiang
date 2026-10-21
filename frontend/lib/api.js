@@ -5,7 +5,7 @@
  * Satu-satunya tempat frontend melakukan request ke backend.
  *
  * - Base URL memakai proxy rewrite Next.js yang SUDAH ADA
- *   (`/api/*` -> http://187.77.112.247/api/*` pada next.config.mjs).
+ *   (`/api/*` -> API_UPSTREAM_ORIGIN pada next.config.mjs).
  * - Auth token tetap memakai key yang sudah dipakai login page:
  *   `tracking_tiang_token` (di Circuit via header Authorization: Bearer).
  * - Tidak ada base URL hardcoded di halaman mana pun.

@@ -1,12 +1,18 @@
+import { apiUpstreamOrigin } from './lib/upstream.mjs'
+
+const upstream = apiUpstreamOrigin(process.env)
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   async rewrites() {
-    return [
-      {
-        source: '/api/:path*',
-        destination: `${(process.env.API_UPSTREAM_ORIGIN || 'http://187.77.112.247').replace(/\/+$/, '')}/api/:path*`,
-      },
-    ]
+    return [{ source: '/api/:path*', destination: `${upstream}/api/:path*` }]
+  },
+  async headers() {
+    return [{ source: '/:path*', headers: [
+      { key: 'X-Content-Type-Options', value: 'nosniff' },
+      { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+      { key: 'X-Frame-Options', value: 'DENY' },
+    ] }]
   },
 }
 

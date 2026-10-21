@@ -116,3 +116,52 @@ Akses SSH dan host key berhasil diuji melalui workflow `Check VPS access` pada
 20 Oktober 2026. Pemilik memilih source GitHub sebagai acuan. Penyelarasan dan
 deploy pertama berhasil setelah backup source/database dibuat. Deploy otomatis
 aktif untuk push ke `main`; lihat [hasil pemeriksaan dan lokasi backup](VPS-AUDIT.md).
+
+## Tambahan hardening (PR lanjutan setelah #1 dan #2)
+
+Sebelum backup, deploy mengaktifkan maintenance lalu menghentikan backend dengan
+waktu drain 120 detik. Ini mencegah request aplikasi mengubah DB/upload saat kedua
+snapshot diambil. Worker eksternal atau penulis DB di luar backend harus dihentikan
+oleh operator juga; skrip tidak dapat menemukan semuanya. Maintenance operator
+yang sudah aktif tidak ditimpa. Jika backup gagal sebelum source berubah, backend
+lama dinyalakan kembali dan maintenance dibuka. Setelah source/schema berubah,
+kegagalan mempertahankan maintenance dan memerlukan pemeriksaan operator; tidak
+ada pengembalian database atau backend otomatis.
+
+Journal lokal `.git/tracking-deploy-pending` dibuat sebelum maintenance/backup.
+Deploy berikutnya menolak berjalan jika journal tertinggal, termasuk setelah
+koneksi terputus atau proses terbunuh. Jangan menghapus journal untuk sekadar
+mengulang deploy: periksa SHA, backup, stage, status migration dan layanan terlebih
+dahulu, pilih lanjut/perbaikan atau pemulihan yang disetujui pemilik, baru hapus
+journal setelah verifikasi. Artefak stage dan build gagal dipertahankan ketika
+pemulihan diperlukan. Simpan direktori tersebut privat karena berisi `.env*`.
+Health check yang gagal sesudah pertukaran frontend mengembalikan build frontend
+lama sambil mempertahankan build baru untuk pemeriksaan; ini bukan rollback penuh.
+
+Health check kini mewajibkan HTTP 200 `/login`, HTTP 200 dengan array JSON pada
+`/api/regions/provinces`, dan HTTP 401 dengan JSON `Unauthenticated.` pada `/api/me`.
+Redirect atau HTML fallback API gagal. Ini belum menggantikan smoke test bisnis
+berizin. `backup-vps.sh` mandiri menolak backend yang masih berjalan; penghentian
+backend/worker untuk backup manual perlu persetujuan operator sebelum dijalankan.
+
+Proxy Next memakai `API_UPSTREAM_ORIGIN`; alias `API_PROXY_ORIGIN` tetap diterima.
+Default HTTPS `https://pjl.ituiot.com` sesuai vhost yang didokumentasikan:
+`/api/` langsung ke PHP-FPM, `/` ke Next. Jangan arahkan origin ke Next sendiri;
+itu membentuk loop. HTTP ke IP/domain publik ditolak pada production build;
+HTTP loopback diperbolehkan untuk tes dan upstream lokal yang benar-benar HTTP.
+Pastikan `.env*` build VPS yang lama tidak menetapkan public HTTP; ubah hanya saat
+persetujuan konfigurasi produksi diberikan. Header/token tidak pernah dimasukkan
+ke URL. Konfigurasi ini belum diterapkan pada VPS oleh PR.
+
+Sebelum merge produksi: aktifkan branch protection/required PR dan `Quality gate`,
+pause deploy `DEPLOY_ENABLED=false` selama penggabungan rangkaian PR, periksa vhost,
+origin HTTPS/TLS dari VPS, graceful-stop signal PHP-FPM, worker eksternal, ruang
+disk, izin backup serta prosedur restore. Resume deploy dan eksekusi produksi
+memerlukan persetujuan pemilik. Detail protection/environment/secrets tidak dapat
+dikelola oleh kredensial workspace (403); tidak ada secrets yang dibaca/dicetak.
+
+Konfigurasi Capacitor remote-WebView juga memakai HTTPS pada domain yang sama,
+dengan cleartext=false. App ID/navigasi/arsitektur remote-WebView tetap dipertahankan;
+ini baru berlaku pada build APK berikutnya. APK yang sudah terpasang tidak berubah
+dan masih memerlukan pembaruan berizin serta tes perangkat. Ini bukan integrasi
+static-export/plugin native dari branch review.
