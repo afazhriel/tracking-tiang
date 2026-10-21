@@ -87,9 +87,11 @@ pada PostgreSQL uji. Detail eksekusi lengkap tersedia di quality.yml.
 
 ## Perlindungan main yang disarankan
 
-API branch protection mengembalikan HTTP 403 pada pemeriksaan sesi ini. Daftar
-ruleset yang dapat dibaca kosong; status classic branch protection tidak dapat
-dipastikan. Tidak ada pengaturan protection yang diubah secara diam-diam.
+Pemeriksaan ulang 21 Oktober 2026 WIB: daftar branch GitHub melaporkan
+`main.protected=false`, dan daftar ruleset yang dapat dibaca kosong. Endpoint
+detail classic branch protection mengembalikan HTTP 403, sehingga konfigurasi
+detail tidak dapat diperiksa/diubah dengan kredensial sesi ini. Perlindungan main
+perlu diaktifkan oleh pemilik. Tidak ada pengaturan protection yang diubah.
 
 Pemilik dapat membuat branch ruleset aktif di Settings → Rules → Rulesets:
 

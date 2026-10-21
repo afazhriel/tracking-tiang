@@ -1,0 +1,1040 @@
+{
+  "audited_at_wib": "2026-10-21",
+  "refs": {
+    "origin/main": "c547c48504e72ec282d8668946e73b6113b0cca0",
+    "origin/review/sinkronisasi-20261020": "4fc1fc605fdb177f480bdb386d3d31376efaea07",
+    "origin/codex/ci-quality-gates": "0c0c4b2cb4023c5fa66f7d0b954e0d972306c8f6"
+  },
+  "comparisons": {
+    "origin/main..origin/review/sinkronisasi-20261020": [
+      {
+        "status": "D",
+        "paths": [
+          ".github/workflows/check-vps.yml"
+        ]
+      },
+      {
+        "status": "D",
+        "paths": [
+          ".github/workflows/deploy.yml"
+        ]
+      },
+      {
+        "status": "M",
+        "paths": [
+          "RECOVERY_AUDIT_2026-10-16.md"
+        ]
+      },
+      {
+        "status": "M",
+        "paths": [
+          "backend/.env.example"
+        ]
+      },
+      {
+        "status": "M",
+        "paths": [
+          "backend/app/Http/Controllers/Api/ActivityController.php"
+        ]
+      },
+      {
+        "status": "M",
+        "paths": [
+          "backend/app/Http/Controllers/Api/CurveController.php"
+        ]
+      },
+      {
+        "status": "M",
+        "paths": [
+          "backend/app/Http/Controllers/Api/InvitationController.php"
+        ]
+      },
+      {
+        "status": "M",
+        "paths": [
+          "backend/app/Http/Controllers/Api/NotificationController.php"
+        ]
+      },
+      {
+        "status": "M",
+        "paths": [
+          "backend/app/Http/Controllers/Api/PhotoController.php"
+        ]
+      },
+      {
+        "status": "M",
+        "paths": [
+          "backend/app/Http/Controllers/Api/PoleAssignmentController.php"
+        ]
+      },
+      {
+        "status": "M",
+        "paths": [
+          "backend/app/Http/Controllers/Api/PoleController.php"
+        ]
+      },
+      {
+        "status": "M",
+        "paths": [
+          "backend/app/Http/Controllers/Api/ProgressController.php"
+        ]
+      },
+      {
+        "status": "M",
+        "paths": [
+          "backend/app/Http/Controllers/Api/ProjectController.php"
+        ]
+      },
+      {
+        "status": "M",
+        "paths": [
+          "backend/app/Http/Controllers/Api/TeamController.php"
+        ]
+      },
+      {
+        "status": "M",
+        "paths": [
+          "backend/app/Http/Controllers/Api/WorkItemController.php"
+        ]
+      },
+      {
+        "status": "M",
+        "paths": [
+          "backend/app/Models/Invitation.php"
+        ]
+      },
+      {
+        "status": "A",
+        "paths": [
+          "backend/app/Models/Notification.php"
+        ]
+      },
+      {
+        "status": "M",
+        "paths": [
+          "backend/app/Models/Pole.php"
+        ]
+      },
+      {
+        "status": "M",
+        "paths": [
+          "backend/app/Models/PoleAssignment.php"
+        ]
+      },
+      {
+        "status": "M",
+        "paths": [
+          "backend/app/Models/ProgressPhoto.php"
+        ]
+      },
+      {
+        "status": "M",
+        "paths": [
+          "backend/app/Models/User.php"
+        ]
+      },
+      {
+        "status": "M",
+        "paths": [
+          "backend/app/Models/WorkItem.php"
+        ]
+      },
+      {
+        "status": "M",
+        "paths": [
+          "backend/app/Policies/TeamPolicy.php"
+        ]
+      },
+      {
+        "status": "M",
+        "paths": [
+          "backend/app/Providers/AppServiceProvider.php"
+        ]
+      },
+      {
+        "status": "A",
+        "paths": [
+          "backend/app/Services/NotificationService.php"
+        ]
+      },
+      {
+        "status": "M",
+        "paths": [
+          "backend/bootstrap/app.php"
+        ]
+      },
+      {
+        "status": "M",
+        "paths": [
+          "backend/composer.json"
+        ]
+      },
+      {
+        "status": "M",
+        "paths": [
+          "backend/composer.lock"
+        ]
+      },
+      {
+        "status": "A",
+        "paths": [
+          "backend/config/cors.php"
+        ]
+      },
+      {
+        "status": "A",
+        "paths": [
+          "backend/database/migrations/2026_10_17_000001_add_pole_and_source_to_work_items_table.php"
+        ]
+      },
+      {
+        "status": "A",
+        "paths": [
+          "backend/database/migrations/2026_10_17_000002_create_notifications_table.php"
+        ]
+      },
+      {
+        "status": "A",
+        "paths": [
+          "backend/database/migrations/2026_10_17_000003_backfill_pole_work_items.php"
+        ]
+      },
+      {
+        "status": "M",
+        "paths": [
+          "backend/routes/api.php"
+        ]
+      },
+      {
+        "status": "A",
+        "paths": [
+          "backend/tests/Feature/NotificationTest.php"
+        ]
+      },
+      {
+        "status": "A",
+        "paths": [
+          "backend/tests/Feature/PoleWorkItemTest.php"
+        ]
+      },
+      {
+        "status": "M",
+        "paths": [
+          "backend/tests/Feature/ProvinceProgressTest.php"
+        ]
+      },
+      {
+        "status": "A",
+        "paths": [
+          "backend/tests/Feature/SecurityHardeningTest.php"
+        ]
+      },
+      {
+        "status": "M",
+        "paths": [
+          "backend/tests/Feature/WorkItemNormalizationTest.php"
+        ]
+      },
+      {
+        "status": "D",
+        "paths": [
+          "deploy/README.md"
+        ]
+      },
+      {
+        "status": "D",
+        "paths": [
+          "deploy/VPS-AUDIT.md"
+        ]
+      },
+      {
+        "status": "D",
+        "paths": [
+          "deploy/backup-vps.sh"
+        ]
+      },
+      {
+        "status": "D",
+        "paths": [
+          "deploy/check-vps.sh"
+        ]
+      },
+      {
+        "status": "D",
+        "paths": [
+          "deploy/tests/.gitignore"
+        ]
+      },
+      {
+        "status": "D",
+        "paths": [
+          "deploy/tests/test_vps.py"
+        ]
+      },
+      {
+        "status": "D",
+        "paths": [
+          "deploy/vps.sh"
+        ]
+      },
+      {
+        "status": "M",
+        "paths": [
+          "frontend/.gitignore"
+        ]
+      },
+      {
+        "status": "M",
+        "paths": [
+          "frontend/android/app/build.gradle"
+        ]
+      },
+      {
+        "status": "M",
+        "paths": [
+          "frontend/android/app/capacitor.build.gradle"
+        ]
+      },
+      {
+        "status": "M",
+        "paths": [
+          "frontend/android/app/src/main/AndroidManifest.xml"
+        ]
+      },
+      {
+        "status": "M",
+        "paths": [
+          "frontend/android/app/src/main/java/com/trackingtiang/app/MainActivity.java"
+        ]
+      },
+      {
+        "status": "M",
+        "paths": [
+          "frontend/android/app/src/main/res/drawable-land-hdpi/splash.png"
+        ]
+      },
+      {
+        "status": "M",
+        "paths": [
+          "frontend/android/app/src/main/res/drawable-land-mdpi/splash.png"
+        ]
+      },
+      {
+        "status": "M",
+        "paths": [
+          "frontend/android/app/src/main/res/drawable-land-xhdpi/splash.png"
+        ]
+      },
+      {
+        "status": "M",
+        "paths": [
+          "frontend/android/app/src/main/res/drawable-land-xxhdpi/splash.png"
+        ]
+      },
+      {
+        "status": "M",
+        "paths": [
+          "frontend/android/app/src/main/res/drawable-land-xxxhdpi/splash.png"
+        ]
+      },
+      {
+        "status": "M",
+        "paths": [
+          "frontend/android/app/src/main/res/drawable-port-hdpi/splash.png"
+        ]
+      },
+      {
+        "status": "M",
+        "paths": [
+          "frontend/android/app/src/main/res/drawable-port-mdpi/splash.png"
+        ]
+      },
+      {
+        "status": "M",
+        "paths": [
+          "frontend/android/app/src/main/res/drawable-port-xhdpi/splash.png"
+        ]
+      },
+      {
+        "status": "M",
+        "paths": [
+          "frontend/android/app/src/main/res/drawable-port-xxhdpi/splash.png"
+        ]
+      },
+      {
+        "status": "M",
+        "paths": [
+          "frontend/android/app/src/main/res/drawable-port-xxxhdpi/splash.png"
+        ]
+      },
+      {
+        "status": "M",
+        "paths": [
+          "frontend/android/app/src/main/res/drawable/splash.png"
+        ]
+      },
+      {
+        "status": "A",
+        "paths": [
+          "frontend/android/app/src/main/res/values/colors.xml"
+        ]
+      },
+      {
+        "status": "M",
+        "paths": [
+          "frontend/android/app/src/main/res/values/strings.xml"
+        ]
+      },
+      {
+        "status": "M",
+        "paths": [
+          "frontend/android/app/src/main/res/values/styles.xml"
+        ]
+      },
+      {
+        "status": "M",
+        "paths": [
+          "frontend/android/capacitor.settings.gradle"
+        ]
+      },
+      {
+        "status": "M",
+        "paths": [
+          "frontend/app/aktivitas/AktivitasPage.jsx"
+        ]
+      },
+      {
+        "status": "M",
+        "paths": [
+          "frontend/app/dashboard/Dashboard.jsx"
+        ]
+      },
+      {
+        "status": "M",
+        "paths": [
+          "frontend/app/globals.css"
+        ]
+      },
+      {
+        "status": "M",
+        "paths": [
+          "frontend/app/kurva-s/KurvaSPage.jsx"
+        ]
+      },
+      {
+        "status": "M",
+        "paths": [
+          "frontend/app/landing.css"
+        ]
+      },
+      {
+        "status": "M",
+        "paths": [
+          "frontend/app/layout.jsx"
+        ]
+      },
+      {
+        "status": "M",
+        "paths": [
+          "frontend/app/notifikasi/NotifikasiPage.jsx"
+        ]
+      },
+      {
+        "status": "M",
+        "paths": [
+          "frontend/app/page.jsx"
+        ]
+      },
+      {
+        "status": "M",
+        "paths": [
+          "frontend/app/pekerjaan/PekerjaanPage.jsx"
+        ]
+      },
+      {
+        "status": "M",
+        "paths": [
+          "frontend/app/pekerjaan/[id]/PekerjaanDetailPage.jsx"
+        ]
+      },
+      {
+        "status": "M",
+        "paths": [
+          "frontend/app/pekerjaan/[id]/page.jsx"
+        ]
+      },
+      {
+        "status": "A",
+        "paths": [
+          "frontend/app/pekerjaan/detail/page.jsx"
+        ]
+      },
+      {
+        "status": "M",
+        "paths": [
+          "frontend/app/profil/ProfilPage.jsx"
+        ]
+      },
+      {
+        "status": "M",
+        "paths": [
+          "frontend/app/tiang/TiangPage.jsx"
+        ]
+      },
+      {
+        "status": "M",
+        "paths": [
+          "frontend/app/tiang/[id]/TiangDetailPage.jsx"
+        ]
+      },
+      {
+        "status": "M",
+        "paths": [
+          "frontend/app/tiang/[id]/page.jsx"
+        ]
+      },
+      {
+        "status": "A",
+        "paths": [
+          "frontend/app/tiang/[id]/pekerjaan/PekerjaanTiangPage.jsx"
+        ]
+      },
+      {
+        "status": "A",
+        "paths": [
+          "frontend/app/tiang/[id]/pekerjaan/page.jsx"
+        ]
+      },
+      {
+        "status": "A",
+        "paths": [
+          "frontend/app/tiang/detail/page.jsx"
+        ]
+      },
+      {
+        "status": "A",
+        "paths": [
+          "frontend/app/tiang/detail/pekerjaan/page.jsx"
+        ]
+      },
+      {
+        "status": "M",
+        "paths": [
+          "frontend/capacitor.config.json"
+        ]
+      },
+      {
+        "status": "M",
+        "paths": [
+          "frontend/components/layout/AppShell.jsx"
+        ]
+      },
+      {
+        "status": "M",
+        "paths": [
+          "frontend/components/tiang/CreatePoleModal.jsx"
+        ]
+      },
+      {
+        "status": "M",
+        "paths": [
+          "frontend/components/tiang/TiangMap.jsx"
+        ]
+      },
+      {
+        "status": "M",
+        "paths": [
+          "frontend/components/tiang/UpdateProgressModal.jsx"
+        ]
+      },
+      {
+        "status": "M",
+        "paths": [
+          "frontend/components/ui/bento-grid.jsx"
+        ]
+      },
+      {
+        "status": "M",
+        "paths": [
+          "frontend/components/ui/card.jsx"
+        ]
+      },
+      {
+        "status": "M",
+        "paths": [
+          "frontend/components/ui/modal.jsx"
+        ]
+      },
+      {
+        "status": "M",
+        "paths": [
+          "frontend/eslint.config.js"
+        ]
+      },
+      {
+        "status": "M",
+        "paths": [
+          "frontend/lib/api.js"
+        ]
+      },
+      {
+        "status": "A",
+        "paths": [
+          "frontend/lib/capacitor.js"
+        ]
+      },
+      {
+        "status": "A",
+        "paths": [
+          "frontend/lib/native.js"
+        ]
+      },
+      {
+        "status": "A",
+        "paths": [
+          "frontend/lib/use-media-query.js"
+        ]
+      },
+      {
+        "status": "M",
+        "paths": [
+          "frontend/next.config.mjs"
+        ]
+      },
+      {
+        "status": "M",
+        "paths": [
+          "frontend/package-lock.json"
+        ]
+      },
+      {
+        "status": "M",
+        "paths": [
+          "frontend/package.json"
+        ]
+      },
+      {
+        "status": "A",
+        "paths": [
+          "frontend/resources/android/icon/drawable-hdpi-icon.png"
+        ]
+      },
+      {
+        "status": "A",
+        "paths": [
+          "frontend/resources/android/icon/drawable-ldpi-icon.png"
+        ]
+      },
+      {
+        "status": "A",
+        "paths": [
+          "frontend/resources/android/icon/drawable-mdpi-icon.png"
+        ]
+      },
+      {
+        "status": "A",
+        "paths": [
+          "frontend/resources/android/icon/drawable-xhdpi-icon.png"
+        ]
+      },
+      {
+        "status": "A",
+        "paths": [
+          "frontend/resources/android/icon/drawable-xxhdpi-icon.png"
+        ]
+      },
+      {
+        "status": "A",
+        "paths": [
+          "frontend/resources/android/icon/drawable-xxxhdpi-icon.png"
+        ]
+      },
+      {
+        "status": "A",
+        "paths": [
+          "frontend/resources/android/splash/drawable-land-hdpi-screen.png"
+        ]
+      },
+      {
+        "status": "A",
+        "paths": [
+          "frontend/resources/android/splash/drawable-land-ldpi-screen.png"
+        ]
+      },
+      {
+        "status": "A",
+        "paths": [
+          "frontend/resources/android/splash/drawable-land-mdpi-screen.png"
+        ]
+      },
+      {
+        "status": "A",
+        "paths": [
+          "frontend/resources/android/splash/drawable-land-xhdpi-screen.png"
+        ]
+      },
+      {
+        "status": "A",
+        "paths": [
+          "frontend/resources/android/splash/drawable-land-xxhdpi-screen.png"
+        ]
+      },
+      {
+        "status": "A",
+        "paths": [
+          "frontend/resources/android/splash/drawable-land-xxxhdpi-screen.png"
+        ]
+      },
+      {
+        "status": "A",
+        "paths": [
+          "frontend/resources/android/splash/drawable-port-hdpi-screen.png"
+        ]
+      },
+      {
+        "status": "A",
+        "paths": [
+          "frontend/resources/android/splash/drawable-port-ldpi-screen.png"
+        ]
+      },
+      {
+        "status": "A",
+        "paths": [
+          "frontend/resources/android/splash/drawable-port-mdpi-screen.png"
+        ]
+      },
+      {
+        "status": "A",
+        "paths": [
+          "frontend/resources/android/splash/drawable-port-xhdpi-screen.png"
+        ]
+      },
+      {
+        "status": "A",
+        "paths": [
+          "frontend/resources/android/splash/drawable-port-xxhdpi-screen.png"
+        ]
+      },
+      {
+        "status": "A",
+        "paths": [
+          "frontend/resources/android/splash/drawable-port-xxxhdpi-screen.png"
+        ]
+      },
+      {
+        "status": "A",
+        "paths": [
+          "frontend/resources/icon.png"
+        ]
+      },
+      {
+        "status": "A",
+        "paths": [
+          "frontend/resources/splash.png"
+        ]
+      },
+      {
+        "status": "A",
+        "paths": [
+          "frontend/scripts/capacitor-sim-server.mjs"
+        ]
+      },
+      {
+        "status": "M",
+        "paths": [
+          "frontend/src/App.jsx"
+        ]
+      },
+      {
+        "status": "M",
+        "paths": [
+          "frontend/src/components/Sidebar.jsx"
+        ]
+      },
+      {
+        "status": "M",
+        "paths": [
+          "frontend/src/components/TemplateSidebar.jsx"
+        ]
+      },
+      {
+        "status": "M",
+        "paths": [
+          "frontend/src/components/ui/sign-in-card-2.jsx"
+        ]
+      },
+      {
+        "status": "M",
+        "paths": [
+          "frontend/src/components/ui/sign-up-card-2.jsx"
+        ]
+      },
+      {
+        "status": "M",
+        "paths": [
+          "frontend/src/legacy-pages/Dashboard.jsx"
+        ]
+      }
+    ],
+    "origin/main..origin/codex/ci-quality-gates": [
+      {
+        "status": "M",
+        "paths": [
+          ".github/workflows/check-vps.yml"
+        ]
+      },
+      {
+        "status": "M",
+        "paths": [
+          ".github/workflows/deploy.yml"
+        ]
+      },
+      {
+        "status": "A",
+        "paths": [
+          ".github/workflows/quality.yml"
+        ]
+      },
+      {
+        "status": "M",
+        "paths": [
+          "backend/app/Http/Controllers/Api/ActivityController.php"
+        ]
+      },
+      {
+        "status": "M",
+        "paths": [
+          "backend/app/Http/Controllers/Api/CurveController.php"
+        ]
+      },
+      {
+        "status": "M",
+        "paths": [
+          "backend/app/Http/Controllers/Api/InvitationController.php"
+        ]
+      },
+      {
+        "status": "M",
+        "paths": [
+          "backend/app/Http/Controllers/Api/NotificationController.php"
+        ]
+      },
+      {
+        "status": "M",
+        "paths": [
+          "backend/app/Http/Controllers/Api/PoleAssignmentController.php"
+        ]
+      },
+      {
+        "status": "M",
+        "paths": [
+          "backend/app/Http/Controllers/Api/PoleController.php"
+        ]
+      },
+      {
+        "status": "M",
+        "paths": [
+          "backend/app/Models/Invitation.php"
+        ]
+      },
+      {
+        "status": "M",
+        "paths": [
+          "backend/app/Models/PoleAssignment.php"
+        ]
+      },
+      {
+        "status": "M",
+        "paths": [
+          "backend/app/Models/ProgressPhoto.php"
+        ]
+      },
+      {
+        "status": "M",
+        "paths": [
+          "backend/app/Models/User.php"
+        ]
+      },
+      {
+        "status": "M",
+        "paths": [
+          "backend/app/Policies/TeamPolicy.php"
+        ]
+      },
+      {
+        "status": "M",
+        "paths": [
+          "backend/bootstrap/app.php"
+        ]
+      },
+      {
+        "status": "M",
+        "paths": [
+          "backend/phpunit.xml"
+        ]
+      },
+      {
+        "status": "M",
+        "paths": [
+          "backend/routes/api.php"
+        ]
+      },
+      {
+        "status": "A",
+        "paths": [
+          "backend/tests/Feature/ApiContractTest.php"
+        ]
+      },
+      {
+        "status": "A",
+        "paths": [
+          "backend/tests/Feature/NotificationScopeTest.php"
+        ]
+      },
+      {
+        "status": "M",
+        "paths": [
+          "backend/tests/Feature/ProvinceProgressTest.php"
+        ]
+      },
+      {
+        "status": "A",
+        "paths": [
+          "backend/tests/Fixtures/production-migrations/2026_10_14_092909_add_weight_snapshot_to_pole_progress_histories_table.php"
+        ]
+      },
+      {
+        "status": "A",
+        "paths": [
+          "backend/tests/Fixtures/production-migrations/2026_10_17_000001_add_pole_and_source_to_work_items_table.php"
+        ]
+      },
+      {
+        "status": "A",
+        "paths": [
+          "backend/tests/Fixtures/production-migrations/2026_10_17_000002_create_notifications_table.php"
+        ]
+      },
+      {
+        "status": "A",
+        "paths": [
+          "backend/tests/Fixtures/production-migrations/2026_10_17_000003_backfill_pole_work_items.php"
+        ]
+      },
+      {
+        "status": "A",
+        "paths": [
+          "backend/tests/Migration/MigrationCompatibilityTest.php"
+        ]
+      },
+      {
+        "status": "A",
+        "paths": [
+          "backend/tests/Support/IsolatedDatabase.php"
+        ]
+      },
+      {
+        "status": "A",
+        "paths": [
+          "backend/tests/Support/MigrationPolicy.php"
+        ]
+      },
+      {
+        "status": "M",
+        "paths": [
+          "backend/tests/TestCase.php"
+        ]
+      },
+      {
+        "status": "A",
+        "paths": [
+          "backend/tests/Unit/IsolatedDatabaseTest.php"
+        ]
+      },
+      {
+        "status": "A",
+        "paths": [
+          "backend/tests/Unit/MigrationPolicyTest.php"
+        ]
+      },
+      {
+        "status": "A",
+        "paths": [
+          "ci/check-migrations.php"
+        ]
+      },
+      {
+        "status": "A",
+        "paths": [
+          "deploy/tests/requirements.txt"
+        ]
+      },
+      {
+        "status": "A",
+        "paths": [
+          "deploy/tests/test_quality_gates.py"
+        ]
+      },
+      {
+        "status": "M",
+        "paths": [
+          "deploy/tests/test_vps.py"
+        ]
+      },
+      {
+        "status": "M",
+        "paths": [
+          "deploy/vps.sh"
+        ]
+      },
+      {
+        "status": "A",
+        "paths": [
+          "docs/api-contract.md"
+        ]
+      },
+      {
+        "status": "A",
+        "paths": [
+          "docs/api-routes.json"
+        ]
+      },
+      {
+        "status": "A",
+        "paths": [
+          "docs/ci-safety.md"
+        ]
+      },
+      {
+        "status": "M",
+        "paths": [
+          "frontend/eslint.config.js"
+        ]
+      },
+      {
+        "status": "M",
+        "paths": [
+          "frontend/lib/api.js"
+        ]
+      },
+      {
+        "status": "M",
+        "paths": [
+          "frontend/next.config.mjs"
+        ]
+      },
+      {
+        "status": "M",
+        "paths": [
+          "frontend/package.json"
+        ]
+      },
+      {
+        "status": "A",
+        "paths": [
+          "frontend/tests/api.test.mjs"
+        ]
+      }
+    ]
+  }
+}

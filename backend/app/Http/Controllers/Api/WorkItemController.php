@@ -3,271 +3,148 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\PoleProgressHistory;
 use App\Models\PoleWorkProgress;
 use App\Models\Project;
 use App\Models\WorkItem;
+use App\Services\PoleWorkItems;
+use App\Services\WorkItemInput;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 
 class WorkItemController extends Controller
 {
-    /**
-     * Daftar item pekerjaan project, dilengkapi progres aktual agregat.
-     *
-     * Progres aktual tiap item dihitung dari `pole_work_progress`
-     * (rata-rata capaian seluruh tiang pada penyebut yang sama dengan
-     * Kurva S), sehingga:
-     *
-     *   kontribusi item = bobot x actual_progress / 100
-     *
-     * dan penjumlahan kontribusi seluruh item sama dengan
-     * `actual_current_percent` pada endpoint Kurva S. Frontend tidak
-     * perlu menghitung ulang atau menembak puluhan endpoint progress.
-     */
-    public function index(Project $project): JsonResponse
+    public function __construct(private PoleWorkItems $items, private WorkItemInput $input) {}
+
+    public function index(Request $request, Project $project): JsonResponse
     {
         $this->authorize('view', $project);
-
-        $workItems = $project->workItems()
-            ->orderBy('sequence')
-            ->get();
-
-        $denominator = $project->progressDenominator();
-
-        $aggregates = PoleWorkProgress::query()
-            ->join('poles', 'poles.id', '=', 'pole_work_progress.pole_id')
-            ->where('poles.project_id', $project->id)
-            ->groupBy('pole_work_progress.work_item_id')
-            ->select('pole_work_progress.work_item_id')
-            ->selectRaw('SUM(pole_work_progress.progress_percent) as total_progress')
-            ->selectRaw('COUNT(DISTINCT pole_work_progress.pole_id) as poles_with_progress')
-            ->get()
-            ->keyBy('work_item_id');
-
-        $data = $workItems->map(function (WorkItem $item) use ($aggregates, $denominator) {
-            $aggregate = $aggregates->get($item->id);
-
-            $totalProgress = $aggregate ? (float) $aggregate->total_progress : 0.0;
-            $polesWithProgress = $aggregate ? (int) $aggregate->poles_with_progress : 0;
-
-            $actualProgress = $denominator > 0
-                ? min(100, round($totalProgress / $denominator, 2))
-                : 0.0;
-
-            return array_merge($item->toArray(), [
-                'actual_progress' => $actualProgress,
-                'poles_with_progress' => $polesWithProgress,
-                'weighted_contribution' => round(
-                    ((float) $item->weight_percent * $actualProgress) / 100,
-                    2
-                ),
-            ]);
-        });
-
-        return response()->json([
-            'data' => $data,
-            'meta' => [
-                'total_weight' => round((float) $workItems->sum('weight_percent'), 2),
-                'is_balanced' => $this->isWeightBalanced($workItems->sum('weight_percent')),
-                'progress_denominator' => $denominator,
-                'total_target_poles' => $project->total_target_poles,
-            ],
+        $values = $request->validate([
+            'scope' => ['sometimes', Rule::in(['project', 'aggregate', 'pole'])],
+            'pole_id' => ['required_if:scope,pole', 'integer'],
         ]);
+        if (($values['scope'] ?? null) === 'pole') {
+            $pole = $project->poles()->findOrFail($values['pole_id']);
+
+            return app(PoleWorkItemController::class)->index($project, $pole);
+        }
+
+        $templates = $this->templates($project);
+        $denominator = $project->progressDenominator();
+        $aggregates = PoleWorkProgress::query()
+            ->join('work_items as wi', 'wi.id', '=', 'pole_work_progress.work_item_id')
+            ->join('poles', 'poles.id', '=', 'pole_work_progress.pole_id')
+            ->where('wi.project_id', $project->id)->where('poles.project_id', $project->id)
+            ->where(fn ($q) => $q->whereNull('wi.pole_id')->orWhereColumn('wi.pole_id', 'poles.id'))
+            ->groupByRaw('COALESCE(wi.source_item_id, wi.id)')
+            ->selectRaw('COALESCE(wi.source_item_id, wi.id) as item_id')
+            ->selectRaw('SUM(pole_work_progress.progress_percent) as total_progress')
+            ->selectRaw('SUM(wi.weight_percent * pole_work_progress.progress_percent / 100) as weighted_progress')
+            ->selectRaw('COUNT(DISTINCT pole_work_progress.pole_id) as poles_with_progress')
+            ->get()->toBase()->keyBy('item_id');
+        $contribution = fn ($row) => $denominator > 0 ? (float) ($row?->weighted_progress ?? 0) / $denominator : 0;
+        $data = $templates->map(fn (WorkItem $item) => [
+            ...$item->toArray(),
+            'actual_progress' => $denominator > 0 ? min(100, round((float) ($aggregates->get($item->id)?->total_progress ?? 0) / $denominator, 2)) : 0,
+            'poles_with_progress' => (int) ($aggregates->get($item->id)?->poles_with_progress ?? 0),
+            'weighted_contribution' => round($contribution($aggregates->get($item->id)), 4),
+        ]);
+        $custom = $aggregates->except($templates->modelKeys());
+
+        return response()->json(['data' => $data, 'meta' => [
+            ...$this->items->meta($templates),
+            'progress_denominator' => $denominator,
+            'total_target_poles' => $project->total_target_poles,
+            'custom_weighted_contribution' => round($custom->sum($contribution), 4),
+            'actual_current_percent' => round($aggregates->sum($contribution), 4),
+        ]]);
     }
 
     public function store(Request $request, Project $project): JsonResponse
     {
         $this->authorize('update', $project);
 
-        $validated = $this->validated($request, $project);
+        return DB::transaction(function () use ($request, $project) {
+            Project::whereKey($project->id)->lockForUpdate()->firstOrFail();
+            $item = $project->workItems()->create($this->input->validate($request, $project));
+            $this->items->normalize($this->templates($project));
 
-        $workItem = $project->workItems()->create($validated);
-
-        $this->normalizeWorkItemWeights($project);
-
-        return response()->json([
-            'message' => 'Item pekerjaan berhasil dibuat. Bobot seluruh item disesuaikan otomatis agar total 100%.',
-            'data' => $workItem->fresh(),
-            'meta' => $this->weightMeta($project),
-        ], 201);
+            return response()->json(['message' => 'Template pekerjaan dibuat. Bobot disesuaikan menjadi 100%.', 'data' => $item->fresh(), 'meta' => $this->items->meta($this->templates($project))], 201);
+        });
     }
 
-    public function update(
-        Request $request,
-        Project $project,
-        WorkItem $workItem
-    ): JsonResponse {
-        abort_unless((int) $workItem->project_id === (int) $project->id, 404);
-
+    public function update(Request $request, Project $project, WorkItem $workItem): JsonResponse
+    {
+        $this->belongsTo($project, $workItem);
         $this->authorize('update', $project);
+        if ($workItem->pole_id !== null) {
+            return app(PoleWorkItemController::class)->update($request, $project, $workItem->pole, $workItem);
+        }
 
-        $validated = $this->validated($request, $project, $workItem);
+        return DB::transaction(function () use ($request, $project, $workItem) {
+            Project::whereKey($project->id)->lockForUpdate()->firstOrFail();
+            $item = WorkItem::findOrFail($workItem->id);
+            $values = $this->input->validate($request, $project, null, $item);
+            $this->items->preserveHistoryWeights($this->templates($project));
+            $item->update($values);
+            $this->items->normalize($this->templates($project));
 
-        $workItem->update($validated);
-
-        $this->normalizeWorkItemWeights($project);
-
-        return response()->json([
-            'message' => 'Item pekerjaan berhasil diperbarui. Bobot seluruh item disesuaikan otomatis agar total 100%.',
-            'data' => $workItem->fresh(),
-            'meta' => $this->weightMeta($project),
-        ]);
+            return response()->json(['message' => 'Template pekerjaan diperbarui.', 'data' => $item->fresh(), 'meta' => $this->items->meta($this->templates($project))]);
+        });
     }
 
-    /**
-     * Rapikan bobot seluruh item pekerjaan agar totalnya tepat 100%.
-     *
-     * Dipakai untuk data lama yang bobotnya belum seimbang (mis. setelah
-     * item dihapus, atau data yang diinput sebelum normalisasi otomatis
-     * berlaku). Bobot tiap item dipertahankan proporsinya.
-     */
     public function normalize(Project $project): JsonResponse
     {
         $this->authorize('update', $project);
 
-        $this->normalizeWorkItemWeights($project);
+        return DB::transaction(function () use ($project) {
+            Project::whereKey($project->id)->lockForUpdate()->firstOrFail();
+            $this->items->normalize($this->templates($project));
 
-        return response()->json([
-            'message' => 'Bobot seluruh item pekerjaan telah dirapikan menjadi 100%.',
-            'meta' => $this->weightMeta($project),
-        ]);
+            return response()->json(['message' => 'Bobot template telah dirapikan menjadi 100%.', 'meta' => $this->items->meta($this->templates($project))]);
+        });
     }
 
     public function destroy(Project $project, WorkItem $workItem): JsonResponse
     {
-        abort_unless((int) $workItem->project_id === (int) $project->id, 404);
-
+        $this->belongsTo($project, $workItem);
         $this->authorize('delete', $project);
-
-        $hasReferencedProgress = PoleWorkProgress::where('work_item_id', $workItem->id)->exists()
-            || PoleProgressHistory::where('work_item_id', $workItem->id)->exists();
-
-        if ($hasReferencedProgress) {
-            return response()->json([
-                'message' => 'Item pekerjaan tidak bisa dihapus karena sudah memiliki progres tercatat. Nonaktifkan item ini pada pengaturan supaya tersembunyi tanpa menghapus riwayat progres.',
-                'errors' => [
-                    'work_item' => ['Item sudah memiliki data progres. Hapus progres terkait terlebih dahulu atau nonaktifkan item.'],
-                ],
-            ], 409);
+        if ($workItem->pole_id !== null) {
+            return app(PoleWorkItemController::class)->destroy($project, $workItem->pole, $workItem);
         }
 
-        $workItem->delete();
+        return DB::transaction(function () use ($project, $workItem) {
+            Project::whereKey($project->id)->lockForUpdate()->firstOrFail();
+            abort_if($workItem->copies()->exists(), 409, 'Template memiliki salinan per tiang. Nonaktifkan agar data tetap tersimpan.');
+            foreach (['pole_work_progress', 'pole_progress_histories', 'progress_photos'] as $table) {
+                abort_if(DB::table($table)->where('work_item_id', $workItem->id)->exists(), 409, 'Item memiliki progres/foto. Nonaktifkan agar riwayat tetap tersimpan.');
+            }
+            $workItem->delete();
+            $this->items->normalize($this->templates($project));
 
-        return response()->json([
-            'message' => 'Item pekerjaan berhasil dihapus.',
-        ]);
+            return response()->json(['message' => 'Item pekerjaan berhasil dihapus.']);
+        });
     }
 
     public function show(Project $project, WorkItem $workItem): JsonResponse
     {
-        abort_unless((int) $workItem->project_id === (int) $project->id, 404);
-
+        $this->belongsTo($project, $workItem);
         $this->authorize('view', $project);
-
-        return response()->json([
-            'data' => $workItem,
-        ]);
-    }
-
-    /**
-     * Normalisasi bobot seluruh item pekerjaan agar totalnya tepat 100%.
-     *
-     * Bobot yang diisi pengguna dibaca sebagai bobot *relatif* terhadap
-     * kondisi saat ini, bukan angka mati. Contoh: total item lama 100%,
-     * pengguna menambah item berbobot 50% -> total sementara 150% ->
-     * seluruh item diskalakan dengan faktor 100/150 sehingga total kembali
-     * 100% (item lama 66,67%, item baru 33,33%). Input di atas 100% tidak
-     * lagi ditolak, cukup dihitung ulang.
-     *
-     * Pembulatan dilakukan per item ke 2 desimal (presisi kolom
-     * `weight_percent`). Sisa pembulatan diserap item dengan bobot terbesar
-     * supaya penjumlahannya benar-benar 100,00% dan tidak pernah negatif.
-     * Karena semua halaman progres dan Kurva S memakai `weight_percent`,
-     * penyesuaian ini otomatis konsisten di seluruh aplikasi.
-     */
-    private function normalizeWorkItemWeights(Project $project): void
-    {
-        $items = $project->workItems()
-            ->orderBy('sequence')
-            ->orderBy('id')
-            ->get();
-
-        if ($items->isEmpty()) {
-            return;
+        if ($workItem->pole_id !== null) {
+            $this->authorize('view', $workItem->pole);
         }
 
-        $count = $items->count();
-        $total = (float) $items->sum('weight_percent');
-
-        $scaled = $items->map(function (WorkItem $item) use ($total, $count) {
-            if ($total > 0) {
-                return round(((float) $item->weight_percent / $total) * 100, 2);
-            }
-
-            /* Semua bobot nol -> bagi rata supaya total tetap 100%. */
-            return round(100 / $count, 2);
-        })->all();
-
-        $diff = round(100 - array_sum($scaled), 2);
-
-        if (abs($diff) >= 0.01) {
-            $maxIndex = array_search(max($scaled), $scaled, true);
-
-            $scaled[$maxIndex] = round($scaled[$maxIndex] + $diff, 2);
-        }
-
-        foreach ($items as $index => $item) {
-            $item->update(['weight_percent' => max(0.0, $scaled[$index])]);
-        }
+        return response()->json(['data' => $workItem]);
     }
 
-    /**
-     * Ringkasan bobot untuk respons API.
-     */
-    private function weightMeta(Project $project): array
+    private function belongsTo(Project $project, WorkItem $item): void
     {
-        $total = (float) $project->workItems()->sum('weight_percent');
-
-        return [
-            'total_weight' => round($total, 2),
-            'is_balanced' => $this->isWeightBalanced($total),
-        ];
+        abort_unless((int) $item->project_id === (int) $project->id, 404);
     }
 
-    private function isWeightBalanced(float|int|string $total): bool
+    private function templates(Project $project)
     {
-        return abs((float) $total - 100) < 0.01;
-    }
-
-    /**
-     * Aturan validasi item pekerjaan.
-     *
-     * `name` wajib unik per project (bukan lintas project) supaya dua
-     * project berbeda boleh memakai nama pekerjaan yang sama. Saat
-     * update, item yang sedang diedit diabaikan dari pemeriksaan unik.
-     */
-    private function validated(
-        Request $request,
-        Project $project,
-        ?WorkItem $workItem = null
-    ): array {
-        return $request->validate([
-            'name' => [
-                'required',
-                'string',
-                'max:255',
-                Rule::unique('work_items', 'name')
-                    ->where(fn ($query) => $query->where('project_id', $project->id))
-                    ->ignore($workItem?->id),
-            ],
-            'weight_percent' => ['required', 'numeric', 'min:0', 'max:100'],
-            'sequence' => ['nullable', 'integer', 'min:0'],
-            'planned_duration_days' => ['nullable', 'integer', 'min:0'],
-            'planned_start_month' => ['nullable', 'integer', 'min:1', 'max:60'],
-            'planned_end_month' => ['nullable', 'integer', 'min:1', 'max:60'],
-            'is_active' => ['nullable', 'boolean'],
-        ]);
+        return $project->workItems()->whereNull('pole_id')->orderBy('sequence')->orderBy('id')->get();
     }
 }

@@ -86,6 +86,49 @@ class MigrationCompatibilityTest extends TestCase
         return ['GitHub base schema' => [false], 'known production schema extensions' => [true]];
     }
 
+    public function test_partial_backfill_and_manual_items_survive_upgrade_and_additive_rollback(): void
+    {
+        $base = getenv('CI_BASE_MIGRATIONS');
+        $this->assertNotFalse($base);
+        $this->artisan('migrate:fresh', ['--path' => $base, '--realpath' => true, '--force' => true])->assertSuccessful();
+        $this->seedLegacyRecords();
+        foreach (['2026_10_17_000001_add_pole_and_source_to_work_items_table.php', '2026_10_17_000002_create_notifications_table.php'] as $name) {
+            $this->artisan('migrate', ['--path' => base_path('tests/Fixtures/production-migrations/'.$name), '--realpath' => true, '--force' => true])->assertSuccessful();
+        }
+        $template = DB::table('work_items')->first();
+        $pole = DB::table('poles')->first();
+        DB::table('work_items')->insert([
+            'project_id' => $template->project_id, 'pole_id' => $pole->id, 'source_item_id' => $template->id,
+            'name' => 'Partial copy', 'weight_percent' => 60, 'sequence' => 1,
+        ]);
+        DB::table('work_items')->insert([
+            'project_id' => $template->project_id, 'pole_id' => $pole->id,
+            'name' => 'Pekerjaan manual harus tetap ada', 'weight_percent' => 40, 'sequence' => 2,
+        ]);
+        DB::table('notifications')->insert(['user_id' => DB::table('users')->first()->id, 'title' => 'Inbox lama', 'read_at' => '2026-01-02 00:00:00']);
+        $before = $this->snapshot();
+
+        $this->artisan('migrate', ['--force' => true])->assertSuccessful();
+        foreach ($before as $table => $snapshot) {
+            $this->assertSame($snapshot['rows'], $this->rows($table, $snapshot['columns']), $table);
+        }
+        // Reverse only these new additive migrations, never a historical migration.
+        foreach (array_reverse(glob(database_path('migrations/2026_10_20_*.php'))) as $path) {
+            (require $path)->down();
+        }
+        foreach ($before as $table => $snapshot) {
+            $this->assertSame($snapshot['rows'], $this->rows($table, $snapshot['columns']), $table);
+        }
+        $this->assertTrue(Schema::hasColumn('work_items', 'pole_id'));
+        $this->assertTrue(Schema::hasTable('notifications'));
+        foreach (glob(database_path('migrations/2026_10_20_*.php')) as $path) {
+            (require $path)->up();
+        }
+        foreach ($before as $table => $snapshot) {
+            $this->assertSame($snapshot['rows'], $this->rows($table, $snapshot['columns']), $table);
+        }
+    }
+
     public function test_pre_role_and_profile_users_keep_passwords_and_progress_after_upgrade(): void
     {
         $path = sys_get_temp_dir().'/tracking-historical-'.bin2hex(random_bytes(6));

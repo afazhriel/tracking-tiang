@@ -15,11 +15,15 @@ class PoleProgressHistory extends Model
         'recorded_at',
         'recorded_by',
         'notes',
+        'weight_percent_snapshot',
+        'is_active_snapshot',
     ];
 
     protected $casts = [
         'progress_percent' => 'decimal:2',
         'recorded_at' => 'datetime',
+        'weight_percent_snapshot' => 'decimal:2',
+        'is_active_snapshot' => 'boolean',
     ];
 
     public function pole(): BelongsTo

@@ -114,3 +114,32 @@ test('progress photos use multipart without overriding the browser boundary', as
   assert.equal(request.body.get('work_item_id'), '3')
   assert.equal(request.body.get('photos[]').name, 'progress.png')
 })
+
+test('pole work items, curve, and notification helpers use the documented API methods', async () => {
+  const { readFile } = await import('node:fs/promises')
+  const contract = JSON.parse(await readFile(new URL('../../docs/api-routes.json', import.meta.url), 'utf8'))
+  const cases = [
+    [() => api.listPoleWorkItems(1, 2), 'GET', '/api/projects/1/poles/2/work-items'],
+    [() => api.createPoleWorkItem(1, 2, { name: 'Pondasi', weight_percent: 100 }), 'POST', '/api/projects/1/poles/2/work-items'],
+    [() => api.updatePoleWorkItem(1, 2, 3, { name: 'Tiang', weight_percent: 100 }), 'PUT', '/api/projects/1/poles/2/work-items/3'],
+    [() => api.deletePoleWorkItem(1, 2, 3), 'DELETE', '/api/projects/1/poles/2/work-items/3'],
+    [() => api.applyPoleTemplate(1, 2), 'POST', '/api/projects/1/poles/2/work-items/apply-template'],
+    [() => api.getPoleCurve(1, 2), 'GET', '/api/projects/1/poles/2/curve'],
+    [() => api.getUnreadNotificationCount(), 'GET', '/api/notifications/unread-count'],
+    [() => api.markNotificationRead(3), 'POST', '/api/notifications/3/read'],
+    [() => api.markAllNotificationsRead({ body: { project_id: 1 } }), 'POST', '/api/notifications/read-all'],
+  ]
+  for (const [invoke, method, path] of cases) {
+    let request
+    globalThis.fetch = async (url, options) => {
+      request = { url, ...options }
+      return Response.json({ data: [] })
+    }
+    await invoke()
+    assert.equal(request.url, path)
+    assert.equal(request.method, method)
+    assert.equal(request.headers.Authorization, 'Bearer user-a-token')
+    assert.ok(contract.some((route) => route.method === method && new RegExp(`^${route.path.replace(/\{[^}]+\}/g, '[^/]+')}$`).test(path)), `${method} ${path} absent from Laravel contract`)
+    if (path.endsWith('/read-all')) assert.equal(JSON.parse(request.body).project_id, 1)
+  }
+})

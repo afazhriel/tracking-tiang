@@ -3,129 +3,115 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\PoleProgressHistory;
-use App\Models\PoleWorkProgress;
+use App\Models\Notification;
 use App\Models\Project;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Carbon;
-use Illuminate\Support\Collection;
 
 /**
- * Notifikasi sistem — dibangun dari data progress yang ada.
+ * Notifikasi per-user yang tersimpan di tabel `notifications`.
  *
- * Backend belum punya tabel notifikasi tersendiri. Endpoint ini
- * mensintesis notifikasi dari sumber yang sudah ada:
- *   - Histori progress terbaru       → notifikasi "progress"
- *   - Tiang dengan progres 100%      → notifikasi "selesai"
- *
- * Frontend (NotifikasiPage.jsx) memahami field:
- *   id, title, description, category, created_at, read_at, is_read
+ * Field yang dibaca frontend (NotifikasiPage):
+ *   id, category, title, description, created_at, read_at, is_read, href
  */
 class NotificationController extends Controller
 {
-    public function index(Request $request, ?Project $project = null): JsonResponse
+    public function index(Request $request): JsonResponse
     {
-        if ($project) {
-            $this->authorize('view', $project);
-        }
+        return $this->listForUser($request);
+    }
 
-        $notifications = collect();
+    public function projectIndex(Request $request, Project $project): JsonResponse
+    {
+        $this->authorize('view', $project);
 
-        /*
-         * Resolusi project: endpoint bisa dipanggil dengan atau tanpa
-         * project ID. Kalau tanpa project, pakai project pertama milik
-         * user yang login (kalau ada).
-         */
-        $resolvedProject = $project->exists ?? false
-            ? $project
-            : ($request->user()?->projects()->first());
+        return $this->listForUser($request, $project->id);
+    }
 
-        if ($resolvedProject) {
-            $notifications = $notifications->merge(
-                $this->progressNotifications($resolvedProject)
-            );
-
-            $notifications = $notifications->merge(
-                $this->completionNotifications($resolvedProject)
-            );
-        }
-
-        /* Urutkan terbaru ke terlama, batasi 50 */
-        $sorted = $notifications
-            ->sortByDesc('created_at')
-            ->values()
-            ->take(50);
+    public function unreadCount(Request $request): JsonResponse
+    {
+        $count = Notification::query()
+            ->where('user_id', $request->user()->id)
+            ->whereNull('read_at')
+            ->count();
 
         return response()->json([
-            'data' => $sorted,
+            'data' => ['unread' => $count],
+            'meta' => ['unread' => $count],
+        ]);
+    }
+
+    public function markRead(Request $request, Notification $notification): JsonResponse
+    {
+        $this->authorizeOwnership($request, $notification);
+
+        if (! $notification->isRead()) {
+            $notification->forceFill(['read_at' => now()])->save();
+        }
+
+        return response()->json([
+            'message' => 'Notifikasi ditandai sudah dibaca.',
+            'data' => $notification->fresh()->toPayload(),
+        ]);
+    }
+
+    public function markAllRead(Request $request): JsonResponse
+    {
+        $values = $request->validate(['project_id' => ['nullable', 'integer', 'exists:projects,id']]);
+        if (isset($values['project_id'])) {
+            $this->authorize('view', Project::findOrFail($values['project_id']));
+        }
+        $updated = Notification::query()
+            ->where('user_id', $request->user()->id)
+            ->when($values['project_id'] ?? null, fn ($query, $id) => $query->where('project_id', $id))
+            ->whereNull('read_at')
+            ->update(['read_at' => now()]);
+
+        return response()->json([
+            'message' => 'Semua notifikasi ditandai sudah dibaca.',
+            'data' => ['updated' => $updated],
+        ]);
+    }
+
+    private function listForUser(Request $request, ?int $projectId = null): JsonResponse
+    {
+        $userId = $request->user()->id;
+
+        $base = Notification::query()->where('user_id', $userId);
+
+        if ($projectId !== null) {
+            $base->where('project_id', $projectId);
+        }
+
+        $unread = (clone $base)->whereNull('read_at')->count();
+
+        $pagination = $request->validate(['limit' => ['sometimes', 'integer', 'min:1', 'max:100'], 'page' => ['sometimes', 'integer', 'min:1']]);
+        $limit = $pagination['limit'] ?? 50;
+        $page = $pagination['page'] ?? 1;
+        $notifications = (clone $base)
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
+            ->forPage($page, $limit)
+            ->get()
+            ->map(fn (Notification $notification) => $notification->toPayload());
+
+        return response()->json([
+            'data' => $notifications,
             'meta' => [
-                'total' => $sorted->count(),
-                'unread' => $sorted->where('is_read', false)->count(),
-                'project' => $resolvedProject?->id,
+                'total' => $base->count(),
+                'page' => $page,
+                'per_page' => $limit,
+                'unread' => $unread,
+                'project' => $projectId,
             ],
         ]);
     }
 
-    /** Notifikasi dari 10 update progress terbaru. */
-    private function progressNotifications(Project $project): Collection
+    private function authorizeOwnership(Request $request, Notification $notification): void
     {
-        $histories = PoleProgressHistory::with([
-            'pole:id,pole_code',
-            'workItem:id,name',
-            'recordedBy:id,name',
-        ])
-            ->whereHas('pole', fn ($q) => $q->where('project_id', $project->id))
-            ->orderByDesc('recorded_at')
-            ->limit(10)
-            ->get();
-
-        return $histories->map(function (PoleProgressHistory $history, int $index) {
-            $poleCode = $history->pole?->pole_code ?? "Tiang #{$history->pole_id}";
-            $itemName = $history->workItem?->name ?? 'Pekerjaan';
-            $userName = $history->recordedBy?->name ?? 'Tim lapangan';
-            $progress = number_format((float) $history->progress_percent, 0);
-
-            return [
-                'id' => "progress-{$history->id}",
-                'title' => "Progress {$poleCode} diperbarui",
-                'description' => "{$userName} memperbarui {$itemName} ke {$progress}%.",
-                'category' => 'progress',
-                'created_at' => $history->recorded_at?->toIso8601String(),
-                'read_at' => null,
-                'is_read' => $index >= 3,   // tiga terbaru dianggap belum dibaca
-                'href' => "/tiang/{$history->pole_id}",
-            ];
-        });
-    }
-
-    /** Notifikasi tiang yang sudah selesai 100% (maks 10). */
-    private function completionNotifications(Project $project): Collection
-    {
-        /* Tiang selesai = semua progress item bobotnya 100%. Sebagai
-           proxy sederhana: cari pole_work_progress dengan progress 100
-           yang diperbarui dalam 7 hari terakhir. */
-        $recent = PoleWorkProgress::with('pole:id,pole_code')
-            ->whereHas('pole', fn ($q) => $q->where('project_id', $project->id))
-            ->where('progress_percent', 100)
-            ->where('updated_at', '>=', Carbon::now()->subDays(7))
-            ->orderByDesc('updated_at')
-            ->limit(10)
-            ->get();
-
-        return $recent->map(function (PoleWorkProgress $progress) {
-            $poleCode = $progress->pole?->pole_code ?? "Tiang #{$progress->pole_id}";
-
-            return [
-                'id' => "done-{$progress->id}",
-                'title' => "{$poleCode} mencapai 100%",
-                'description' => "Item pekerjaan pada {$poleCode} sudah diselesaikan.",
-                'category' => 'aktivitas',
-                'created_at' => $progress->updated_at?->toIso8601String(),
-                'read_at' => null,
-                'is_read' => true,
-                'href' => "/tiang/{$progress->pole_id}",
-            ];
-        });
+        abort_unless(
+            (int) $notification->user_id === (int) $request->user()->id,
+            403
+        );
     }
 }

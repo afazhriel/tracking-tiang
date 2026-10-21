@@ -13,7 +13,11 @@ class ProjectController extends Controller
     {
         $accessibleIds = $request->user()->accessibleProjectIds();
 
-        $projects = Project::withCount(['regions', 'poles', 'workItems'])
+        $projects = Project::withCount([
+            'regions',
+            'poles',
+            'workItems' => fn ($query) => $query->whereNull('pole_id'),
+        ])
             ->when($accessibleIds !== null, fn ($query) => $query->whereIn('id', $accessibleIds))
             ->latest()
             ->get();
@@ -50,7 +54,10 @@ class ProjectController extends Controller
 
         $project->load([
             'regions',
-            'workItems',
+            'workItems' => fn ($query) => $query
+                ->whereNull('pole_id')
+                ->orderBy('sequence')
+                ->orderBy('id'),
         ])->loadCount('poles');
 
         return response()->json([

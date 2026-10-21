@@ -34,11 +34,6 @@ import { useResource } from '../../lib/use-api'
 import { formatRelativeTime } from '../../lib/format'
 import { cn } from '../../lib/utils'
 
-/**
- * BACKEND BELUM memiliki endpoint notifikasi.
- * Loader mencoba endpoint yang wajar; bila 404 semua, halaman
- * menampilkan empty state (bukan data buatan).
- */
 function normalizeNotification(item, index) {
   const readAt = item?.read_at ?? item?.readAt ?? null
 
@@ -77,22 +72,17 @@ function getCategoryMeta(category) {
   )
 }
 
-function NotificationCard({ notification }) {
+function NotificationCard({ notification, onMarkRead, marking }) {
   const meta = getCategoryMeta(notification.category)
   const Icon = meta.Icon
 
-  const Wrapper = notification.href ? Link : 'div'
-  const wrapperProps = notification.href ? { href: notification.href } : {}
-
   return (
-    <Wrapper
-      {...wrapperProps}
+    <div
       className={cn(
         'flex gap-4 rounded-card border p-4 transition-colors',
         notification.isRead
           ? 'border-neutral-200 bg-paper'
-          : 'border-neutral-300 bg-canvas',
-        notification.href && 'hover:border-neutral-400'
+          : 'border-neutral-300 bg-canvas'
       )}
     >
       <span
@@ -144,21 +134,50 @@ function NotificationCard({ notification }) {
           </p>
         )}
 
-        <p className="mt-2 text-[11px] text-neutral-400">
-          {formatRelativeTime(notification.createdAt)}
-        </p>
+        <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+          <p className="text-[11px] text-neutral-400">
+            {formatRelativeTime(notification.createdAt)}
+          </p>
+
+          <div className="flex items-center gap-2">
+            {notification.href && (
+              <Link
+                href={notification.href}
+                className="text-[11px] font-medium text-brand-700 underline-offset-2 hover:underline"
+              >
+                Buka
+              </Link>
+            )}
+
+            {!notification.isRead && onMarkRead && (
+              <button
+                type="button"
+                onClick={() => onMarkRead(notification.id)}
+                disabled={marking}
+                className="text-[11px] font-medium text-neutral-600 underline-offset-2 hover:text-neutral-900 hover:underline disabled:opacity-50"
+              >
+                {marking ? 'Menandai...' : 'Tandai dibaca'}
+              </button>
+            )}
+          </div>
+        </div>
       </div>
-    </Wrapper>
+    </div>
   )
 }
 
 function NotifikasiContent() {
   const { projectId, error: projectError } = useProject()
   const [category, setCategory] = useState('all')
+  const [pagination, setPagination] = useState({ projectId: null, page: 1 })
+  const page = pagination.projectId === projectId ? pagination.page : 1
+  const [markingId, setMarkingId] = useState(null)
+  const [markingAll, setMarkingAll] = useState(false)
+  const [actionError, setActionError] = useState(null)
 
   const notificationsLoader = useCallback(
-    async () => (projectId ? await api.listNotifications(projectId) : null),
-    [projectId]
+    async () => (projectId ? await api.listNotifications(projectId, { query: { page, limit: 50 } }) : null),
+    [projectId, page]
   )
 
   const {
@@ -166,7 +185,7 @@ function NotifikasiContent() {
     error,
     loading,
     reload,
-  } = useResource(notificationsLoader, [projectId], { enabled: Boolean(projectId) })
+  } = useResource(notificationsLoader, [projectId, page], { enabled: Boolean(projectId) })
 
   const notifications = useMemo(
     () => unwrapList(data).map(normalizeNotification),
@@ -174,6 +193,43 @@ function NotifikasiContent() {
   )
 
   const unreadCount = notifications.filter((item) => !item.isRead).length
+
+  const handleMarkRead = useCallback(
+    async (id) => {
+      setMarkingId(id)
+      setActionError(null)
+
+      try {
+        await api.markNotificationRead(id)
+        setMarkingId(null)
+        reload()
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new Event('tracking_tiang:notifications-updated'))
+        }
+      } catch (err) {
+        setActionError(err)
+        setMarkingId(null)
+      }
+    },
+    [reload]
+  )
+
+  const handleMarkAll = useCallback(async () => {
+    setMarkingAll(true)
+    setActionError(null)
+
+    try {
+      await api.markAllNotificationsRead({ body: { project_id: projectId } })
+      setMarkingAll(false)
+      reload()
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('tracking_tiang:notifications-updated'))
+      }
+    } catch (err) {
+      setActionError(err)
+      setMarkingAll(false)
+    }
+  }, [projectId, reload])
 
   const counts = useMemo(() => {
     const result = { all: notifications.length, unread: unreadCount }
@@ -220,8 +276,6 @@ function NotifikasiContent() {
     })
   }, [category, notifications])
 
-  const endpointMissing = !error && !loading && notifications.length === 0
-
   return (
     <div className="space-y-6">
       <PageHeader
@@ -229,26 +283,33 @@ function NotifikasiContent() {
         title="Notifikasi"
         subtitle="Pemberitahuan progress, aktivitas lapangan, dan informasi sistem."
         actions={
-          <ActionButton
-            onClick={reload}
-            icon={RefreshCw}
-          >
-            Muat ulang
-          </ActionButton>
+          <>
+            <ActionButton
+              onClick={handleMarkAll}
+              icon={CheckCheck}
+              disabled={markingAll || loading || (data?.meta?.unread ?? unreadCount) === 0}
+            >
+              {markingAll ? 'Memproses...' : 'Tandai semua dibaca'}
+            </ActionButton>
+
+            <ActionButton onClick={reload} icon={RefreshCw}>
+              Muat ulang
+            </ActionButton>
+          </>
         }
       />
 
       <StatCardGrid>
         <StatCard
           label="Total Notifikasi"
-          value={loading ? '…' : notifications.length}
-          hint="Data dari endpoint notifikasi"
+          value={loading ? '…' : data?.meta?.total ?? notifications.length}
+          hint="Pemberitahuan untuk proyek ini"
           Icon={Bell}
         />
 
         <StatCard
           label="Belum Dibaca"
-          value={loading ? '…' : unreadCount}
+          value={loading ? '…' : data?.meta?.unread ?? unreadCount}
           hint="Perlu ditinjau"
           Icon={Info}
           tone="blue"
@@ -264,16 +325,16 @@ function NotifikasiContent() {
 
         <StatCard
           label="Status Integrasi"
-          value={loading ? '…' : endpointMissing ? 'Belum tersedia' : 'Terhubung'}
-          hint={endpointMissing ? 'Menunggu endpoint backend' : 'Endpoint aktif'}
-          Icon={endpointMissing ? BellOff : CheckCheck}
-          tone={endpointMissing ? 'rose' : 'emerald'}
+          value={loading ? '…' : error ? 'Gagal dimuat' : 'Terhubung'}
+          hint="Status kotak notifikasi"
+          Icon={CheckCheck}
+          tone="emerald"
         />
       </StatCardGrid>
 
-      {(projectError || error) && (
+      {(projectError || error || actionError) && (
         <ErrorNotice
-          error={projectError || error}
+          error={projectError || error || actionError}
           onRetry={reload}
           title="Data notifikasi belum dapat dimuat"
         />
@@ -310,6 +371,8 @@ function NotifikasiContent() {
                 <NotificationCard
                   key={notification.id}
                   notification={notification}
+                  onMarkRead={handleMarkRead}
+                  marking={markingId === notification.id}
                 />
               ))}
             </div>
@@ -317,18 +380,11 @@ function NotifikasiContent() {
             <EmptyState
               icon={BellOff}
               title={
-                endpointMissing
-                  ? 'Endpoint notifikasi belum tersedia'
-                  : category === 'unread'
-                    ? 'Tidak ada notifikasi belum dibaca'
-                    : 'Tidak ada notifikasi'
+                category === 'unread'
+                  ? 'Tidak ada notifikasi belum dibaca'
+                  : 'Tidak ada notifikasi'
               }
-              description={
-                endpointMissing
-                  ? 'Backend Laravel belum menyediakan endpoint notifikasi. Struktur UI ini sudah siap dihubungkan: kartu notifikasi mendukung ikon, judul, deskripsi, timestamp, serta status read/unread.'
-                  : 'Belum ada notifikasi pada kategori yang dipilih.'
-              }
-              hint={endpointMissing ? 'Ready for API integration' : undefined}
+              description="Belum ada notifikasi pada kategori yang dipilih."
               action={
                 <ActionButton onClick={reload} icon={RefreshCw}>
                   Periksa kembali
@@ -336,37 +392,17 @@ function NotifikasiContent() {
               }
             />
           )}
+          {(data?.meta?.total ?? 0) > 50 && (
+            <div className="mt-4 flex items-center justify-between gap-3">
+              <ActionButton disabled={loading || page <= 1} onClick={() => setPagination({ projectId, page: page - 1 })}>Sebelumnya</ActionButton>
+              <span className="text-xs text-neutral-500">Halaman {page}</span>
+              <ActionButton disabled={loading || page * 50 >= data.meta.total} onClick={() => setPagination({ projectId, page: page + 1 })}>Berikutnya</ActionButton>
+            </div>
+          )}
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Kontrak Integrasi</CardTitle>
-        </CardHeader>
 
-        <CardContent className="space-y-2 text-xs leading-6 text-neutral-500">
-          <p>
-            Halaman mencoba endpoint berurutan:{' '}
-            <code className="rounded bg-neutral-100 px-1.5 py-0.5 text-[11px] text-neutral-600">
-              /api/notifications
-            </code>
-            , lalu{' '}
-            <code className="rounded bg-neutral-100 px-1.5 py-0.5 text-[11px] text-neutral-600">
-              /api/projects/{'{id}'}/notifications
-            </code>
-            . Bila semuanya 404, halaman menampilkan empty state.
-          </p>
-          <p>
-            Field yang dibaca otomatis:{' '}
-            <code className="text-[11px] text-neutral-600">
-              title, description/message, category, created_at, read_at
-            </code>
-            . Kategori yang dikenali:{' '}
-            <strong>progress</strong>, <strong>aktivitas</strong>,{' '}
-            <strong>sistem</strong>.
-          </p>
-        </CardContent>
-      </Card>
     </div>
   )
 }

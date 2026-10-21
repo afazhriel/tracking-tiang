@@ -28,6 +28,7 @@ class Pole extends Model
     protected $casts = [
         'latitude' => 'decimal:7',
         'longitude' => 'decimal:7',
+        'work_items_customized_at' => 'datetime',
     ];
 
     public function project(): BelongsTo
@@ -53,5 +54,10 @@ class Pole extends Model
     public function workProgress(): HasMany
     {
         return $this->hasMany(PoleWorkProgress::class);
+    }
+
+    public function workItems(): HasMany
+    {
+        return $this->hasMany(WorkItem::class);
     }
 }

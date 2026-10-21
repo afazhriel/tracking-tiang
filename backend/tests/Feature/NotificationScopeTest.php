@@ -30,13 +30,13 @@ class NotificationScopeTest extends TestCase
             ->assertForbidden();
     }
 
-    public function test_global_notifications_resolve_the_pics_own_project(): void
+    public function test_global_notifications_are_not_restricted_to_the_first_project(): void
     {
         $pic = User::factory()->create(['role' => 'pic', 'status' => 'active']);
         $project = Project::create(['name' => 'Assigned project', 'code' => 'NOTIFY-3']);
         $pic->projects()->attach($project);
 
         $this->actingAs($pic, 'sanctum')->getJson('/api/notifications')
-            ->assertOk()->assertJsonPath('meta.project', $project->id);
+            ->assertOk()->assertJsonPath('meta.project', null);
     }
 }
