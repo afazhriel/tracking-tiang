@@ -126,7 +126,7 @@ cleanup() {
   fi
 }
 trap cleanup EXIT
-git archive "$sha" frontend backend | tar -x -C "$stage"
+git archive "$sha" frontend backend deploy/verify-production-backup.sh | tar -x -C "$stage"
 # Preserve server-specific build configuration without printing its contents.
 for envfile in .env .env.local .env.production .env.production.local; do
   if [[ -f "$frontend/$envfile" ]]; then
@@ -203,6 +203,9 @@ tar -tzf "$backup/backend.tar.gz" > /dev/null
 tar -tzf "$backup/frontend.tar.gz" > /dev/null
 (cd "$backup"; sha256sum backend.tar.gz frontend.tar.gz database.dump > SHA256SUMS)
 printf 'Archive structure and dump catalog verified.\n' > "$backup/COMPLETE"
+
+# Restore the actual quiesced backup before changing source or production schema.
+bash "$stage/deploy/verify-production-backup.sh" "$backup"
 
 live_change_started=1
 printf 'state=changing-source\n' >> "$recovery_marker"

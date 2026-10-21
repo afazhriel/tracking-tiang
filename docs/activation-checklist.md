@@ -1,12 +1,14 @@
 # Aktivasi produksi setelah review
 
-Urutan ini disiapkan untuk pemilik. Belum ada perubahan setting GitHub/VPS,
-merge main, deployment atau migration produksi dilakukan.
+Persetujuan merge/deploy/konfigurasi/migration telah diberikan pemilik.
+Status pelaksanaan terbaru ada di [catatan rollout](production-rollout-2026-10-21.md).
+Checklist ini tetap wajib sebelum aktivasi; persetujuan tidak menggantikan verifikasi.
 
 ## 1. Jeda deployment selama penggabungan
 
 GitHub repo → Settings → Secrets and variables → Actions → Variables:
-set `DEPLOY_ENABLED=false`. Ini variable, bukan secret. Pastikan tidak ada deploy
+set `DEPLOY_ENABLED=false`. Ini variable, bukan secret. Jika akses variable
+ditolak, nonaktifkan workflow Deploy VPS dan verifikasi `disabled_manually`. Pastikan tidak ada deploy
 lama yang masih berjalan; jeda tidak menghentikan run yang sudah aktif.
 
 ## 2. Lindungi main dan environment production
@@ -39,7 +41,7 @@ Urutan: **#1 → #2 → #3 → #4 → #5 → #6 → #7 → #8 → #9 → #10**. 
 pekerjaan tidak diulang. Setelah satu masuk main, pemilik mengubah base PR
 berikutnya ke main dan menunggu CI commit terbaru sebelum merge. Jangan merge
 branch review/sinkronisasi langsung, force push atau menghapus migration lama.
-Agent belum diberi izin melakukan merge.
+Agent sudah diberi izin merge; workflow deployment harus tetap dijeda selama integrasi.
 
 Quality gate wajib mencakup Laravel/Pint, compatibility migration PostgreSQL,
 frontend unit/lint/build, audit dependency PHP/npm, deployment/policy tests, Chromium desktop/viewport
@@ -50,7 +52,7 @@ tidak ikut dipasang pada layanan web aktif. Tool browser penguji berada terpisah
 
 ## 4. Preflight VPS dan aplikasi
 
-Langkah server berikut memerlukan persetujuan terpisah dan belum dijalankan:
+Langkah server berikut telah diizinkan, tetapi pelaksanaan dan hasilnya harus diverifikasi:
 
 - Pastikan Nginx `/api/` langsung ke PHP-FPM, APP_URL/upstream memakai origin HTTPS
   yang benar, serta Set-Cookie dan respons no-store tidak dibuang/dicache.
@@ -80,8 +82,9 @@ memulai workflow dari main yang telah diperiksa. Reviewer environment menyetujui
 commit yang sama. Jangan dispatch deploy untuk sekadar mencoba.
 
 Backup baru memiliki SHA256SUMS dan COMPLETE setelah arsip dan katalog dump valid.
-COMPLETE bukan bukti restore penuh; periksa checksum dan lakukan rehearsal
-terisolasi. Backup memuat data sensitif dan harus disimpan privat. Migration
+COMPLETE bukan bukti restore penuh. Gate tambahan mewajibkan restore dump
+sebenarnya ke PostgreSQL terisolasi sebelum perubahan source/migration; lihat
+`RESTORE_VERIFIED`. Rehearsal migration dan offsite recovery tetap perlu diuji. Backup memuat data sensitif dan harus disimpan privat. Migration
 memakai lock_timeout 5s dan statement_timeout 300s. Gagal/timeout setelah perubahan
 mempertahankan maintenance/journal untuk pemeriksaan, bukan rollback DB otomatis.
 Jangan menghapus journal atau menjalankan migrate:rollback untuk memaksa retry.

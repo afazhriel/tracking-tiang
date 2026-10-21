@@ -38,3 +38,19 @@ mkdir "$workspace/restored-files"
 tar -xzf "$workspace/uploads.tar.gz" --no-same-owner -C "$workspace/restored-files"
 (cd "$workspace/restored-files"; sha256sum --check --status "$workspace/uploads.sha256")
 echo 'PASS isolated PostgreSQL restore: 10 tables, foreign keys, sequences, legacy/private upload bytes.'
+
+# Exercise the exact gate used for real VPS backups, with synthetic data only.
+backup="$workspace/production-backup-shape"
+mkdir "$backup"
+cp "$workspace/database.dump" "$backup/database.dump"
+cp "$workspace/uploads.tar.gz" "$backup/backend.tar.gz"
+tar -czf "$backup/frontend.tar.gz" -C "$workspace" uploads.sha256
+(cd "$backup"; sha256sum backend.tar.gz frontend.tar.gz database.dump > SHA256SUMS)
+printf 'Synthetic backup complete.\n' > "$backup/COMPLETE"
+if ! bash deploy/verify-production-backup.sh "$backup"; then
+  # This directory contains only the guarded synthetic fixtures created above.
+  # Production helper output remains private; never use this CI harness on VPS.
+  cat "$backup/restore-private.log" >&2
+  exit 1
+fi
+test -s "$backup/RESTORE_VERIFIED"

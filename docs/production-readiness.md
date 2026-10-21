@@ -1,5 +1,8 @@
 # Final hardening dan kesiapan produksi
 
+Catatan berikut mencatat tahap-tahap audit sebelum izin aktivasi diberikan.
+Untuk kondisi operasional terkini, baca [pelaksanaan rollout](production-rollout-2026-10-21.md).
+
 Status saat menyiapkan PR tambahan: **NOT READY untuk aktivasi produksi**.
 Main c547c48 belum berisi quality gates dan GitHub melaporkan protected=false.
 Environment production juga belum punya reviewer rules/deployment branch policy;
