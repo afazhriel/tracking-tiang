@@ -7,6 +7,7 @@ use App\Models\PoleWorkProgress;
 use App\Models\Project;
 use App\Models\WorkItem;
 use App\Services\PoleWorkItems;
+use App\Services\ProgressIntegrity;
 use App\Services\WorkItemInput;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -30,6 +31,7 @@ class WorkItemController extends Controller
             return app(PoleWorkItemController::class)->index($project, $pole);
         }
 
+        app(ProgressIntegrity::class)->assertUnambiguous($project);
         $templates = $this->templates($project);
         $denominator = $project->progressDenominator();
         $aggregates = PoleWorkProgress::query()

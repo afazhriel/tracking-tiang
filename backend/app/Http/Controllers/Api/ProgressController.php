@@ -13,6 +13,7 @@ use App\Models\WorkItem;
 use App\Services\NotificationService;
 use App\Services\PendingPhotos;
 use App\Services\PoleWorkItems;
+use App\Services\ProgressIntegrity;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
@@ -29,6 +30,7 @@ class ProgressController extends Controller
         abort_unless((int) $pole->project_id === (int) $project->id, 404);
 
         $this->authorize('view', $pole);
+        app(ProgressIntegrity::class)->assertUnambiguous($project, $pole);
 
         $progress = PoleWorkProgress::with('workItem')
             ->where('pole_id', $pole->id)

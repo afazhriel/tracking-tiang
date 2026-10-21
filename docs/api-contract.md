@@ -113,6 +113,19 @@ progress_denominator, custom_weighted_contribution dan actual_current_percent.
 Kontribusi template + custom sama dengan progres proyek Kurva S; UI memakai total
 backend. Data pekerjaan custom dikelola pada halaman tiang, bukan dihapus dari data.
 
+Jika satu tiang memiliki state progres template dan salinan dari sumber yang sama,
+GET work-items project/aggregate, progress tiang, summary serta Kurva S terkait
+mengembalikan 409 dengan message rekonsiliasi. Server tidak menjumlahkan dua state
+yang ambigu atau memilih salah satunya. Summary hanya memeriksa tiang dalam scope
+akses pembacanya. GET work-items scope=pole tetap tersedia untuk melihat data dan
+needs_reconciliation; catatan, histori dan foto tidak dihapus. Pemilihan state yang
+benar membutuhkan rekonsiliasi eksplisit, bukan migration otomatis.
+
+Untuk histori yang baru sebagian dipindahkan ke salinan, Kurva S memakai satu
+timeline per sumber pekerjaan dan tiang: kejadian terbaru menurut recorded_at/id
+menggantikan state sebelumnya, dengan snapshot bobot kejadian tersebut. ID item
+manual tanpa sumber tetap berdiri sendiri. Seluruh baris histori dipertahankan.
+
 POST progress menerima template ID untuk tiang legacy. Setelah dikustomisasi,
 ID template dipetakan ke salinan milik tiang itu. ID item tiang lain ditolak 404;
 konflik partial backfill 409. Histori baru menyimpan snapshot bobot. Perubahan
