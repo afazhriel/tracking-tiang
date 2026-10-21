@@ -130,6 +130,7 @@ class UserProfileTest extends TestCase
     public function test_avatar_upload_replaces_file_and_can_be_served(): void
     {
         Storage::fake('public');
+        Storage::fake('media');
 
         $user = User::factory()->create();
 
@@ -143,7 +144,7 @@ class UserProfileTest extends TestCase
         $firstPath = $user->fresh()->avatar;
 
         $this->assertNotNull($firstPath);
-        Storage::disk('public')->assertExists($firstPath);
+        Storage::disk('media')->assertExists($firstPath);
 
         /* Foto lama harus terhapus setelah diganti. */
         $this->actingAs($user, 'sanctum')
@@ -155,10 +156,10 @@ class UserProfileTest extends TestCase
         $secondPath = $user->fresh()->avatar;
 
         $this->assertNotSame($firstPath, $secondPath);
-        Storage::disk('public')->assertExists($secondPath);
-        Storage::disk('public')->assertMissing($firstPath);
+        Storage::disk('media')->assertExists($secondPath);
+        Storage::disk('media')->assertMissing($firstPath);
 
-        /* Disajikan lewat endpoint public tanpa header Authorization. */
+        /* Cookie/bearer diperlukan; actingAs mempertahankan identitas pemilik. */
         $this->get('/api/user/avatar/'.$user->id)->assertOk();
 
         /* Hapus: kolom kosong + file hilang. */
@@ -167,7 +168,7 @@ class UserProfileTest extends TestCase
             ->assertOk();
 
         $this->assertNull($user->fresh()->avatar);
-        Storage::disk('public')->assertMissing($secondPath);
+        Storage::disk('media')->assertMissing($secondPath);
 
         $this->get('/api/user/avatar/'.$user->id)->assertNotFound();
     }
@@ -175,6 +176,7 @@ class UserProfileTest extends TestCase
     public function test_avatar_rejects_non_image_payload(): void
     {
         Storage::fake('public');
+        Storage::fake('media');
 
         $user = User::factory()->create();
 

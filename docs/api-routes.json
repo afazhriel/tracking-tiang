@@ -1,5 +1,11 @@
 [
   {
+    "method": "POST",
+    "path": "/api/browser-session",
+    "authenticated": true,
+    "active_user": true
+  },
+  {
     "method": "GET",
     "path": "/api/invitations",
     "authenticated": true,
@@ -39,13 +45,13 @@
     "method": "POST",
     "path": "/api/logout",
     "authenticated": true,
-    "active_user": true
+    "active_user": false
   },
   {
     "method": "POST",
     "path": "/api/logout-all",
     "authenticated": true,
-    "active_user": true
+    "active_user": false
   },
   {
     "method": "GET",
@@ -80,8 +86,8 @@
   {
     "method": "GET",
     "path": "/api/photos/{ulid}",
-    "authenticated": false,
-    "active_user": false
+    "authenticated": true,
+    "active_user": true
   },
   {
     "method": "GET",
@@ -326,8 +332,8 @@
   {
     "method": "GET",
     "path": "/api/user/avatar/{user}",
-    "authenticated": false,
-    "active_user": false
+    "authenticated": true,
+    "active_user": true
   },
   {
     "method": "PUT",

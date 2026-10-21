@@ -162,10 +162,61 @@ jobs:
       - run: bash -n deploy/vps.sh deploy/backup-vps.sh deploy/check-vps.sh
       - run: python3 -m unittest discover -s deploy/tests -v
 
+  browser:
+    name: Browser auth and media
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_DB: tracking_ci
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci-only-password
+        ports: [5432:5432]
+        options: >-
+          --health-cmd "pg_isready -U ci -d tracking_ci"
+          --health-interval 5s --health-timeout 5s --health-retries 15
+    env:
+      APP_ENV: testing
+      APP_KEY: base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+      DB_CONNECTION: pgsql
+      DB_HOST: 127.0.0.1
+      DB_PORT: '5432'
+      DB_DATABASE: tracking_ci
+      DB_USERNAME: ci
+      DB_PASSWORD: ci-only-password
+      DB_URL: ''
+      API_UPSTREAM_ORIGIN: http://127.0.0.1:3185
+      NEXT_TELEMETRY_DISABLED: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: pdo_pgsql, mbstring
+          coverage: none
+          tools: composer:v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: |
+          mkdir -p backend/bootstrap/cache backend/storage/framework/{cache/data,sessions,views} backend/storage/logs
+          cp backend/.env.example backend/.env
+          composer install --working-dir=backend --no-interaction --prefer-dist --no-progress
+          npm ci --prefix frontend --no-audit --no-fund
+          npm run build --prefix frontend
+      - name: Exercise real browser login, media, CSRF, upgrade and logout
+        run: bash ci/browser-smoke.sh
+
   gate:
     name: Quality gate
     if: always()
-    needs: [backend, migrations, frontend, deployment-tests]
+    needs: [backend, migrations, frontend, deployment-tests, browser]
     runs-on: ubuntu-24.04
     timeout-minutes: 2
     steps:

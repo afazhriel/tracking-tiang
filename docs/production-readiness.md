@@ -43,6 +43,7 @@ CI tetap memeriksa kedua baseline, bukan menghapus pengujian historical extensio
 
 ## Batas keamanan yang tetap berlaku
 
+Catatan tahap sebelum PR #8 (digantikan oleh bagian sesi browser di bawah):
 Sanctum tetap bearer, browser menyimpan token di localStorage agar kontrak web/
 Capacitor lama tidak berubah. Semua route protected tetap auth + active dan policy.
 Tidak ada bukti XSS yang digunakan untuk membenarkan refactor autentikasi besar;
@@ -55,6 +56,9 @@ keduanya tetap publik sesuai kontrak lama, dengan MIME server + nosniff/cache
 private. Ini tidak setara authorization file privat. Jika foto bersifat rahasia,
 akses signed/authenticated dan perubahan pemuatan gambar perlu keputusan kontrak
 serta PR terpisah. Header keamanan bukan pengganti authorization tersebut.
+
+PR #8 di bawah mengganti akses publik API dengan auth/policy dan upload privat;
+risiko bypass Nginx pada file lama tetap memerlukan verifikasi operator.
 
 PHP-FPM stop hanya menghentikan penulis HTTP di container backend. Worker, cron,
 atau klien database eksternal harus didata/dihentikan operator saat backup. Perlu
@@ -181,3 +185,42 @@ lama, pencabutan anggota, dan pindah project tim tanpa assignment. Tidak ada
 migration, penghapusan histori atau membership project lama. Unit/Feature lokal:
 181 tes / 571 assertions lulus. Review #7 setelah #6 dan retarget/CI ulang sesuai
 prosedur di atas. Pembatasan produksi tetap berlaku; source ini belum dideploy.
+
+## Lanjutan sesi browser dan media privat (PR #8)
+
+Browser kini memilih cookie Sanctum __Host-... yang Secure, HttpOnly, Strict,
+host-only, maksimal 12 jam; token tidak dikembalikan dalam JSON atau disimpan
+di localStorage. Penanda sesi acak bukan credential. Bearer browser lama dipindah
+lebih dulu tanpa menambah token atau memperpanjang expiry yang lebih pendek.
+Login dan mutasi cookie memerlukan header browser + Origin yang cocok; HTTP
+publik ditolak frontend sebelum password/token dikirim. API bisnis tetap active;
+logout/logout-all hanya auth agar akun suspended pun bisa mencabut sesi sendiri.
+Halaman internal memeriksa profil server. Menu logout kini benar-benar mencabut
+token; error jaringan tidak dinyatakan sukses.
+
+Foto memakai policy tiang, avatar untuk pemilik/admin/supervisor. Respons media
+no-store/CORP same-origin, MIME raster server; HTML/SVG lama tidak dirender inline.
+Upload baru memakai storage/app/private/media. Avatar baru memiliki prefix
+private-media/avatars; referensi/path lama tetap dibaca dari public tanpa migration
+atau pemindahan massal. Cleanup mempertahankan file lama/referensi committed.
+deploy/nginx-private-media.conf menutup /storage/ agar file legacy tidak melewati
+Laravel; operator harus menggabungkannya dengan vhost yang ada setelah persetujuan.
+Source tidak memasang aturan Nginx atau mengubah server produksi.
+
+Kontrak bearer lama tetap tersedia untuk klien tanpa header browser, termasuk
+klien native. Native yang membaca foto perlu mengirim bearer. Cookie memerlukan
+HTTPS same-origin: APK lama yang masih membuka HTTP/IP harus diperbarui ke URL
+HTTPS sebelum rollout ini; jangan menambahkan fallback login HTTP. Build APK dan
+perangkat fisik belum diverifikasi. APP_URL/proxy harus cocok dengan origin HTTPS,
+tidak menghapus Set-Cookie atau mencache respons private/API. Source ini harus
+dirilis bersama frontend/backend, sesudah perlindungan dan preflight produksi.
+
+Validasi lokal: 196 Unit/Feature / 674 assertions, 5 migration / 763 assertions,
+Pint 124 file, 15 deployment tests, frontend lint/build lulus. Enam kelompok smoke
+Chromium nyata lulus: login/cookie/upload progres/gambar privat/CSRF, anonim dan
+PIC asing, pencabutan assignment, upgrade bearer lama, viewport ponsel, menu logout.
+Frontend mempunyai 21 unit tests setelah tambahan penolakan HTTP. Dependency dev
+playwright-core dipin; metadata dependency lama tetap dipertahankan. Job browser
+terisolasi PostgreSQL 18 kini menjadi dependency wajib Quality gate, tanpa secrets
+atau environment produksi. Review setelah #7; semua perubahan masih memerlukan
+merge oleh pemilik dan CI ulang pada target main. Status produksi belum berubah.

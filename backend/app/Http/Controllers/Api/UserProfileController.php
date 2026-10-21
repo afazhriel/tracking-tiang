@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Services\BrowserSession;
 use App\Services\PendingPhotos;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -152,7 +153,7 @@ class UserProfileController extends Controller
         ]);
 
         try {
-            $path = $uploads->store($request->file('avatar'), 'avatars');
+            $path = $uploads->store($request->file('avatar'), 'private-media/avatars');
             [$user, $previous] = DB::transaction(function () use ($request, $path) {
                 $user = User::whereKey($request->user()->id)->lockForUpdate()->firstOrFail();
                 $previous = $user->avatar;
@@ -199,28 +200,29 @@ class UserProfileController extends Controller
     /**
      * Menyajikan file avatar.
      *
-     * PUBLIC (di luar group auth) — alasan yang sama dengan
-     * `PhotoController::show`: `<img>` tidak bisa mengirim header
-     * Authorization. URL-nya `/{id user}` yang bisa ditebak, jadi TTL
-     * dibuat pendek dan dipaksa private.
+     * Sanctum + active, hanya pemilik atau admin/supervisor.
+     * Browser mengirim cookie HttpOnly; response tidak boleh dicache.
      */
     public function showAvatar(User $user): BinaryFileResponse
     {
+        abort_unless((int) request()->user()->id === (int) $user->id || request()->user()->isAdmin() || request()->user()->isSupervisor(), 403);
         abort_unless($user->avatar, 404);
 
-        $disk = Storage::disk('public');
+        $disk = Storage::disk(PendingPhotos::avatarDisk($user->avatar));
 
         abort_unless($disk->exists($user->avatar), 404);
 
         $mime = $disk->mimeType($user->avatar) ?: 'application/octet-stream';
+        abort_unless(in_array($mime, ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/bmp', 'image/x-ms-bmp'], true), 415, 'Berkas bukan gambar yang didukung.');
 
         $response = response()->file($disk->path($user->avatar), [
             'Content-Type' => $mime,
             'X-Content-Type-Options' => 'nosniff',
+            'Cross-Origin-Resource-Policy' => 'same-origin',
         ]);
 
         $response->setPrivate();
-        $response->setMaxAge(3600);
+        $response->headers->set('Cache-Control', 'private, no-store');
 
         return $response;
     }
@@ -236,8 +238,8 @@ class UserProfileController extends Controller
     {
         $request->user()->tokens()->delete();
 
-        return response()->json([
+        return app(BrowserSession::class)->forget(response()->json([
             'message' => 'Berhasil keluar dari semua perangkat.',
-        ]);
+        ]));
     }
 }

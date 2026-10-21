@@ -119,7 +119,7 @@ class ProgressController extends Controller
                         'pole_id' => $pole->id,
                         'work_item_id' => $workItem->id,
                         'progress_history_id' => $history->id,
-                        'disk' => 'public',
+                        'disk' => 'media',
                         'path' => $path,
                         'original_name' => $file->getClientOriginalName(),
                         'mime_type' => $file->getMimeType(),

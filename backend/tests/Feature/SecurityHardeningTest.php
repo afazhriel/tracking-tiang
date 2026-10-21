@@ -133,6 +133,7 @@ class SecurityHardeningTest extends TestCase
     public function test_progress_photo_is_served_with_private_cache_and_server_mime(): void
     {
         Storage::fake('public');
+        Storage::fake('media');
 
         $project = $this->makeProject('PRJ-PHOTO');
         $pole = $this->makePole($project, '32', 'T-PHOTO');

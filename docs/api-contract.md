@@ -2,10 +2,11 @@
 
 Base path `/api`. Kirim `Accept: application/json`; JSON request memakai
 `Content-Type: application/json`. Endpoint protected memerlukan
-`Authorization: Bearer <token>` dan akun aktif. Daftar lengkap 66 kombinasi
+cookie browser HttpOnly atau `Authorization: Bearer <token>` serta akun aktif
+(logout/logout-all juga diizinkan untuk akun nonaktif). Daftar lengkap 67 kombinasi
 method/path beserta auth/active policy ada di [api-routes.json](api-routes.json).
 `ApiContractTest` memeriksa inventaris terhadap route Laravel dan memastikan
-seluruh 46 endpoint protected mengembalikan 401 tanpa token.
+seluruh 59 endpoint protected mengembalikan 401 tanpa sesi/token.
 
 ## Format umum
 
@@ -39,9 +40,39 @@ seluruh 46 endpoint protected mengembalikan 401 tanpa token.
 | Wilayah | GET /regions/provinces; GET /regions/provinces/{province}/regencies; GET /regions/regencies/{regency}/districts; GET /regions/districts/{district}/villages | Publik, array id/nama, ID wilayah string; data master perlu disiapkan tersendiri |
 | Undangan | GET/POST /invitations; DELETE /invitations/{invitation}; GET /invitations/{token}; POST .../{token}/accept | Kelola oleh admin; preview/accept publik sesuai token; request terikat validasi undangan |
 
-Foto dan avatar saat ini dapat dibaca publik melalui URL, sesuai implementasi
-existing. Jangan mengasumsikan bearer token melindungi URL file tersebut. Perubahan
-ke signed URL/akses privat memerlukan keputusan kontrak tersendiri.
+Foto memerlukan auth/active dan policy view tiang; avatar hanya untuk pemilik
+atau admin/supervisor aktif. URL tetap relatif, tetapi pembacaan anonim sekarang
+401; PIC tanpa izin 403. Gambar dibatasi MIME raster dari isi file (415 jika
+berkas lama bukan gambar), no-store dan Cross-Origin-Resource-Policy same-origin.
+Upload baru memakai disk media privat. Foto lama tetap memakai disk/path
+tersimpan; avatar lama tetap terbaca dari disk public. Tidak ada pemindahan massal.
+Nginx harus menutup /storage/ agar file lama tidak dapat melewati policy API;
+aturan siap review ada di deploy/nginx-private-media.conf, belum dipasang di VPS.
+
+### Sesi browser dan kompatibilitas bearer
+
+Frontend mengirim X-Tracking-Client: browser. Login/accept membalas
+`{authenticated:true,token_type:"Cookie",user}` tanpa token mentah, dengan cookie
+__Host-tracking_tiang_session: Secure, HttpOnly, SameSite=Strict, Path=/, host-only,
+berlaku maksimal 12 jam dan diperiksa kedaluwarsanya di server. Mutasi browser
+memerlukan header tersebut serta Origin sesuai origin request atau APP_URL.
+Origin asing/hilang ditolak 419; jangan menambahkan origin wildcard. APP_URL dan
+forwarded host/proto dari proxy harus sesuai origin HTTPS produksi. Browser tidak
+perlu membaca cookie; fetch, img dan tautan file same-origin mengirimkannya.
+
+POST /browser-session memindahkan bearer browser lama ke cookie tanpa menambah
+token atau memperpanjang expiry lama yang lebih pendek. Frontend menunggu sukses
+sebelum mengirim mutasi bisnis; sesudah itu localStorage hanya berisi penanda
+acak non-rahasia dan profil. 401 menghapus penanda dan meminta login kembali.
+Halaman internal memeriksa profil ke server sebelum menampilkan isi. Semua tombol
+logout mencabut token di server dan menghapus cookie; error jaringan tidak
+dinyatakan sebagai logout sukses. Cookie bukan pengganti pencegahan XSS.
+
+Klien tanpa header browser tetap mendapat `{token,token_type:"Bearer",user}`
+seperti sebelumnya. Native harus mengirim bearer untuk membaca file privat.
+Preview/accept undangan tetap publik berbasis token undangan. Logout memerlukan
+auth saja agar akun suspended pun bisa mencabut sesi sendiri; API bisnis tetap
+memerlukan active. Perubahan ini harus dirilis bersama backend dan frontend.
 
 ## Perbaikan kecil pada tahap pengamanan
 
@@ -186,7 +217,7 @@ native tetap bearer; perubahan Android/CORS lebih luas dipisah ke tahap berikutn
 ## Batas audit tahap ini
 
 Inventaris mencakup route Laravel serta helper/pemanggilan frontend. Tes kontrak
-memeriksa semua 66 method/path, middleware auth/active dan 401 tanpa token; frontend
+memeriksa semua 67 method/path, middleware auth/active dan 401 tanpa token; frontend
 memeriksa sembilan helper yang sebelumnya belum tersedia terhadap inventaris yang
 sama. Tes bisnis mencakup auth/profil/approval, wilayah penugasan, progres/foto,
 normalisasi/Kurva S, CRUD per tiang, legacy/partial backfill, notifikasi dan alur

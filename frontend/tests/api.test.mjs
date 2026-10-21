@@ -20,6 +20,84 @@ afterEach(() => {
   else globalThis.window = originalWindow
 })
 
+function browserSession(value) {
+  token = value
+  globalThis.window.location = { origin: 'http://localhost' }
+  globalThis.window.dispatchEvent = () => {}
+  globalThis.window.localStorage.setItem = (key, value) => { if (key === TOKEN_KEY) token = value }
+  globalThis.window.localStorage.removeItem = (key) => { if (key === TOKEN_KEY) token = null }
+}
+
+test('browser upgrades a legacy bearer only once before concurrent API requests', async () => {
+  browserSession('legacy-browser-token')
+  const requests = []
+  globalThis.fetch = async (url, options) => {
+    requests.push({ url, ...options })
+    return Response.json(url === '/api/browser-session' ? { authenticated: true, token_type: 'Cookie' } : { id: 1 })
+  }
+  await Promise.all([apiRequest('/api/me'), apiRequest('/api/me')])
+  assert.equal(requests.filter((request) => request.url === '/api/browser-session').length, 1)
+  assert.equal(requests[0].headers.Authorization, 'Bearer legacy-browser-token')
+  assert.equal(requests[0].headers['X-Tracking-Client'], 'browser')
+  assert.equal(requests[1].headers.Authorization, undefined)
+  assert.equal(requests[1].credentials, 'same-origin')
+  assert.ok(token.startsWith('cookie:'))
+  assert.ok(!token.includes('legacy-browser-token'))
+})
+
+test('failed browser upgrade never sends the pending business mutation', async () => {
+  browserSession('legacy-browser-token')
+  const urls = []
+  globalThis.fetch = async (url) => { urls.push(url); throw new Error('offline') }
+  await assert.rejects(apiRequest('/api/projects', { method: 'POST', body: { name: 'New' } }), (error) => {
+    assert.equal(error.outcomeUnknown, false)
+    return true
+  })
+  assert.deepEqual(urls, ['/api/browser-session'])
+  assert.equal(token, 'legacy-browser-token')
+})
+
+test('cookie sessions never send a marker as a bearer token', async () => {
+  browserSession('cookie:session-a')
+  globalThis.fetch = async (_url, options) => {
+    assert.equal(options.headers.Authorization, undefined)
+    assert.equal(options.headers['X-Tracking-Client'], 'browser')
+    assert.equal(options.credentials, 'same-origin')
+    return Response.json({ ok: true })
+  }
+  await apiRequest('/api/projects', { method: 'POST', body: {} })
+})
+
+test('changing cookie sessions does not share another accounts in-flight GET', async () => {
+  browserSession('cookie:session-a')
+  let requests = 0
+  globalThis.fetch = async () => { requests++; return Response.json({ session: token }) }
+  const first = apiRequest('/api/me')
+  token = 'cookie:session-b'
+  const second = apiRequest('/api/me')
+  assert.deepEqual(await Promise.all([first, second]), [{ session: 'cookie:session-a' }, { session: 'cookie:session-b' }])
+  assert.equal(requests, 2)
+})
+
+test('expired browser sessions clear the local marker', async () => {
+  browserSession('cookie:expired')
+  globalThis.fetch = async () => Response.json({ message: 'Unauthenticated.' }, { status: 401 })
+  await assert.rejects(apiRequest('/api/me'), (error) => error.status === 401)
+  assert.equal(token, null)
+})
+
+test('authenticated helpers reject an external URL before transmitting credentials', async () => {
+  await assert.rejects(apiRequest('https://attacker.example/api/me'), (error) => error instanceof ApiError)
+  await assert.rejects(apiRequest('//attacker.example/api/me'), (error) => error instanceof ApiError)
+})
+
+test('insecure public HTTP pages cannot transmit passwords or migrate old tokens', async () => {
+  browserSession('legacy-browser-token')
+  globalThis.window.isSecureContext = false
+  await assert.rejects(apiRequest('/api/login', { method: 'POST', auth: false, body: { password: 'fixture' } }), (error) => error instanceof ApiError)
+  await assert.rejects(apiRequest('/api/me'), (error) => error instanceof ApiError)
+})
+
 test('concurrent requests for the same user share one GET', async () => {
   let requests = 0
   globalThis.fetch = async () => {

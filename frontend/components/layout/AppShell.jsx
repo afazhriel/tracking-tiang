@@ -20,7 +20,7 @@ import {
 } from '../../lib/use-sidebar-preference'
 
 import { api, clearAuth, getStoredUser } from '../../lib/api'
-import { useAuthGate } from '../../lib/use-api'
+import { useAuthGate, useResource } from '../../lib/use-api'
 import {
   NAV_ITEMS,
   NAV_SECONDARY,
@@ -143,6 +143,8 @@ function SidebarHeader() {
 function UserMenu({ compact = false }) {
   const [user] = useState(() => getStoredUser())
   const [unread, setUnread] = useState(0)
+  const [signingOut, setSigningOut] = useState(false)
+  const [logoutError, setLogoutError] = useState('')
   const [open, setOpen] = useState(false)
   const rootRef = useRef(null)
 
@@ -212,11 +214,22 @@ function UserMenu({ compact = false }) {
     }
   }, [open])
 
-  function handleLogout() {
-    clearAuth()
-    /* Full reload supaya semua state client (project, progress, cache)
-       ikut dibersihkan setelah token dihapus. */
-    window.location.href = '/login'
+  async function handleLogout() {
+    setSigningOut(true)
+    setLogoutError('')
+    try {
+      await api.logout()
+      clearAuth()
+      window.location.href = '/login'
+    } catch (error) {
+      if (error.status === 401) {
+        clearAuth()
+        window.location.href = '/login'
+      } else {
+        setLogoutError('Sesi belum dapat ditutup. Periksa koneksi dan coba lagi.')
+        setSigningOut(false)
+      }
+    }
   }
 
   return (
@@ -333,11 +346,13 @@ function UserMenu({ compact = false }) {
             type="button"
             role="menuitem"
             onClick={handleLogout}
+            disabled={signingOut}
             className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-clay-700 transition-colors hover:bg-clay-50"
           >
             <LogOut className="h-4 w-4 text-clay-500" />
-            Keluar
+            {signingOut ? 'Menutup sesi…' : 'Keluar'}
           </button>
+          {logoutError && <p role="alert" className="px-3 py-2 text-xs text-clay-700">{logoutError}</p>}
         </div>
       )}
     </div>
@@ -385,6 +400,7 @@ function ShellContent({ children, title }) {
 function AuthGate({ children }) {
   const { authenticated } = useAuthGate()
   const router = useRouter()
+  const session = useResource(() => api.getProfile(), [authenticated], { enabled: authenticated })
 
   useEffect(() => {
     if (!authenticated) {
@@ -392,7 +408,11 @@ function AuthGate({ children }) {
     }
   }, [authenticated, router])
 
-  if (!authenticated) {
+  if (session.error && authenticated) {
+    return <div className="mx-auto max-w-xl p-6"><ErrorNotice error={session.error} onRetry={session.reload} title="Sesi belum dapat diverifikasi" /></div>
+  }
+
+  if (!authenticated || session.loading || !session.data) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-canvas text-sm text-neutral-500">
         <span className="mr-3 h-4 w-4 animate-spin rounded-full border-2 border-neutral-200 border-t-brand-600" />

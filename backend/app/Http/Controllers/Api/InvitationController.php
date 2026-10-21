@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Invitation;
 use App\Models\Team;
 use App\Models\User;
+use App\Services\BrowserSession;
 use App\Services\TeamAccess;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -154,7 +155,7 @@ class InvitationController extends Controller
             'password' => ['required', 'confirmed', Password::min(8)],
         ]);
 
-        return DB::transaction(function () use ($token, $validated) {
+        return DB::transaction(function () use ($token, $validated, $request) {
             $invitation = Invitation::where('token_hash', Invitation::hashToken($token))->lockForUpdate()->firstOrFail();
             if ($reason = $invitation->unusableReason()) {
                 return response()->json(['message' => $reason], 403);
@@ -196,12 +197,7 @@ class InvitationController extends Controller
                kedua kali setelah accept. Bentuknya sama dengan
                `POST /api/login` supaya frontend bisa memakai satu
                handler untuk keduanya. */
-            return response()->json([
-                'message' => 'Akun berhasil dibuat.',
-                'token' => $user->createToken('web')->plainTextToken,
-                'token_type' => 'Bearer',
-                'user' => $user->fresh()->toAuthPayload(),
-            ], 201);
+            return app(BrowserSession::class)->login($request, $user->fresh(), 201, ['message' => 'Akun berhasil dibuat.']);
         });
     }
 

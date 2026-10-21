@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Services\BrowserSession;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -70,16 +71,9 @@ class AuthController extends Controller
             ]);
         }
 
-        /* Token dibuat ulang setiap login. Ini yang bikin
-           `POST /api/logout` benar-benar revoke sesi: token lama
-           ikut terhapus dari database. */
-        $token = $user->createToken($credentials['device_name'] ?? 'web')->plainTextToken;
-
-        return response()->json([
-            'token' => $token,
-            'token_type' => 'Bearer',
-            'user' => $user->toAuthPayload(),
-        ]);
+        // Browser opts into an HttpOnly cookie; existing native clients retain
+        // the bearer response. Logout revokes only the token used by that call.
+        return app(BrowserSession::class)->login($request, $user);
     }
 
     /**
@@ -132,9 +126,14 @@ class AuthController extends Controller
 
         $user?->currentAccessToken()?->delete();
 
-        return response()->json([
+        return app(BrowserSession::class)->forget(response()->json([
             'message' => 'Berhasil keluar.',
-        ]);
+        ]));
+    }
+
+    public function browserSession(Request $request, BrowserSession $sessions): JsonResponse
+    {
+        return $sessions->migrate($request);
     }
 
     /**

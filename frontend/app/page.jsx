@@ -22,6 +22,7 @@ import {
 
 import {
   getToken,
+  apiRequest,
   normalizePole,
   normalizeProject,
   unwrapList,
@@ -52,16 +53,6 @@ const LandingPoleMap = dynamic(() => import('../components/landing/LandingPoleMa
    dan peta kosong padahal user sudah login. */
 const PROJECTS_URL = '/api/projects'
 const POLES_URL = '/api/projects/{project}/poles'
-
-function authHeaders(token) {
-  const headers = { Accept: 'application/json' }
-
-  if (token) {
-    headers.Authorization = `Bearer ${token}`
-  }
-
-  return headers
-}
 
 const features = [
   {
@@ -121,18 +112,7 @@ export default function HomePage() {
         return
       }
 
-      const headers = authHeaders(token)
-
-      const projectsResponse = await fetch(PROJECTS_URL, {
-        headers,
-        signal: controller.signal,
-      })
-
-      if (!projectsResponse.ok) {
-        throw new Error('Daftar project tidak dapat diakses')
-      }
-
-      const projects = unwrapList(await projectsResponse.json())
+      const projects = unwrapList(await apiRequest(PROJECTS_URL, { signal: controller.signal }))
 
       if (!projects.length) {
         setProject(null)
@@ -149,25 +129,10 @@ export default function HomePage() {
 
       setProject(normalizeProject(active))
 
-      const detailResponse = await fetch(`/api/projects/${active.id}`, {
-        headers,
-        signal: controller.signal,
-      })
-
-      if (detailResponse.ok) {
-        const detail = await detailResponse.json()
-
-        if (detail?.data) setProject(normalizeProject(detail.data))
-      }
-
-      const polesResponse = await fetch(POLES_URL.replace('{project}', active.id), {
-        headers,
-        signal: controller.signal,
-      })
-
-      if (!polesResponse.ok) throw new Error('Data tiang tidak dapat diakses')
-
-      setPoles(unwrapList(await polesResponse.json()).map(normalizePole))
+      const detail = await apiRequest(`/api/projects/${active.id}`, { signal: controller.signal })
+      if (detail?.data) setProject(normalizeProject(detail.data))
+      const polePayload = await apiRequest(POLES_URL.replace('{project}', active.id), { signal: controller.signal })
+      setPoles(unwrapList(polePayload).map(normalizePole))
       setMapFailed(false)
     }
 
