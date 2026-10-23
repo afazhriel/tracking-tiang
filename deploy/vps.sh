@@ -138,7 +138,7 @@ done
 # must not be installed in the active web service's dependency tree.
 (umask 022; cd "$stage/frontend" && npm prune --omit=dev --ignore-scripts --no-audit --no-fund)
 # Build PHP image before touching the live source.
-docker build -t tracking-tiang-php:latest -f "$stage/backend/Dockerfile" "$stage/backend"
+docker build --pull -t tracking-tiang-php:latest -f "$stage/backend/Dockerfile" "$stage/backend"
 
 backup="${DEPLOY_BACKUPS:-/opt/tracking-tiang-deploy-backups}/auto-$(date -u +%Y%m%dT%H%M%SZ)-${sha:0:12}"
 (umask 077; mkdir -p "$backup")
