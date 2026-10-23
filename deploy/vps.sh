@@ -39,7 +39,7 @@ systemctl cat "$service" >/dev/null
 docker compose config --quiet
 docker compose exec -T backend php -v >/dev/null < /dev/null
 # Refuse to override maintenance deliberately enabled by an operator.
-docker compose exec -T backend php -r 'try { $app=require "bootstrap/app.php"; $app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap(); exit($app->isDownForMaintenance() ? 1 : 0); } catch (Throwable $e) { fwrite(STDERR, "Backend preflight failed.\n"); exit(1); }' < /dev/null
+docker compose exec -T backend php -r 'try { require "vendor/autoload.php"; $app=require "bootstrap/app.php"; $app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap(); exit($app->isDownForMaintenance() ? 1 : 0); } catch (Throwable $e) { fwrite(STDERR, "Backend preflight failed.\n"); exit(1); }' < /dev/null
 # Avoid overwriting a frontend checkout with local source modifications.
 frontend_repo=$(git -C "$frontend" rev-parse --show-toplevel)
 if [[ "$mode" != --replace-vps ]] && [[ -n "$(git -C "$frontend_repo" status --porcelain -- frontend)" ]]; then
