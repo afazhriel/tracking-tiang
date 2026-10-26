@@ -8,6 +8,12 @@ on:
 permissions:
   contents: read
 
+# A newer PR commit supersedes its old checks. Stop wasting runners on
+# obsolete snapshots while retaining independent main/manual/reusable runs.
+concurrency:
+  group: quality-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   backend:
     name: Laravel tests and Pint
@@ -286,6 +292,24 @@ jobs:
           python3 - <<'PY'
           import json, os
           results = json.loads(os.environ['RESULTS'])
+          names = {
+              'backend': 'Laravel tests and Pint',
+              'migrations': 'PostgreSQL migration safety',
+              'frontend': 'Frontend lint, audit, tests and build',
+              'deployment-tests': 'Deployment regression tests',
+              'browser': 'Browser auth and media',
+              'recovery': 'PostgreSQL backup restore',
+          }
+          summary = os.getenv('GITHUB_STEP_SUMMARY')
+          if summary:
+              with open(summary, 'a', encoding='utf-8') as report:
+                  report.write('## Tracking Tiang: quality checks\\n\\n')
+                  report.write('| Check | Result |\\n| --- | --- |\\n')
+                  for name, label in names.items():
+                      result = results[name]['result']
+                      report.write(f'| {label} | {result} |\\n')
+                  report.write('\\nOnly the latest commit checks determine this PR readiness. '
+                               'Historical failed runs remain visible in GitHub Actions.\\n')
           failed = [name for name, job in results.items() if job['result'] != 'success']
           if failed:
               raise SystemExit('Failed, cancelled or skipped checks: ' + ', '.join(failed))
