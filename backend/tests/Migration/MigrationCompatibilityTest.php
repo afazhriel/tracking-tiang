@@ -159,6 +159,57 @@ class MigrationCompatibilityTest extends TestCase
         }
     }
 
+    public function test_source_repair_preserves_tanki_and_projects_with_quantity_entries(): void
+    {
+        $this->artisan('migrate:fresh', ['--force' => true])->assertSuccessful();
+        $user = User::factory()->admin()->create();
+
+        foreach (['HISTORY-ONLY', 'TANKI --01', 'QUANTITY-KEEP'] as $code) {
+            $projectId = DB::table('projects')->insertGetId([
+                'name' => $code,
+                'code' => $code,
+                'total_target_poles' => 4,
+                'target_quantity' => 4,
+                'unit_code' => 'pole',
+                'progress_source' => 'quantity_entries',
+                'status' => 'active',
+            ]);
+            $poleId = DB::table('poles')->insertGetId([
+                'project_id' => $projectId,
+                'pole_code' => $code.'-01',
+            ]);
+            $workItemId = DB::table('work_items')->insertGetId([
+                'project_id' => $projectId,
+                'name' => 'Legacy item',
+                'weight_percent' => 100,
+                'sequence' => 1,
+                'is_active' => true,
+            ]);
+            DB::table('pole_progress_histories')->insert([
+                'pole_id' => $poleId,
+                'work_item_id' => $workItemId,
+                'progress_percent' => 25,
+                'recorded_by' => $user->id,
+                'recorded_at' => now(),
+            ]);
+
+            if ($code === 'QUANTITY-KEEP') {
+                DB::table('project_quantity_entries')->insert([
+                    'project_id' => $projectId,
+                    'quantity_delta' => 1,
+                    'unit_code' => 'pole',
+                    'recorded_at' => now(),
+                ]);
+            }
+        }
+
+        (require database_path('migrations/2026_10_26_120000_restore_historical_pole_progress_source.php'))->up();
+
+        $this->assertDatabaseHas('projects', ['code' => 'HISTORY-ONLY', 'progress_source' => 'pole_weighted']);
+        $this->assertDatabaseHas('projects', ['code' => 'TANKI --01', 'progress_source' => 'quantity_entries']);
+        $this->assertDatabaseHas('projects', ['code' => 'QUANTITY-KEEP', 'progress_source' => 'quantity_entries']);
+    }
+
     private function installHistoricalExtensions(bool $backfill): void
     {
         // The PR base can already contain additive replacements for these
