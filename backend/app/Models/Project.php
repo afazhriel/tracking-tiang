@@ -28,6 +28,21 @@ class Project extends Model
         'target_quantity' => 'decimal:4',
     ];
 
+    protected static function booted(): void
+    {
+        static::creating(function (Project $project): void {
+            // Old pole projects can be created without a quantity target.
+            // Keep them on the historical weighted calculation; quantity
+            // projects created with a target retain the new calculation.
+            // An explicitly selected source always wins.
+            if ($project->progress_source === null) {
+                $project->progress_source = $project->target_quantity !== null
+                    ? 'quantity_entries'
+                    : 'pole_weighted';
+            }
+        });
+    }
+
     public function regions(): HasMany
     {
         return $this->hasMany(Region::class);
