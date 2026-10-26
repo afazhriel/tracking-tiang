@@ -39,7 +39,9 @@ class InvitationIntegrityTest extends TestCase
         $response = $this->accept()->assertCreated()->assertJsonStructure(['token', 'user']);
         $userId = $response->json('user.id');
         $this->assertDatabaseHas('team_members', ['team_id' => $team->id, 'user_id' => $userId]);
-        $this->assertDatabaseHas('project_user', ['project_id' => $project->id, 'user_id' => $userId]);
+        // A team invitation creates derived access, never a direct grant.
+        $this->assertDatabaseMissing('project_user', ['project_id' => $project->id, 'user_id' => $userId]);
+        $this->assertTrue(User::findOrFail($userId)->canAccessProject($project->id));
         $this->assertSame('accepted', $invitation->fresh()->status);
         $this->accept()->assertForbidden();
         $this->assertDatabaseCount('personal_access_tokens', 1);
