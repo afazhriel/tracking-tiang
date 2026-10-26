@@ -1,0 +1,92 @@
+name: Activate Tracking Tiang live (one-time 2026-10-26)
+
+# Only adding this exact file to protected main can trigger this run.
+# The matching merge title below is a second one-time authorization gate.
+# Subsequent normal main pushes cannot trigger a deployment.
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/activate-live-20261026.yml
+
+permissions:
+  contents: read
+  deployments: read
+  actions: read
+
+concurrency:
+  group: production-vps
+  cancel-in-progress: false
+
+jobs:
+  quality:
+    uses: ./.github/workflows/quality.yml
+
+  activate:
+    name: Activate verified release on VPS
+    needs: quality
+    if: >-
+      github.event_name == 'push'
+      && github.ref == 'refs/heads/main'
+      && startsWith(github.event.head_commit.message, 'Activate Tracking Tiang live [release-20261026]')
+      && vars.DEPLOY_ENABLED != 'false'
+    runs-on: ubuntu-24.04
+    environment: production
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify prior audited main and release script
+        run: |
+          set -Eeuo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          git merge-base --is-ancestor 7850b0aa6c2f042d4ace49b1fe7a99349f8c393b "$GITHUB_SHA"
+          bash -n deploy/vps.sh
+          test -f deploy/verify-production-backup.sh
+          echo "Exact commit and previous audited main are in release ancestry."
+      - name: Verify protected main, production reviewer and environment branch policy
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node ci/check-production-policy.mjs
+      - name: Configure verified SSH identity
+        env:
+          SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
+        run: |
+          set -Eeuo pipefail
+          test -n "$SSH_KEY"
+          test -n "$KNOWN_HOSTS"
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+      - name: Activate exact reviewed commit with backup-first source reconciliation
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_PORT: ${{ secrets.VPS_PORT }}
+        run: |
+          set -Eeuo pipefail
+          test -n "$VPS_HOST"
+          test -n "$VPS_USER"
+          [[ "$VPS_HOST" =~ ^[a-zA-Z0-9.-]+$ ]]
+          [[ "$VPS_USER" =~ ^[a-zA-Z_][a-zA-Z0-9_-]*$ ]]
+          port="${VPS_PORT:-22}"
+          [[ "$port" =~ ^[0-9]{1,5}$ ]] && (( 10#$port >= 1 && 10#$port <= 65535 ))
+          # This explicit mode is necessary because read-only audit showed
+          # live source changes. The deploy script first backs up runtime
+          # data + local source, then verifies an actual isolated DB restore,
+          # and only afterward changes live source/migrations.
+          remote_command='script=$(mktemp); trap '\''rm -f "$script"'\'' EXIT; cat > "$script"; bash "$script" "$@" < /dev/null'
+          printf -v escaped_command '%q' "$remote_command"
+          ssh -i ~/.ssh/deploy_key -p "$port" \
+            -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=20 \
+            "$VPS_USER@$VPS_HOST" "bash -c $escaped_command -- '$GITHUB_SHA' '--replace-vps'" < deploy/vps.sh
+      - name: Remove private SSH identity
+        if: always()
+        run: rm -f ~/.ssh/deploy_key
