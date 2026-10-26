@@ -251,7 +251,19 @@ class MigrationCompatibilityTest extends TestCase
                 'abilities' => '["*"]',
             ] + $timestamps);
         }
-        $projectId = DB::table('projects')->insertGetId(['name' => 'Proyek Lama', 'code' => 'LEGACY', 'status' => 'active', 'total_target_poles' => 4] + $timestamps);
+        $legacyProject = ['name' => 'Proyek Lama', 'code' => 'LEGACY', 'status' => 'active', 'total_target_poles' => 4];
+        // CI_BASE_MIGRATIONS may already be the merged Quantity schema on
+        // subsequent PRs. Preserve the *existing legacy semantics* when
+        // seeding a row into that schema, rather than allowing its generic
+        // SQL default (quantity_entries) to turn a pole project into a
+        // targetless quantity project. When upgrading an older base, these
+        // columns do not exist and the historical migration still backfills.
+        if (Schema::hasColumn('projects', 'progress_source')) {
+            $legacyProject['target_quantity'] = 4;
+            $legacyProject['unit_code'] = 'pole';
+            $legacyProject['progress_source'] = 'pole_weighted';
+        }
+        $projectId = DB::table('projects')->insertGetId($legacyProject + $timestamps);
         $poleId = DB::table('poles')->insertGetId(['project_id' => $projectId, 'pole_code' => 'LAMA-01', 'address' => 'Alamat lama – tidak boleh hilang', 'latitude' => '-6.2000000', 'longitude' => '106.8000000'] + $timestamps);
         $itemId = DB::table('work_items')->insertGetId(['project_id' => $projectId, 'name' => 'Pondasi Lama', 'weight_percent' => '100.00', 'sequence' => 1, 'is_active' => true] + $timestamps);
         DB::table('pole_work_progress')->insert(['pole_id' => $poleId, 'work_item_id' => $itemId, 'progress_percent' => '37.50', 'notes' => 'Catatan lama', 'updated_by' => $userId] + $timestamps);
