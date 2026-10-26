@@ -78,7 +78,6 @@ class ProjectQuantityEntryController extends Controller
             $project,
             $progress,
             $data,
-            $delta,
             $fingerprint
         ) {
             $locked = Project::query()

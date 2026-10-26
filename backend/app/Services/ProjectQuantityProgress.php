@@ -105,10 +105,8 @@ class ProjectQuantityProgress
             ],
             'planned_curve' => $plan['planned_curve'],
             'actual_curve' => $state['actual_curve'],
-            'actual_current_quantity' =>
-                $state['actual_current_quantity'],
-            'actual_current_percent' =>
-                $state['actual_current_percent'],
+            'actual_current_quantity' => $state['actual_current_quantity'],
+            'actual_current_percent' => $state['actual_current_percent'],
             'baseline_status' => $plan['status'],
             'baseline_version' => $plan['version'],
             'registered_poles' => $project->poles()->count(),

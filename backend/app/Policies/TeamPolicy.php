@@ -33,16 +33,17 @@ class TeamPolicy
 
     public function create(User $user): bool
     {
-        return $user->isActive() && $user->isAdmin();
+        return $user->isActive();
     }
 
     public function update(User $user, Team $team): bool
     {
-        return $user->isActive() && $user->isAdmin();
+        return $user->isActive() && ($user->isAdmin()
+            || ($team->project_id !== null && $user->can('update', $team->project)));
     }
 
     public function manageMembers(User $user, Team $team): bool
     {
-        return $user->isActive() && $user->isAdmin();
+        return $this->update($user, $team);
     }
 }

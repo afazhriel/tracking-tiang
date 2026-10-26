@@ -7,8 +7,8 @@ import { useCurrentUser } from '../../lib/use-current-user'
 const dateOnly = (value) => String(value ?? '').slice(0, 10)
 
 const emptyPeriod = (project) => ({
-  period_start: dateOnly(project?.start_date),
-  period_end: dateOnly(project?.end_date),
+  period_start: dateOnly(project?.start_date ?? project?.startDate),
+  period_end: dateOnly(project?.end_date ?? project?.endDate),
   planned_quantity: '',
 })
 
@@ -67,6 +67,8 @@ export default function BaselineManager({ projectId, project, onApproved }) {
   const [revision, setRevision] = useState(0)
 
   useEffect(() => {
+    // Reset the editor when its project context changes.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setSelection('auto')
     setBaselines([])
   }, [projectId])
@@ -75,6 +77,8 @@ export default function BaselineManager({ projectId, project, onApproved }) {
     let cancelled = false
     if (!projectId) return
 
+    // Reflect the lifecycle of this cancellable external request.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true)
     api.listBaselines(projectId)
       .then((result) => {
@@ -123,6 +127,8 @@ export default function BaselineManager({ projectId, project, onApproved }) {
   useEffect(() => {
     const selectedBaseline = baselines.find((b) => String(b.id) === selection)
 
+    // Populate editable fields from the selected server revision.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setNotes(selectedBaseline?.notes ?? '')
     setPeriods(
       selectedBaseline?.periods?.length
@@ -131,9 +137,9 @@ export default function BaselineManager({ projectId, project, onApproved }) {
             period_end: dateOnly(p.period_end),
             planned_quantity: String(p.planned_quantity),
           }))
-        : [emptyPeriod(project)]
+        : [{ period_start: dateOnly(project?.start_date ?? project?.startDate), period_end: dateOnly(project?.end_date ?? project?.endDate), planned_quantity: '' }]
     )
-  }, [selection, baselines, project?.start_date, project?.end_date])
+  }, [selection, baselines, project?.start_date, project?.end_date, project?.startDate, project?.endDate])
 
   function updatePeriod(index, field, value) {
     setPeriods((previous) => previous.map((period, i) =>

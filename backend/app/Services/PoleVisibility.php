@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Project;
 use App\Models\User;
 
 class PoleVisibility
@@ -29,8 +30,8 @@ class PoleVisibility
         // PIC tetap dibatasi berdasarkan provinsi atau penugasan.
         $provinceIds = $user->managedProvinceIds() ?? [];
         $poleIds = $user->assignedPoleIds();
-        $query->where(function ($inner) use ($provinceIds, $poleIds, $table) {
-            $inner->whereIn($table.'.province_id', $provinceIds)->orWhereIn($table.'.id', $poleIds);
+        $query->where(function ($inner) use ($provinceIds, $poleIds, $table, $user) {
+            $inner->whereIn($table.'.project_id', Project::where('owner_user_id', $user->id)->select('id'))->orWhereIn($table.'.province_id', $provinceIds)->orWhereIn($table.'.id', $poleIds);
         });
     }
 }

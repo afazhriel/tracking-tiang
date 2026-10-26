@@ -3,9 +3,9 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\Project;
 use App\Models\Team;
 use App\Models\User;
-use App\Services\TeamAccess;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -16,153 +16,133 @@ class TeamController extends Controller
     public function index(Request $request): JsonResponse
     {
         $this->authorize('viewAny', Team::class);
-
-        $query = Team::query()
-            ->with(['project:id,name'])
-            ->withCount('users')
-            ->orderBy('name');
-
-        if ($request->filled('project_id')) {
-            $query->where('project_id', $request->integer('project_id'));
+        $values = $request->validate([
+            'project_id' => ['sometimes', 'required', 'integer', 'exists:projects,id'],
+            'status' => ['sometimes', Rule::in(['active', 'inactive'])],
+        ]);
+        if (isset($values['project_id'])) {
+            $this->authorize('view', Project::findOrFail($values['project_id']));
         }
-
-        if ($request->filled('status')) {
-            $query->where('status', $request->string('status')->toString());
-        }
-
-        /*
-         * Selain admin/supervisor (PIC), daftar hanya menampilkan tim
-         * dari project yang boleh diakses — sejalan dengan `TeamPolicy@view`.
-         * Tanpa ini, PIC bisa melihat seluruh tim lintas project.
-         */
         $user = $request->user();
+        $teams = Team::with('project:id,name,owner_user_id')->withCount('users')
+            ->when(isset($values['project_id']), fn ($q) => $q->where('project_id', $values['project_id']))
+            ->when(isset($values['status']), fn ($q) => $q->where('status', $values['status']))
+            ->when(! $user->isAdmin(), fn ($q) => $q->whereIn('project_id', $user->accessibleProjectIds() ?? []))
+            ->orderBy('name')->get();
+        $teams->each(fn ($team) => $team->setAttribute('can_manage', $user->can('update', $team)));
 
-        if ($user !== null && ! $user->isAdmin()) {
-            $projectIds = $user->accessibleProjectIds() ?? [];
-
-            if ($projectIds === []) {
-                $query->whereRaw('1 = 0');
-            } else {
-                $query->whereIn('project_id', $projectIds);
-            }
-        }
-
-        return response()->json($query->get());
+        return response()->json($teams);
     }
 
     public function store(Request $request): JsonResponse
     {
         $this->authorize('create', Team::class);
-
-        $validated = $request->validate([
+        $values = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'code' => ['nullable', 'string', 'max:255', 'unique:teams,code'],
-            'project_id' => ['nullable', 'integer', 'exists:projects,id'],
-            'status' => ['nullable', 'string', 'max:50'],
+            'project_id' => ['required', 'integer', 'exists:projects,id'],
+            'status' => ['sometimes', Rule::in(['active', 'inactive'])],
         ]);
 
-        $team = Team::create([
-            'name' => $validated['name'],
-            'code' => $validated['code'] ?? null,
-            'project_id' => $validated['project_id'] ?? null,
-            'status' => $validated['status'] ?? 'active',
-        ]);
+        return DB::transaction(function () use ($values) {
+            $project = Project::whereKey($values['project_id'])->lockForUpdate()->firstOrFail();
+            $this->authorize('update', $project);
+            $team = Team::create([...$values, 'status' => $values['status'] ?? 'active']);
 
-        $team->load('project:id,name');
-
-        return response()->json($team, 201);
+            return $this->detail($team, 201);
+        }, 3);
     }
 
     public function show(Team $team): JsonResponse
     {
         $this->authorize('view', $team);
 
-        $team->load([
-            'project:id,name',
-            'users:id,name,email,role,status',
-        ]);
-
-        $team->loadCount('users');
-
-        return response()->json($team);
+        return $this->detail($team);
     }
 
     public function update(Request $request, Team $team): JsonResponse
     {
         $this->authorize('update', $team);
-
-        $validated = $request->validate([
+        $values = $request->validate([
             'name' => ['sometimes', 'required', 'string', 'max:255'],
-            'code' => [
-                'sometimes',
-                'nullable',
-                'string',
-                'max:255',
-                Rule::unique('teams', 'code')->ignore($team->id),
-            ],
-            'project_id' => ['sometimes', 'nullable', 'integer', 'exists:projects,id'],
-            'status' => ['sometimes', 'required', 'string', 'max:50'],
+            'code' => ['sometimes', 'nullable', 'string', 'max:255', Rule::unique('teams', 'code')->ignore($team->id)],
+            'project_id' => ['sometimes', 'required', 'integer', 'exists:projects,id'],
+            'status' => ['sometimes', 'required', Rule::in(['active', 'inactive'])],
         ]);
 
-        return DB::transaction(function () use ($team, $validated) {
+        return DB::transaction(function () use ($team, $values) {
             $team = Team::whereKey($team->id)->lockForUpdate()->firstOrFail();
-            if (array_key_exists('project_id', $validated) && (string) $validated['project_id'] !== (string) $team->project_id) {
-                abort_if($team->poleAssignments()->where('status', 'active')->exists(), 409, 'Cabut penugasan aktif sebelum memindahkan proyek tim. Data penugasan tetap disimpan.');
+            $this->authorize('update', $team);
+            if (isset($values['project_id']) && (int) $values['project_id'] !== (int) $team->project_id) {
+                $this->authorize('update', Project::findOrFail($values['project_id']));
+                abort_if($team->poleAssignments()->where('status', 'active')->exists(), 409, 'Cabut penugasan aktif sebelum memindahkan proyek tim. Histori tetap disimpan.');
             }
-            $team->update($validated);
-            foreach ($team->users as $member) {
-                app(TeamAccess::class)->grantProjects($team, $member);
-            }
-            $team->load('project:id,name');
-            $team->loadCount('users');
+            $team->update($values);
 
-            return response()->json($team);
-        });
+            return $this->detail($team);
+        }, 3);
     }
 
-    public function addMember(
-        Request $request,
-        Team $team
-    ): JsonResponse {
-        $this->authorize('manageMembers', $team);
+    /** Project-scoped directory; outside users require an exact email, never global browsing. */
+    public function candidates(Request $request, Project $project): JsonResponse
+    {
+        $this->authorize('update', $project);
+        $values = $request->validate(['email' => ['sometimes', 'required', 'email', 'max:255']]);
+        $users = User::query()->where(fn ($q) => $q->whereNull('status')->orWhere('status', 'active'));
+        if (isset($values['email'])) {
+            $users->whereRaw('LOWER(email) = ?', [strtolower($values['email'])]);
+        } else {
+            $users->where(function ($q) use ($project) {
+                $q->where('id', $project->owner_user_id)
+                    ->orWhereHas('projectMemberships', fn ($q) => $q->where('project_id', $project->id))
+                    ->orWhereHas('teams', fn ($q) => $q->where('project_id', $project->id));
+            });
+        }
 
-        $validated = $request->validate([
+        return response()->json(['data' => $users->orderBy('name')->limit(100)->get(['id', 'name', 'email', 'role', 'status'])]);
+    }
+
+    public function addMember(Request $request, Team $team): JsonResponse
+    {
+        $this->authorize('manageMembers', $team);
+        $values = $request->validate([
             'user_id' => ['required', 'integer', 'exists:users,id'],
             'role' => ['nullable', 'string', 'max:100'],
         ]);
 
-        $user = User::findOrFail($validated['user_id']);
-
-        return DB::transaction(function () use ($team, $user, $validated) {
+        return DB::transaction(function () use ($team, $values) {
             $team = Team::whereKey($team->id)->lockForUpdate()->firstOrFail();
-            $team->users()->syncWithoutDetaching([$user->id => ['role' => $validated['role'] ?? null]]);
-            app(TeamAccess::class)->grantProjects($team, $user);
-            $team->load('users:id,name,email,role,status');
+            $this->authorize('manageMembers', $team);
+            abort_unless($team->status === 'active', 422, 'Aktifkan tim sebelum menambahkan anggota.');
+            $user = User::findOrFail($values['user_id']);
+            abort_unless($user->isActive(), 422, 'Hanya pengguna aktif yang dapat ditambahkan.');
+            $team->users()->syncWithoutDetaching([$user->id => ['role' => $values['role'] ?? null]]);
 
-            return response()->json($team);
-        });
+            return $this->detail($team);
+        }, 3);
     }
 
-    public function removeMember(
-        Team $team,
-        User $user
-    ): JsonResponse {
+    public function removeMember(Team $team, User $user): JsonResponse
+    {
         $this->authorize('manageMembers', $team);
 
-        $removed = DB::transaction(function () use ($team, $user) {
+        return DB::transaction(function () use ($team, $user) {
             $team = Team::whereKey($team->id)->lockForUpdate()->firstOrFail();
+            $this->authorize('manageMembers', $team);
+            abort_unless($team->users()->detach($user->id), 404, 'User bukan anggota tim ini.');
 
-            return $team->users()->detach($user->id);
-        });
-
-        if ($removed === 0) {
             return response()->json([
-                'message' => 'User bukan anggota tim ini.',
-            ], 404);
-        }
+                'message' => 'Anggota dikeluarkan. Akses langsung dan akses dari tim lain tetap berlaku.',
+                'project_access_remaining' => $team->project_id !== null && $user->canAccessProject((int) $team->project_id),
+            ]);
+        }, 3);
+    }
 
-        return response()->json([
-            'message' => 'Anggota tim berhasil dihapus.',
-        ]);
+    private function detail(Team $team, int $status = 200): JsonResponse
+    {
+        $team->load(['project:id,name,owner_user_id', 'users:id,name,email,role,status'])->loadCount('users');
+        $team->setAttribute('can_manage', request()->user()->can('update', $team));
+
+        return response()->json($team, $status);
     }
 }

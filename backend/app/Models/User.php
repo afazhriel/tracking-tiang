@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\TeamAccess;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -212,6 +213,7 @@ class User extends Authenticatable
 
         return $memberIds
             ->merge($ownedIds)
+            ->merge(app(TeamAccess::class)->projectIds($this))
             ->map(fn ($id) => (int) $id)
             ->unique()
             ->values()

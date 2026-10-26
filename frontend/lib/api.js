@@ -637,6 +637,12 @@ export const api = {
       ...options,
       query: { project_id: projectId, status },
     }),
+  teamCandidates: (projectId, email, options) =>
+    apiRequest(`/api/projects/${projectId}/team-candidates`, { ...options, query: { email: email || undefined } }),
+  teamAssignments: (teamId, options) => apiRequest(`/api/teams/${teamId}/assignments`, options),
+  teamPoleCandidates: (teamId, search, options) => apiRequest(`/api/teams/${teamId}/pole-candidates`, { ...options, query: { search: search || undefined } }),
+  assignTeamPole: (teamId, poleId, options) => apiRequest(`/api/teams/${teamId}/assignments`, { ...options, method: 'POST', body: { pole_id: poleId } }),
+  revokeTeamPole: (teamId, assignmentId, options) => apiRequest(`/api/teams/${teamId}/assignments/${assignmentId}`, { ...options, method: 'DELETE' }),
   getTeam: (teamId, options) => apiRequest(`/api/teams/${teamId}`, options),
   createTeam: (payload, options) =>
     apiRequest('/api/teams', { ...options, method: 'POST', body: payload }),
@@ -849,6 +855,7 @@ export function normalizeRegion(region) {
 export function normalizeProject(project) {
   return {
     id: project?.id ?? null,
+    ownerUserId: project?.owner_user_id ?? null,
     name: project?.name ?? '—',
     code: project?.code ?? null,
     status: project?.status ?? null,
@@ -931,7 +938,8 @@ export function normalizeUser(user) {
     projects: Array.isArray(user?.projects)
       ? user.projects.map((project) => ({
           id: project?.id ?? null,
-          name: project?.name ?? '—',
+          ownerUserId: project?.owner_user_id ?? null,
+    name: project?.name ?? '—',
         }))
       : [],
     /* Provinsi yang ditugaskan (non-admin). Admin tidak dibatasi,
@@ -959,7 +967,8 @@ export function normalizeTeam(team) {
       ? { id: team.project.id ?? null, name: team.project.name ?? '—' }
       : null,
     status: team?.status ?? null,
-    usersCount: team?.users_count ?? (users.length || null),
+    canManage: team?.can_manage === true,
+    usersCount: team?.users_count ?? users.length,
     users: users.map(normalizeUser),
     raw: team ?? null,
   }

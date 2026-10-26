@@ -89,7 +89,7 @@ class ProgressController extends Controller
                         $workItem = $pole->workItems()->where('source_item_id', $workItem->id)->firstOrFail();
                     }
                 }
-                abort_unless($workItem->is_active, 422, "Item pekerjaan nonaktif tidak boleh menerima progres.");
+                abort_unless($workItem->is_active, 422, 'Item pekerjaan nonaktif tidak boleh menerima progres.');
                 $progress = PoleWorkProgress::updateOrCreate(
                     [
                         'pole_id' => $pole->id,

@@ -237,3 +237,26 @@ test('failed writes distinguish an unknown network outcome from a confirmed uplo
   globalThis.fetch = async () => Response.json({ message: 'Foto gagal disimpan.', saved: false }, { status: 503 })
   await assert.rejects(api.savePoleProgress(1, 2, { work_item_id: 3, progress_percent: 20 }), (error) => error.status === 503 && error.outcomeUnknown === false)
 })
+
+test('team helpers scope candidates, membership, and assignments to the selected project and team', async () => {
+  const requests = []
+  globalThis.fetch = async (url, options) => { requests.push({ url, method: options.method, body: options.body ? JSON.parse(options.body) : null }); return Response.json({ data: [] }) }
+  await api.listTeams({ projectId: 7 })
+  await api.createTeam({ name: 'Tim 7', project_id: 7 })
+  await api.teamCandidates(7, 'member@example.test')
+  await api.addTeamMember(9, 42)
+  await api.removeTeamMember(9, 42)
+  await api.teamAssignments(9)
+  await api.teamPoleCandidates(9, 'P-7')
+  await api.assignTeamPole(9, 77)
+  await api.revokeTeamPole(9, 11)
+  assert.deepEqual(requests.map(r => [r.method, r.url]), [
+    ['GET', '/api/teams?project_id=7'], ['POST', '/api/teams'],
+    ['GET', '/api/projects/7/team-candidates?email=member%40example.test'],
+    ['POST', '/api/teams/9/members'], ['DELETE', '/api/teams/9/members/42'],
+    ['GET', '/api/teams/9/assignments'], ['GET', '/api/teams/9/pole-candidates?search=P-7'],
+    ['POST', '/api/teams/9/assignments'], ['DELETE', '/api/teams/9/assignments/11'],
+  ])
+  assert.deepEqual(requests[1].body, { name: 'Tim 7', project_id: 7 })
+  assert.deepEqual(requests[7].body, { pole_id: 77 })
+})

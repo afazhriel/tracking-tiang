@@ -2,26 +2,30 @@
 
 namespace App\Services;
 
-use App\Models\PoleAssignment;
-use App\Models\ProjectUser;
-use App\Models\Team;
 use App\Models\User;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 
 class TeamAccess
 {
-    /** Call inside a transaction with the team locked, as assignment writers do. */
-    public function grantProjects(Team $team, User $user): void
+    /** Derived grants are queried, never copied into direct project_user membership. */
+    public function projectIds(User $user): Collection
     {
-        $projects = $team->poleAssignments()
-            ->join('poles', 'poles.id', '=', 'pole_assignments.pole_id')
-            ->where('pole_assignments.status', PoleAssignment::STATUS_ACTIVE)
-            ->when($team->status !== 'active', fn ($query) => $query->whereRaw('1 = 0'))
-            ->pluck('poles.project_id');
-        if ($team->project_id !== null) {
-            $projects->push($team->project_id);
-        }
-        foreach ($projects->unique() as $projectId) {
-            ProjectUser::firstOrCreate(['project_id' => $projectId, 'user_id' => $user->id], ['role' => $user->role]);
-        }
+        $teams = DB::table('teams as t')
+            ->join('team_members as tm', 'tm.team_id', '=', 't.id')
+            ->where('tm.user_id', $user->id)
+            ->where('t.status', 'active');
+
+        $scoped = (clone $teams)->whereNotNull('t.project_id')->pluck('t.project_id');
+        $assigned = (clone $teams)
+            ->join('pole_assignments as pa', 'pa.team_id', '=', 't.id')
+            ->join('poles as p', 'p.id', '=', 'pa.pole_id')
+            ->where('pa.status', 'active')
+            ->where(function ($query) {
+                $query->whereNull('t.project_id')->orWhereColumn('t.project_id', 'p.project_id');
+            })
+            ->pluck('p.project_id');
+
+        return $scoped->merge($assigned)->unique()->values();
     }
 }

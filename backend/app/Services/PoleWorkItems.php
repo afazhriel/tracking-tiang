@@ -103,7 +103,7 @@ class PoleWorkItems
 
     public function meta(Collection $items): array
     {
-        $total = round((float) $items->where("is_active", true)->sum('weight_percent'), 2);
+        $total = round((float) $items->where('is_active', true)->sum('weight_percent'), 2);
 
         return ['total_weight' => $total, 'is_balanced' => abs($total - 100) < 0.01];
     }

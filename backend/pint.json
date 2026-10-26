@@ -1,0 +1,6 @@
+{
+    "notPath": [
+        "database/migrations/2026_10_23_073333_create_project_baselines_table.php",
+        "database/migrations/2026_10_24_120000_add_project_quantity_tracking.php"
+    ]
+}

@@ -138,38 +138,11 @@ class ProjectMemberController extends Controller
                 'Cabut penugasan tiang aktif pengguna terlebih dahulu.'
             );
 
-            // TeamAccess dapat memberikan kembali akses proyek.
-            // Karena itu, cegah pencabutan yang masih bersumber
-            // dari keanggotaan tim atau penugasan tim.
-            $teamAccess = DB::table('team_members as tm')
-                ->join('teams as t', 't.id', '=', 'tm.team_id')
-                ->where('tm.user_id', $user->id)
-                ->where(function ($query) use ($lockedProject) {
-                    $query->where('t.project_id', $lockedProject->id)
-                        ->orWhere(function ($inner) use ($lockedProject) {
-                            $inner->where('t.status', 'active')
-                                ->whereExists(function ($sub) use ($lockedProject) {
-                                    $sub->selectRaw('1')
-                                        ->from('pole_assignments as pa')
-                                        ->join('poles as p', 'p.id', '=', 'pa.pole_id')
-                                        ->whereColumn('pa.team_id', 't.id')
-                                        ->where('pa.status', 'active')
-                                        ->where('p.project_id', $lockedProject->id);
-                                });
-                        });
-                })
-                ->exists();
-
-            abort_if(
-                $teamAccess,
-                409,
-                'Pengguna masih memiliki akses melalui tim. Selesaikan keanggotaan atau penugasan tim terlebih dahulu.'
-            );
-
             $memberQuery->delete();
 
             return response()->json([
-                'message' => 'Keanggotaan proyek berhasil dicabut.',
+                'message' => 'Akses langsung dicabut. Akses melalui tim aktif tetap berlaku.',
+                'access_remaining' => $user->canAccessProject((int) $lockedProject->id),
                 'data' => [
                     'project_id' => $lockedProject->id,
                     'user_id' => $user->id,
@@ -177,5 +150,4 @@ class ProjectMemberController extends Controller
             ]);
         }, 3);
     }
-
 }

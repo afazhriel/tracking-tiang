@@ -39,7 +39,7 @@ class WorkItemController extends Controller
             ->join('poles', 'poles.id', '=', 'pole_work_progress.pole_id')
             ->where('wi.project_id', $project->id)->where('poles.project_id', $project->id)
             ->where(fn ($q) => $q->whereNull('wi.pole_id')->orWhereColumn('wi.pole_id', 'poles.id'))
-            ->where("wi.is_active", true)
+            ->where('wi.is_active', true)
             ->groupByRaw('COALESCE(wi.source_item_id, wi.id)')
             ->selectRaw('COALESCE(wi.source_item_id, wi.id) as item_id')
             ->selectRaw('SUM(pole_work_progress.progress_percent) as total_progress')

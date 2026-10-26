@@ -31,3 +31,7 @@ database/*.sqlite3
 /pole-controller-hierarchy.patch
 /tracking-tiang-local.zip
 /tiangImportPolesModal.jsx
+
+# Local patch backups are not release source.
+*.bak
+*.bak-*

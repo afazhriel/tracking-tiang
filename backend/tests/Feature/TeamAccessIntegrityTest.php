@@ -7,7 +7,7 @@ use App\Models\Pole;
 use App\Models\Project;
 use App\Models\Team;
 use App\Models\User;
-use App\Services\TeamAccess;
+use App\Policies\TeamPolicy;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -33,7 +33,7 @@ class TeamAccessIntegrityTest extends TestCase
         $member = User::factory()->pic()->create();
         $this->postJson("/api/teams/{$team->id}/members", ['user_id' => $member->id])->assertOk();
         $this->actingAs($member, 'sanctum')->getJson("/api/projects/{$project->id}/poles/{$pole->id}")->assertOk();
-        $member->projects()->updateExistingPivot($project->id, ['role' => 'preserved-role']);
+        $member->projects()->attach($project->id, ['role' => 'preserved-role']);
         $this->actingAs($admin, 'sanctum')->postJson("/api/teams/{$team->id}/members", ['user_id' => $member->id])->assertOk();
         $this->assertDatabaseHas('project_user', ['project_id' => $project->id, 'user_id' => $member->id, 'role' => 'preserved-role']);
     }
@@ -100,14 +100,15 @@ class TeamAccessIntegrityTest extends TestCase
         $member->projects()->attach($old, ['role' => 'legacy-role']);
         $this->actingAs($admin, 'sanctum')->putJson("/api/teams/{$team->id}", ['project_id' => $new->id])->assertOk();
         $this->assertDatabaseHas('project_user', ['user_id' => $member->id, 'project_id' => $old->id, 'role' => 'legacy-role']);
-        $this->assertDatabaseHas('project_user', ['user_id' => $member->id, 'project_id' => $new->id]);
+        $this->assertTrue($member->canAccessProject($new->id));
+        $this->assertDatabaseMissing('project_user', ['user_id' => $member->id, 'project_id' => $new->id]);
     }
 
-    public function test_failed_project_grant_rolls_back_the_team_membership(): void
+    public function test_failed_team_response_rolls_back_the_team_membership(): void
     {
         [$admin, $project, $team] = $this->assignedTeam();
         $member = User::factory()->pic()->create();
-        $this->mock(TeamAccess::class)->shouldReceive('grantProjects')->once()->andThrow(new \RuntimeException('Fixture failure'));
+        $this->mock(TeamPolicy::class)->shouldReceive('manageMembers')->andReturnTrue()->shouldReceive('update')->andThrow(new \RuntimeException('Fixture failure'));
         $this->postJson("/api/teams/{$team->id}/members", ['user_id' => $member->id])->assertStatus(500);
         $this->assertDatabaseMissing('team_members', ['team_id' => $team->id, 'user_id' => $member->id]);
         $this->assertDatabaseMissing('project_user', ['project_id' => $project->id, 'user_id' => $member->id]);

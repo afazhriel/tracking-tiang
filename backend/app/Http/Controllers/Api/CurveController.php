@@ -7,6 +7,8 @@ use App\Models\Pole;
 use App\Models\PoleProgressHistory;
 use App\Models\Project;
 use App\Services\ProgressIntegrity;
+use App\Services\ProjectBaselineCurve;
+use App\Services\ProjectQuantityProgress;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Schema;
@@ -66,7 +68,7 @@ class CurveController extends Controller
             && $project->progress_source === 'quantity_entries'
         ) {
             return response()->json(
-                app(\App\Services\ProjectQuantityProgress::class)
+                app(ProjectQuantityProgress::class)
                     ->curve($project)
             );
         }
@@ -181,7 +183,7 @@ class CurveController extends Controller
         $baselinePlan = null;
 
         if ($pole === null) {
-            $baselinePlan = app(\App\Services\ProjectBaselineCurve::class)
+            $baselinePlan = app(ProjectBaselineCurve::class)
                 ->planned($project);
 
             $planned = $baselinePlan['planned_curve'];

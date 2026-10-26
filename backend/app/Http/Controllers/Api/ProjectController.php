@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Project;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class ProjectController extends Controller
 {
@@ -49,13 +50,13 @@ class ProjectController extends Controller
             'status' => ['nullable', 'string', 'max:50'],
         ]);
 
-        $project = \Illuminate\Support\Facades\DB::transaction(
+        $project = DB::transaction(
             function () use ($request, $validated) {
                 $project = new Project($validated);
                 $project->owner_user_id = $request->user()->getKey();
                 $project->save();
 
-                \Illuminate\Support\Facades\DB::table('project_user')->insert([
+                DB::table('project_user')->insert([
                     'project_id' => $project->getKey(),
                     'user_id' => $request->user()->getKey(),
                     'role' => null,

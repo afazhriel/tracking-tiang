@@ -78,6 +78,8 @@ function ProyekContent() {
   useEffect(() => {
     let active = true
 
+    // Clear stale permissions immediately when the active project changes.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setDetail(null)
     setMembers([])
     setMembersError('')
