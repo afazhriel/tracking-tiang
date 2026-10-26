@@ -15,7 +15,7 @@ frontend_pid=$!
 trap 'kill "$backend_pid" "$frontend_pid" 2>/dev/null || true' EXIT
 for attempt in {1..60}; do
   if curl --fail --silent http://localhost:3186/login > /dev/null && curl --fail --silent http://127.0.0.1:3185/api/regions/provinces > /dev/null; then
-    (cd frontend; node tests/browser-smoke.mjs)
+    (cd frontend; node tests/browser-smoke.mjs && node tests/browser-teams.mjs)
     exit 0
   fi
   sleep 1
