@@ -1,0 +1,67 @@
+name: Live post-deploy public smoke
+
+on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/live-public-smoke.yml]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tracking-tiang-live-public-smoke
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    name: Verify live Tim and anonymous API boundaries
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Probe production via HTTPS without credentials or private data
+        env:
+          BASE_URL: https://pjl.ituiot.com
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          work="$(mktemp -d)"
+          trap 'rm -rf "$work"' EXIT
+          status() {
+            local route="$1" expected="$2" file="$3" actual
+            actual="$(curl --silent --show-error --location --max-redirs 2 \
+              --connect-timeout 10 --max-time 25 --retry 3 --retry-delay 2 \
+              --retry-connrefused -H 'Accept: application/json' -H 'Cache-Control: no-cache' \
+              --output "$file" --write-out '%{http_code}' "$BASE_URL$route")"
+            if [[ "$actual" != "$expected" ]]; then
+              printf 'FAIL %s HTTP %s; expected HTTP %s\n' "$route" "$actual" "$expected" >&2
+              exit 1
+            fi
+            printf 'PASS %s HTTP %s\n' "$route" "$actual"
+          }
+          status /login 200 "$work/login"
+          status /tim 200 "$work/tim"
+          status /api/regions/provinces 200 "$work/regions"
+          status /api/me 401 "$work/me"
+          status /api/projects 401 "$work/projects"
+          status /api/teams 401 "$work/teams"
+          node - "$work" <<'NODE'
+          const fs = require('node:fs')
+          const dir = process.argv[2]
+          const json = name => JSON.parse(fs.readFileSync(dir + '/' + name, 'utf8'))
+          if (!Array.isArray(json('regions'))) throw new Error('Regions response is not a JSON array')
+          for (const name of ['me', 'projects', 'teams']) {
+            const data = json(name)
+            if (data?.message !== 'Unauthenticated.') {
+              throw new Error('Protected endpoint ' + name + ' returned an unexpected JSON contract')
+            }
+          }
+          const timPage = fs.readFileSync(dir + '/tim', 'utf8')
+          if (!timPage.includes('<html') || !timPage.includes('/_next/')) {
+            throw new Error('Tim route did not serve a valid application document')
+          }
+          console.log('PASS Tim route and API contracts; anonymous access denied.')
+          NODE
