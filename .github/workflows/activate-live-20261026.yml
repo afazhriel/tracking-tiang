@@ -1,8 +1,7 @@
 name: Activate Tracking Tiang live (one-time 2026-10-26)
 
-# Only adding this exact file to protected main can trigger this run.
-# The matching merge title below is a second one-time authorization gate.
-# Subsequent normal main pushes cannot trigger a deployment.
+# Only an update to this exact file and an audited release merge title can trigger.
+# Ordinary main pushes and retries without a new protected merge do not deploy.
 on:
   push:
     branches: [main]
@@ -36,6 +35,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          # Ancestry validation requires the audited commit to be present.
+          # Checkout's default shallow clone only has HEAD (depth 1).
+          fetch-depth: 0
           persist-credentials: false
       - uses: actions/setup-node@v4
         with:
