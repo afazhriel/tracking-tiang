@@ -22,6 +22,28 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: Distinguish DNS, TCP reachability and runner internet access
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          host=pjl.ituiot.com
+          echo "IPv4 addresses resolved: $(getent ahostsv4 "$host" | awk '{print $1}' | sort -u | wc -l)"
+          echo "IPv6 addresses resolved: $(getent ahostsv6 "$host" | awk '{print $1}' | sort -u | wc -l)"
+          probe() {
+            local label="$1"
+            shift
+            local status rc
+            set +e
+            status=$(curl --silent --show-error --connect-timeout 6 --max-time 9 --output /dev/null --write-out '%{http_code}' "$@")
+            rc=$?
+            set -e
+            echo "$label: curl exit $rc, HTTP $status (000 means no HTTP response)"
+          }
+          probe "Public internet control" https://github.com
+          probe "Site TCP/80 IPv4" -4 "http://$host/login"
+          probe "Site TCP/443 IPv4" -4 "https://$host/login"
+          probe "Site TCP/443 IPv6" -6 "https://$host/login"
+          echo "This diagnostics step is read-only and does not gate deployment."
       - name: Probe production via HTTPS without credentials or private data
         env:
           BASE_URL: https://pjl.ituiot.com
