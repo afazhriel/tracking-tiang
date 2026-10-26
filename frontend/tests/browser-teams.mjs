@@ -49,7 +49,7 @@ async function removeMember(page, name, remaining) {
 }
 
 try {
-  const owner = await session('browser-owner@example.test')
+  const owner = await session('browser-team-owner@example.test')
   await owner.page.getByRole('button', { name: 'Buat tim' }).click()
   await owner.page.getByLabel('Nama tim').fill('Tim CI E2E')
   await owner.page.getByRole('button', { name: 'Simpan tim' }).click()
