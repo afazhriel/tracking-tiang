@@ -2,13 +2,16 @@
 
 use App\Models\Notification;
 use App\Models\Pole;
+use App\Models\PoleAssignment;
 use App\Models\PoleProgressHistory;
 use App\Models\PoleWorkProgress;
 use App\Models\ProgressPhoto;
 use App\Models\Project;
+use App\Models\Team;
 use App\Models\User;
 use Illuminate\Contracts\Console\Kernel;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Tests\Support\IsolatedDatabase;
@@ -22,12 +25,12 @@ $user = User::factory()->pic()->create();
 $project = Project::create(['name' => 'Recovery fixture', 'code' => 'RECOVERY']);
 $user->projects()->attach($project, ['role' => 'legacy-role']);
 // Recovery must exercise independent derived grants, not only direct access.
-$team = \App\Models\Team::create(['name' => 'Recovery team', 'project_id' => $project->id, 'status' => 'active']);
+$team = Team::create(['name' => 'Recovery team', 'project_id' => $project->id, 'status' => 'active']);
 $teamMember = User::factory()->pic()->create();
 $team->users()->attach($teamMember, ['role' => 'field']);
 
 $pole = Pole::create(['project_id' => $project->id, 'pole_code' => 'RESTORE-1']);
-\App\Models\PoleAssignment::create([
+PoleAssignment::create([
     'pole_id' => $pole->id,
     'team_id' => $team->id,
     'user_id' => null,
@@ -58,7 +61,7 @@ $quantity = Project::create([
     'start_date' => '2026-10-01', 'end_date' => '2026-10-31',
 ]);
 $quantity->forceFill(['owner_user_id' => $user->id])->save();
-\Illuminate\Support\Facades\DB::table('project_quantity_entries')->insert([
+DB::table('project_quantity_entries')->insert([
     'project_id' => $quantity->id,
     'quantity_delta' => '25.0000',
     'unit_code' => 'unit',
@@ -70,7 +73,7 @@ $quantity->forceFill(['owner_user_id' => $user->id])->save();
     'created_at' => now(),
     'updated_at' => now(),
 ]);
-$baselineId = \Illuminate\Support\Facades\DB::table('project_baselines')->insertGetId([
+$baselineId = DB::table('project_baselines')->insertGetId([
     'project_id' => $quantity->id,
     'version' => 1,
     'status' => 'draft',
@@ -82,7 +85,7 @@ $baselineId = \Illuminate\Support\Facades\DB::table('project_baselines')->insert
     'created_at' => now(),
     'updated_at' => now(),
 ]);
-\Illuminate\Support\Facades\DB::table('project_baseline_periods')->insert([
+DB::table('project_baseline_periods')->insert([
     'project_baseline_id' => $baselineId,
     'period_number' => 1,
     'period_start' => '2026-10-01',
@@ -91,7 +94,7 @@ $baselineId = \Illuminate\Support\Facades\DB::table('project_baselines')->insert
     'created_at' => now(),
     'updated_at' => now(),
 ]);
-\Illuminate\Support\Facades\DB::table('project_baselines')->where('id', $baselineId)->update([
+DB::table('project_baselines')->where('id', $baselineId)->update([
     'status' => 'approved',
     'approved_by' => $user->id,
     'approved_at' => now(),
