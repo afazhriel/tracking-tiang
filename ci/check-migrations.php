@@ -25,6 +25,13 @@ $deployedHandoffBlobs = [
     'backend/database/migrations/2026_10_24_120000_add_project_quantity_tracking.php' => '5e5bd16bbce96bf5a7316a7fd1dbcd45462b2031',
 ];
 
+// Explicitly reviewed corrective data migration. Unlike the four
+// handoff migrations this one is not yet deployed; the SHA pin stops
+// unreviewed changes from silently inheriting its DML exception.
+$reviewedCorrectionBlobs = [
+    'backend/database/migrations/2026_10_26_120000_restore_historical_pole_progress_source.php' => '8bc938a1d676ba2c5162c31f806e260ea1e40cfa',
+];
+
 $errors = [];
 foreach (array_filter(explode("\n", trim($diff->getOutput()))) as $line) {
     [$status, $file] = explode("\t", $line, 2);
@@ -33,11 +40,12 @@ foreach (array_filter(explode("\n", trim($diff->getOutput()))) as $line) {
         continue;
     }
 
-    if (isset($deployedHandoffBlobs[$file])) {
+    $reviewedBlob = $deployedHandoffBlobs[$file] ?? $reviewedCorrectionBlobs[$file] ?? null;
+    if ($reviewedBlob !== null) {
         $object = new Process(['git', '-C', $root, 'hash-object', $root.'/'.$file]);
         $object->mustRun();
-        if (! hash_equals($deployedHandoffBlobs[$file], trim($object->getOutput()))) {
-            $errors[] = $file.': frozen production handoff migration was modified.';
+        if (! hash_equals($reviewedBlob, trim($object->getOutput()))) {
+            $errors[] = $file.': frozen reviewed migration was modified.';
         }
 
         continue;
