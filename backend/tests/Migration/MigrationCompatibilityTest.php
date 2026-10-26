@@ -20,6 +20,12 @@ class MigrationCompatibilityTest extends TestCase
             $this->markTestSkipped('Migration compatibility requires isolated PostgreSQL.');
         }
         IsolatedDatabase::assertSafe($this->app, postgresOnly: true);
+
+        // migrate:fresh removes tables but PostgreSQL keeps standalone
+        // trigger functions. Clear only known test-schema functions before
+        // rebuilding the isolated database in each migration scenario.
+        DB::unprepared('DROP FUNCTION IF EXISTS guard_project_baseline() CASCADE');
+        DB::unprepared('DROP FUNCTION IF EXISTS guard_project_baseline_period() CASCADE');
     }
 
     public function test_fresh_install_supports_login(): void
