@@ -27,6 +27,37 @@ try {
         foreach (['users', 'projects', 'poles', 'work_items', 'pole_work_progress', 'pole_progress_histories', 'progress_photos', 'migrations'] as $table) {
             $report['rows'][$table] = DB::table($table)->count();
         }
+        // Production activation diagnostics are aggregate-only. No names,
+        // email addresses, entry payloads, photo paths or secrets are logged.
+        foreach (['teams', 'team_members', 'pole_assignments', 'project_quantity_entries', 'project_baselines', 'project_baseline_periods'] as $table) {
+            $report['optional_rows'][$table] = Schema::hasTable($table)
+                ? DB::table($table)->count()
+                : null;
+        }
+        if (Schema::hasColumn('projects', 'progress_source')
+            && Schema::hasColumn('projects', 'target_quantity')) {
+            $report['invalid_quantity_targets'] = DB::table('projects')
+                ->where('progress_source', 'quantity_entries')
+                ->where(fn ($query) => $query->whereNull('target_quantity')->orWhere('target_quantity', '<=', 0))
+                ->count();
+            foreach (['TT-001', 'TANKI --01'] as $code) {
+                $project = DB::table('projects')->where('code', $code)->first(['id', 'progress_source']);
+                $report['protected_projects'][$code] = $project ? [
+                    'present' => true,
+                    'source' => $project->progress_source,
+                    'poles' => DB::table('poles')->where('project_id', $project->id)->count(),
+                    'history' => DB::table('pole_progress_histories as h')
+                        ->join('poles as p', 'p.id', '=', 'h.pole_id')
+                        ->where('p.project_id', $project->id)->count(),
+                    'quantity_entries' => Schema::hasTable('project_quantity_entries')
+                        ? DB::table('project_quantity_entries')->where('project_id', $project->id)->count()
+                        : null,
+                    'baselines' => Schema::hasTable('project_baselines')
+                        ? DB::table('project_baselines')->where('project_id', $project->id)->count()
+                        : null,
+                ] : ['present' => false];
+            }
+        }
         $report['active_admins'] = DB::table('users')->where('role', 'admin')
             ->where(fn ($query) => $query->whereNull('status')->orWhereNotIn('status', ['pending', 'suspended']))->count();
         $report['legacy_scope_columns_present'] = Schema::hasColumn('work_items', 'pole_id')
