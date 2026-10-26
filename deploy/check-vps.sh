@@ -56,3 +56,13 @@ for path in /login /api/regions/provinces; do
   curl --fail --silent --show-error --connect-timeout 10 --max-time 30 \
     -o /dev/null -w "$path HTTP %{http_code}\n" "$url$path"
 done
+
+# Read-only authentication boundary probe. 401 is expected here: credentials
+# are deliberately never supplied to the production smoke test.
+auth_status=$(curl --silent --show-error --connect-timeout 10 --max-time 30 \
+  -o /dev/null -w '%{http_code}' "$url/api/me")
+if [[ "$auth_status" != 401 ]]; then
+  echo "Unauthenticated /api/me returned HTTP $auth_status; expected 401." >&2
+  exit 1
+fi
+printf 'GET /api/me unauthenticated: HTTP %s (expected).\n' "$auth_status"
