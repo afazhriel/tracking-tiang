@@ -24,6 +24,9 @@ class NotificationAccessTest extends TestCase
         $unassigned = User::factory()->pic()->create();
         $suspended = User::factory()->admin()->create(['status' => 'suspended']);
         $pending = User::factory()->admin()->create(['status' => 'pending']);
+        // Supervisors must explicitly belong to this project; their
+        // global role alone cannot expose a different project's data.
+        $manager->projects()->attach($project);
         foreach ([$assigned, $unassigned] as $user) {
             $user->projects()->attach($project);
         }
