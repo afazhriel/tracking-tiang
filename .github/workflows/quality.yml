@@ -303,13 +303,13 @@ jobs:
           summary = os.getenv('GITHUB_STEP_SUMMARY')
           if summary:
               with open(summary, 'a', encoding='utf-8') as report:
-                  report.write('## Tracking Tiang: quality checks\\n\\n')
-                  report.write('| Check | Result |\\n| --- | --- |\\n')
+                  report.write('## Tracking Tiang: quality checks\n\n')
+                  report.write('| Check | Result |\n| --- | --- |\n')
                   for name, label in names.items():
                       result = results[name]['result']
-                      report.write(f'| {label} | {result} |\\n')
-                  report.write('\\nOnly the latest commit checks determine this PR readiness. '
-                               'Historical failed runs remain visible in GitHub Actions.\\n')
+                      report.write(f'| {label} | {result} |\n')
+                  report.write('\nOnly the latest commit checks determine this PR readiness. '
+                               'Historical failed runs remain visible in GitHub Actions.\n')
           failed = [name for name, job in results.items() if job['result'] != 'success']
           if failed:
               raise SystemExit('Failed, cancelled or skipped checks: ' + ', '.join(failed))
