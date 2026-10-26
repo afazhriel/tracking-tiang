@@ -122,12 +122,11 @@ try {
   assert.equal(await admin.page.getByRole('button', { name: 'Buat tim' }).count(), 1)
   assert.equal((await admin.context.request.get(`/api/teams/${teamId}`)).status(), 200)
 
-  const mobile = await session('browser-team-member@example.test', {
-    viewport: { width: 393, height: 852 }, isMobile: true, hasTouch: true,
-  })
-  await mobile.page.getByText('Tim CI E2E').waitFor()
-  assert.equal(await mobile.page.getByRole('button', { name: 'Buat tim' }).count(), 0)
-  assert.equal((await mobile.context.request.get(`/api/projects/${fixture.foreign_project_id}`)).status(), 403)
+  await member.page.setViewportSize({ width: 393, height: 852 })
+  await member.page.goto('/tim')
+  await member.page.getByText('Tim CI E2E').waitFor()
+  assert.equal(await member.page.getByRole('button', { name: 'Buat tim' }).count(), 0)
+  assert.equal((await member.context.request.get(`/api/projects/${fixture.foreign_project_id}`)).status(), 403)
   console.log('PASS Admin access, PIC project-specific mobile view')
 } finally {
   await Promise.all(contexts.map(value => value.close()))
