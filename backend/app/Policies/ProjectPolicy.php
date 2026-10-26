@@ -5,14 +5,6 @@ namespace App\Policies;
 use App\Models\Project;
 use App\Models\User;
 
-/**
- * Otoritas tingkat project.
- *
- * `User::canAccessProject()` mengembalikan `null` untuk admin dan
- * supervisor, artinya "tanpa pembatasan". Nilai `null` itu diperlakukan
- * sebagai iya di sini supaya tidak perlu logika role berulang di
- * banyak tempat.
- */
 class ProjectPolicy
 {
     public function viewAny(User $user): bool
@@ -22,24 +14,29 @@ class ProjectPolicy
 
     public function view(User $user, Project $project): bool
     {
-        return $user->canAccessProject((int) $project->id);
+        return $user->isActive()
+            && $user->canAccessProject((int) $project->id);
     }
 
-    /**
-     * Boleh membuat / mengubah / menghapus project? Hanya admin.
-     */
     public function create(User $user): bool
     {
-        return $user->isAdmin();
+        return $user->isActive();
     }
 
     public function update(User $user, Project $project): bool
     {
-        return $user->isAdmin();
+        return $user->isActive()
+            && (
+                $user->isAdmin()
+                || (int) $project->owner_user_id === (int) $user->id
+                   && $project->owner_user_id !== null
+            );
     }
 
+    // Penghapusan proyek tetap khusus Admin sampai tersedia
+    // mekanisme arsip aman yang mempertahankan riwayat.
     public function delete(User $user, Project $project): bool
     {
-        return $user->isAdmin();
+        return $user->isActive() && $user->isAdmin();
     }
 }

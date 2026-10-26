@@ -11,6 +11,9 @@ use App\Http\Controllers\Api\PoleController;
 use App\Http\Controllers\Api\PoleWorkItemController;
 use App\Http\Controllers\Api\ProgressController;
 use App\Http\Controllers\Api\ProjectController;
+use App\Http\Controllers\Api\ProjectMemberController;
+use App\Http\Controllers\Api\ProjectBaselineController;
+use App\Http\Controllers\Api\ProjectQuantityEntryController;
 use App\Http\Controllers\Api\RegionController;
 use App\Http\Controllers\Api\TeamController;
 use App\Http\Controllers\Api\UserController;
@@ -93,6 +96,20 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
     Route::get('/projects', [ProjectController::class, 'index']);
     Route::post('/projects', [ProjectController::class, 'store']);
     Route::get('/projects/{project}', [ProjectController::class, 'show']);
+    Route::get('/projects/{project}/members', [ProjectMemberController::class, 'index']);
+    Route::post('/projects/{project}/members', [ProjectMemberController::class, 'store']);
+    Route::delete('/projects/{project}/members/{user}', [ProjectMemberController::class, 'destroy']);
+
+    Route::get(
+        '/projects/{project}/quantities',
+        [ProjectQuantityEntryController::class, 'index']
+    );
+
+    Route::post(
+        '/projects/{project}/quantities',
+        [ProjectQuantityEntryController::class, 'store']
+    );
+
 
     /* Tiang / Pole */
     Route::get('/projects/{project}/poles', [PoleController::class, 'index']);
@@ -120,6 +137,13 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
     /* Progress */
     Route::get('/projects/{project}/poles/{pole}/progress', [ProgressController::class, 'index']);
     Route::post('/projects/{project}/poles/{pole}/progress', [ProgressController::class, 'store']);
+
+    /* Baseline proyek */
+    Route::get('/projects/{project}/baselines', [ProjectBaselineController::class, 'index']);
+    Route::post('/projects/{project}/baselines', [ProjectBaselineController::class, 'store']);
+    Route::get('/projects/{project}/baselines/{baseline}', [ProjectBaselineController::class, 'show']);
+    Route::put('/projects/{project}/baselines/{baseline}', [ProjectBaselineController::class, 'update']);
+    Route::post('/projects/{project}/baselines/{baseline}/approve', [ProjectBaselineController::class, 'approve']);
 
     /* Kurva S */
     Route::get('/projects/{project}/curve', [CurveController::class, 'show']);

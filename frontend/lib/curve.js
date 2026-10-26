@@ -145,8 +145,45 @@ export function summarizeCurve(curve) {
       ? null
       : round(currentActual - currentPlanned, 2)
 
-  const periodIndex = computePeriodIndex(curve?.project?.start_date, now)
-  const totalMonths = series.filter((point) => point.month !== null).length || null
+  // Kurva S berbasis baseline menggunakan periode aktual,
+  // bukan jumlah bulan kalender.
+  const baselinePoints =
+    curve?.baseline_status === 'approved'
+      ? sortByDate(curve?.planned_curve ?? [])
+      : []
+
+  // Titik pertama adalah posisi awal (0%).
+  // Setiap titik berikutnya merupakan akhir satu periode.
+  const baselinePeriodEnds = baselinePoints.slice(1)
+
+  const periodIndex = baselinePeriodEnds.length
+    ? (() => {
+        const referenceDate = new Date(now).getTime()
+        const startDate = new Date(
+          `${String(baselinePoints[0]?.date).slice(0, 10)}T00:00:00`
+        ).getTime()
+
+        if (!Number.isFinite(referenceDate)) return null
+        if (referenceDate < startDate) return 0
+
+        const index = baselinePeriodEnds.findIndex((point) => {
+          const endDate = new Date(
+            `${String(point.date).slice(0, 10)}T23:59:59.999`
+          ).getTime()
+
+          return referenceDate <= endDate
+        })
+
+        return index < 0
+          ? baselinePeriodEnds.length
+          : index + 1
+      })()
+    : computePeriodIndex(curve?.project?.start_date, now)
+
+  // Pertahankan totalMonths untuk kompatibilitas komponen lama.
+  const totalMonths = baselinePeriodEnds.length ||
+    series.filter((point) => point.month !== null).length ||
+    null
 
   return {
     series,
@@ -154,6 +191,8 @@ export function summarizeCurve(curve) {
     actualProgress: currentActual,
     variance,
     currentPeriod: periodIndex,
+    totalPeriods: baselinePeriodEnds.length || null,
+    periodBasis: baselinePeriodEnds.length ? 'baseline' : 'monthly',
     totalMonths,
     hasPlanned: series.some((point) => point.planned !== null),
     hasActual: series.some((point) => point.actual !== null),

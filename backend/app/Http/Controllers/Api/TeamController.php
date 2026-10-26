@@ -37,7 +37,7 @@ class TeamController extends Controller
          */
         $user = $request->user();
 
-        if ($user !== null && ! $user->isAdmin() && ! $user->isSupervisor()) {
+        if ($user !== null && ! $user->isAdmin()) {
             $projectIds = $user->accessibleProjectIds() ?? [];
 
             if ($projectIds === []) {

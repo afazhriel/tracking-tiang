@@ -362,6 +362,30 @@ export const api = {
     apiRequest(`/api/projects/${projectId}`, options),
   createProject: (payload, options) =>
     apiRequest('/api/projects', { ...options, method: 'POST', body: payload }),
+  listProjectQuantities: (projectId, options) =>
+    apiRequest(`/api/projects/${projectId}/quantities`, options),
+
+  recordProjectQuantity: (projectId, payload, options) =>
+    apiRequest(`/api/projects/${projectId}/quantities`, {
+      ...options,
+      method: 'POST',
+      body: payload,
+    }),
+
+
+  listProjectMembers: (projectId, options) =>
+    apiRequest(`/api/projects/${encodeURIComponent(projectId)}/members`, options),
+  addProjectMember: (projectId, userId, options) =>
+    apiRequest(`/api/projects/${encodeURIComponent(projectId)}/members`, {
+      ...options,
+      method: 'POST',
+      body: { user_id: Number(userId) },
+    }),
+  removeProjectMember: (projectId, userId, options) =>
+    apiRequest(`/api/projects/${encodeURIComponent(projectId)}/members/${encodeURIComponent(userId)}`, {
+      ...options,
+      method: 'DELETE',
+    }),
 
   /* --- Tiang (Pole) ---
      `PoleController@index` memakai `paginate(100)`. `per_page`
@@ -491,6 +515,33 @@ export const api = {
       `/api/projects/${projectId}/poles/${poleId}/work-items/apply-template`,
       { ...options, method: 'POST' }
     ),
+
+  /* --- Baseline Kurva S --- */
+  listBaselines: (projectId, options) =>
+    apiRequest(`/api/projects/${projectId}/baselines`, options),
+
+  getBaseline: (projectId, baselineId, options) =>
+    apiRequest(`/api/projects/${projectId}/baselines/${baselineId}`, options),
+
+  createBaseline: (projectId, payload, options) =>
+    apiRequest(`/api/projects/${projectId}/baselines`, {
+      ...options,
+      method: 'POST',
+      body: payload,
+    }),
+
+  updateBaseline: (projectId, baselineId, payload, options) =>
+    apiRequest(`/api/projects/${projectId}/baselines/${baselineId}`, {
+      ...options,
+      method: 'PUT',
+      body: payload,
+    }),
+
+  approveBaseline: (projectId, baselineId, options) =>
+    apiRequest(`/api/projects/${projectId}/baselines/${baselineId}/approve`, {
+      ...options,
+      method: 'POST',
+    }),
 
   /* --- Kurva S --- */
   getCurve: (projectId, options) =>
@@ -804,6 +855,9 @@ export function normalizeProject(project) {
     startDate: project?.start_date ?? null,
     endDate: project?.end_date ?? null,
     totalTargetPoles: project?.total_target_poles ?? null,
+    targetQuantity: project?.target_quantity ?? null,
+    unitCode: project?.unit_code ?? null,
+    progressSource: project?.progress_source ?? null,
     polesCount: project?.poles_count ?? null,
     regionsCount: project?.regions_count ?? null,
     workItemsCount: project?.work_items_count ?? null,

@@ -16,12 +16,16 @@ class Project extends Model
         'start_date',
         'end_date',
         'total_target_poles',
+        'target_quantity',
+        'unit_code',
+        'progress_source',
         'status',
     ];
 
     protected $casts = [
         'start_date' => 'date',
         'end_date' => 'date',
+        'target_quantity' => 'decimal:4',
     ];
 
     public function regions(): HasMany

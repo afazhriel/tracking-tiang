@@ -18,7 +18,9 @@ class TeamPolicy
             return false;
         }
 
-        if ($user->isAdmin() || $user->isSupervisor()) {
+        // Hanya Admin platform yang memiliki akses tim global.
+        // Supervisor dan PIC harus memiliki akses ke proyek tim.
+        if ($user->isAdmin()) {
             return true;
         }
 

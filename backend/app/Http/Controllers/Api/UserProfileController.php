@@ -205,7 +205,11 @@ class UserProfileController extends Controller
      */
     public function showAvatar(User $user): BinaryFileResponse
     {
-        abort_unless((int) request()->user()->id === (int) $user->id || request()->user()->isAdmin() || request()->user()->isSupervisor(), 403);
+        abort_unless(
+            (int) request()->user()->id === (int) $user->id
+                || request()->user()->isAdmin(),
+            403
+        );
         abort_unless($user->avatar, 404);
 
         $disk = Storage::disk(PendingPhotos::avatarDisk($user->avatar));

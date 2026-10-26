@@ -3,6 +3,7 @@ import {
   BarChart3,
   Bell,
   ClipboardList,
+  FolderKanban,
   LayoutDashboard,
   MapPin,
   User,
@@ -15,6 +16,7 @@ import {
  */
 export const NAV_ITEMS = [
   { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
+  { label: 'Proyek', href: '/proyek', icon: FolderKanban },
   { label: 'Tiang', href: '/tiang', icon: MapPin },
   { label: 'Pekerjaan', href: '/pekerjaan', icon: ClipboardList },
   { label: 'Kurva S', href: '/kurva-s', icon: BarChart3 },
