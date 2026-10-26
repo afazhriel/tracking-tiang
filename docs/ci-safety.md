@@ -23,6 +23,33 @@ semua pemeriksaan berhasil. Tidak ada `continue-on-error` pada jalur tersebut.
 Pengujian skrip deploy tidak diduplikasi pada runner produksi karena sudah menjadi
 bagian dari quality gate pada commit yang sama.
 
+
+## Membaca error GitHub Actions setelah banyak commit (26 Oktober 2026)
+
+GitHub Actions mempertahankan riwayat run untuk **setiap commit**. Run merah dari
+SHA lama tidak otomatis hilang walaupun bug sudah diperbaiki; yang relevan untuk
+kesiapan PR adalah **7 check pada SHA HEAD terbaru**, bukan jumlah seluruh
+run historis. Di PR #16, kode handoff awal gagal pada PHP feature tests,
+migration policy, dan npm security audit. Perbaikan dan regresi diuji kembali:
+[run 40294197741](https://github.com/afazhriel/tracking-tiang/actions/runs/40294197741)
+berhasil 7 dari 7 pada SHA `ca001440e46bcfae4db6f6373c74343ff1e58e2c`.
+
+Workflow `quality.yml` sekarang memiliki concurrency khusus PR. Ketika commit
+baru masuk, run PR yang sudah usang dapat dibatalkan; workflow main,
+`workflow_dispatch` dan pemanggilan dari deploy tidak dibatalkan oleh
+aturan ini. Pembatalan karena commit lebih baru bukan kegagalan produk.
+Quality gate tetap **gagal** bila ada job pada SHA terkini yang failed,
+cancelled, atau skipped; tidak ada bypass kualitas.
+
+Untuk memeriksa kondisi terbaru:
+
+1. Buka PR → **Checks** dan cocokkan SHA HEAD dengan run yang dilihat.
+2. Buka job **Quality gate** → Summary untuk tabel hasil keenam job.
+3. Jika ada check gagal pada SHA HEAD, buka **Logs** job gagal dan perbaiki
+   penyebabnya. Jangan menganggap run hijau pada SHA sebelumnya sebagai bukti.
+4. Jangan merge hanya karena CI hijau: staging dengan backup produksi terbaru,
+   audit TT-001/TANKI --01, serta approval rilis masih diwajibkan.
+
 ## Database uji dan migration
 
 Nama yang diizinkan oleh guard test: `tracking_ci` dan `tracking_migrations_ci`;
