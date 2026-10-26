@@ -19,7 +19,12 @@ $owner = User::factory()->pic()->create(['name' => 'Browser PIC', 'email' => 'br
 $other = User::factory()->pic()->create(['email' => 'browser-other@example.test', 'password' => 'browser-fixture-password']);
 $admin = User::factory()->admin()->create(['email' => 'browser-admin@example.test', 'password' => 'browser-fixture-password']);
 $project = Project::create(['name' => 'Browser project', 'code' => 'BROWSER']);
-$project->forceFill(['owner_user_id' => $owner->id])->save();
+$teamOwner = User::factory()->pic()->create([
+    'name' => 'Browser Team Owner',
+    'email' => 'browser-team-owner@example.test',
+    'password' => 'browser-fixture-password',
+]);
+$project->forceFill(['owner_user_id' => $teamOwner->id])->save();
 // Isolated team browser checks cover owner, Supervisor, PIC, and foreign users.
 $supervisor = User::factory()->supervisor()->create([
     'email' => 'browser-supervisor@example.test',
