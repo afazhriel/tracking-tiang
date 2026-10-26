@@ -18,14 +18,14 @@ class ProjectTeamAssignmentTest extends TestCase
         $admin = User::factory()->admin()->create();
         $pic = User::factory()->pic()->create();
         $this->actingAs($admin, 'sanctum');
-        $projectId = $this->postJson('/api/projects', ['name' => 'Project flow', 'code' => 'FLOW'])->assertCreated()->json('data.id');
+        $projectId = $this->postJson('/api/projects', ['name' => 'Project flow', 'code' => 'FLOW', 'target_quantity' => '100', 'unit_code' => 'pole'])->assertCreated()->json('data.id');
         $teamId = $this->postJson('/api/teams', ['name' => 'Field team', 'project_id' => $projectId])->assertCreated()->json('id');
         $this->postJson("/api/teams/{$teamId}/members", ['user_id' => $pic->id])->assertOk();
         $poleId = $this->postJson("/api/projects/{$projectId}/poles", ['pole_code' => 'FLOW-1'])->assertCreated()->json('data.id');
         $this->postJson("/api/users/{$pic->id}/poles", ['pole_id' => $poleId, 'team_id' => $teamId])->assertCreated()->assertJsonPath('pole.pole_code', 'FLOW-1');
         $this->getJson("/api/users/{$pic->id}/poles")->assertOk()->assertJsonPath('0.pole.pole_code', 'FLOW-1');
         $this->actingAs($pic, 'sanctum')->getJson("/api/projects/{$projectId}/poles/{$poleId}")->assertOk();
-        $this->postJson('/api/projects', ['name' => 'Forbidden', 'code' => 'NO'])->assertForbidden();
+        $this->postJson('/api/projects', ['name' => 'Own project', 'code' => 'OWN', 'target_quantity' => '100', 'unit_code' => 'unit'])->assertCreated();
         $this->postJson("/api/teams/{$teamId}/members", ['user_id' => $admin->id])->assertForbidden();
         $this->actingAs($admin, 'sanctum')->deleteJson("/api/users/{$pic->id}/poles/{$poleId}")->assertOk();
         $this->assertDatabaseHas('pole_assignments', ['pole_id' => $poleId, 'user_id' => $pic->id, 'status' => 'revoked']);

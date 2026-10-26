@@ -1,10 +1,13 @@
 name: Deploy VPS
 
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
     inputs:
+      release_reviewed:
+        description: Staging, backup restore, and rollback have been reviewed for this exact commit
+        type: boolean
+        required: true
+        default: false
       replace_vps:
         description: Replace VPS source with GitHub after backing up local changes
         type: boolean
@@ -26,7 +29,7 @@ jobs:
   deploy:
     needs: quality
     # Enabled after the first verified deployment; false pauses future runs.
-    if: github.ref == 'refs/heads/main' && vars.DEPLOY_ENABLED != 'false'
+    if: github.event_name == 'workflow_dispatch' && inputs.release_reviewed && github.ref == 'refs/heads/main' && vars.DEPLOY_ENABLED != 'false'
     runs-on: ubuntu-latest
     environment: production
     timeout-minutes: 40

@@ -7,6 +7,8 @@ use App\Models\Pole;
 use App\Models\PoleProgressHistory;
 use App\Models\Project;
 use App\Services\ProgressIntegrity;
+use App\Services\ProjectBaselineCurve;
+use App\Services\ProjectQuantityProgress;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Schema;
@@ -61,6 +63,16 @@ class CurveController extends Controller
 
     private function buildCurveResponse(Project $project, ?Pole $pole = null): JsonResponse
     {
+        if (
+            $pole === null
+            && $project->progress_source === 'quantity_entries'
+        ) {
+            return response()->json(
+                app(ProjectQuantityProgress::class)
+                    ->curve($project)
+            );
+        }
+
         app(ProgressIntegrity::class)->assertUnambiguous($project, $pole);
 
         /*
@@ -166,6 +178,17 @@ class CurveController extends Controller
             ];
         }
 
+        // Rencana proyek hanya berasal dari baseline yang disahkan.
+        // Rencana per tiang tetap menggunakan perhitungan sebelumnya.
+        $baselinePlan = null;
+
+        if ($pole === null) {
+            $baselinePlan = app(ProjectBaselineCurve::class)
+                ->planned($project);
+
+            $planned = $baselinePlan['planned_curve'];
+        }
+
         /*
          * ==========================================
          * HISTORI ACTUAL
@@ -237,7 +260,7 @@ class CurveController extends Controller
             // Single pole progress
             $pole->loadMissing('workProgress.workItem');
 
-            $currentPercent = $pole->workProgress->sum(function ($item) {
+            $currentPercent = $pole->workProgress->filter(fn ($item) => (bool) $item->workItem?->is_active)->sum(function ($item) {
                 return (
                     (float) $item->workItem->weight_percent
                     * (float) $item->progress_percent
@@ -256,7 +279,7 @@ class CurveController extends Controller
             foreach ($project->poles as $p) {
                 $p->loadMissing('workProgress.workItem');
 
-                $poleProgress = $p->workProgress->sum(function ($item) {
+                $poleProgress = $p->workProgress->filter(fn ($item) => (bool) $item->workItem?->is_active)->sum(function ($item) {
                     return (
                         (float) $item->workItem->weight_percent
                         * (float) $item->progress_percent
@@ -286,6 +309,11 @@ class CurveController extends Controller
             'actual_curve' => $actual,
             'actual_current_percent' => $currentPercent,
         ];
+
+        if ($baselinePlan !== null) {
+            $response['baseline_status'] = $baselinePlan['status'];
+            $response['baseline_version'] = $baselinePlan['version'];
+        }
 
         if ($pole !== null) {
             $response['pole'] = [

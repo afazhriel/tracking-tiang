@@ -62,7 +62,7 @@ class PoleAssignmentController extends Controller
                 ['pole_id' => $pole->id, 'user_id' => $user->id],
                 ['team_id' => $team?->id, 'assigned_by' => $request->user()->id, 'assigned_at' => Carbon::now(), 'status' => PoleAssignment::STATUS_ACTIVE]
             );
-            $recipients = collect([$user])->merge($team?->users ?? []);
+            $recipients = collect([$user]);
             foreach ($recipients as $member) {
                 ProjectUser::firstOrCreate(['project_id' => $pole->project_id, 'user_id' => $member->id], ['role' => $member->role]);
             }

@@ -24,6 +24,9 @@ class NotificationAccessTest extends TestCase
         $unassigned = User::factory()->pic()->create();
         $suspended = User::factory()->admin()->create(['status' => 'suspended']);
         $pending = User::factory()->admin()->create(['status' => 'pending']);
+        // Supervisors must explicitly belong to this project; their
+        // global role alone cannot expose a different project's data.
+        $manager->projects()->attach($project);
         foreach ([$assigned, $unassigned] as $user) {
             $user->projects()->attach($project);
         }
@@ -35,7 +38,10 @@ class NotificationAccessTest extends TestCase
         }
         $this->assertLessThanOrEqual(255, mb_strlen(Notification::first()->title));
         $this->actingAs($manager, 'sanctum')->getJson("/api/projects/{$project->id}/poles/{$pole->id}/work-items")->assertOk()->assertJsonPath('meta.can_manage', false);
-        $this->actingAs($assigned, 'sanctum')->getJson("/api/projects/{$project->id}/poles/{$pole->id}/work-items")->assertOk()->assertJsonPath('meta.can_manage', true);
+        // PIC with a pole assignment may report progress, but must not
+        // edit the work-item master definitions.
+        $this->assertTrue($assigned->can('updateProgress', $pole));
+        $this->actingAs($assigned, 'sanctum')->getJson("/api/projects/{$project->id}/poles/{$pole->id}/work-items")->assertOk()->assertJsonPath('meta.can_manage', false);
         $this->actingAs($unassigned, 'sanctum')->getJson("/api/projects/{$project->id}/activities?pole_id={$pole->id}")->assertForbidden();
         $this->getJson("/api/projects/{$project->id}/activities")->assertOk()->assertJsonCount(0, 'data');
         $this->getJson("/api/projects/{$project->id}/poles/{$pole->id}/curve")->assertForbidden();

@@ -6,22 +6,19 @@ import {
   Check,
   CircleAlert,
   Clock,
-  KeyRound,
   Mail,
   MapPin,
-  Plus,
   RefreshCw,
   Send,
-  ShieldCheck,
   Trash2,
   UserCheck,
   UserCog,
-  UserPlus,
   Users,
-  UsersRound,
   X,
 } from 'lucide-react'
 
+import ProjectTeams from './ProjectTeams'
+import { useProject } from '../../lib/project-context'
 import AppShell from '../../components/layout/AppShell'
 import { PageHeader } from '../../components/layout/PageHeader'
 import { Badge } from '../../components/ui/badge'
@@ -42,9 +39,7 @@ import {
   USER_ROLES,
   USER_STATUSES,
   normalizeInvitation,
-  normalizeTeam,
   normalizeUser,
-  unwrapItem,
   unwrapList,
   userRoleLabel,
   userStatusTone,
@@ -52,58 +47,6 @@ import {
 import { useCurrentUser } from '../../lib/use-current-user'
 import { useResource } from '../../lib/use-api'
 import { formatDate, formatNumber } from '../../lib/format'
-
-/**
- * Referensi peran untuk pengguna non-admin.
- *
- * Backend menyimpan kolom `role` yang sebenarnya (`User::ROLES`), jadi
- * kartu di bawah ini murni penjelasan cakupan kerja, bukan janji
- * fitur. Nilai `key` sengaja sama persis dengan nilai backend.
- */
-const ROLE_REFERENCE = [
-  {
-    key: 'admin',
-    label: 'Admin',
-    tone: 'brand',
-    scope: 'Semua project',
-    description:
-      'Kelola project, master data tiang, item pekerjaan beserta bobot, wilayah, user, tim, dan hak akses.',
-    capabilities: [
-      'Tambah & import data tiang',
-      'Atur item pekerjaan dan bobot Kurva S',
-      'Kelola wilayah, user, tim, dan role',
-      'Pantau seluruh progress proyek',
-    ],
-  },
-  {
-    key: 'supervisor',
-    label: 'Supervisor',
-    tone: 'lagoon',
-    scope: 'Project / area yang ditugaskan',
-    description:
-      'Pantau peta dan progress secara read-only, lalu terima catatan lapangan untuk area dalam wewenangnya.',
-    capabilities: [
-      'Lihat peta seluruh project',
-      'Lihat detail & progress tiang',
-      'Analisa Kurva S dan deviasi',
-      'Tidak dapat mengubah master data',
-    ],
-  },
-  {
-    key: 'pic',
-    label: 'PIC Lapangan',
-    tone: 'sage',
-    scope: 'Tiang yang ditugaskan',
-    description:
-      'Kerjakan tiang yang ditugaskan: perbarui progress per item pekerjaan, tulis catatan kendala, dan lengkapi dokumentasi.',
-    capabilities: [
-      'Update progress pekerjaan',
-      'Catat kendala lapangan',
-      'Lihat tiang sendiri',
-      'Tidak dapat melihat project lain',
-    ],
-  },
-]
 
 const INVITATION_STATUS = {
   pending: { label: 'Menunggu', tone: 'ochre' },
@@ -391,10 +334,6 @@ function AdminTimContent({ currentUser }) {
 
   const [provinceTarget, setProvinceTarget] = useState(null)
 
-  const [newTeam, setNewTeam] = useState({ name: '', code: '' })
-  const [openTeam, setOpenTeam] = useState(null)
-  const [teamDetail, setTeamDetail] = useState({})
-  const [memberChoice, setMemberChoice] = useState({})
 
   const [invite, setInvite] = useState({ email: '', name: '', role: 'pic' })
 
@@ -409,11 +348,6 @@ function AdminTimContent({ currentUser }) {
         .then((response) => unwrapList(response).map(normalizeUser)),
     [search, roleFilter, statusFilter],
     { enabled: true }
-  )
-
-  const teamsResource = useResource(
-    () => api.listTeams().then((response) => unwrapList(response).map(normalizeTeam)),
-    []
   )
 
   const invitationsResource = useResource(
@@ -438,7 +372,6 @@ function AdminTimContent({ currentUser }) {
   )
 
   const users = useMemo(() => usersResource.data ?? [], [usersResource.data])
-  const teams = useMemo(() => teamsResource.data ?? [], [teamsResource.data])
   const invitations = useMemo(
     () => invitationsResource.data ?? [],
     [invitationsResource.data]
@@ -524,91 +457,6 @@ function AdminTimContent({ currentUser }) {
     }
   }
 
-  async function createTeam() {
-    const name = newTeam.name.trim()
-
-    if (!name) {
-      setNotice({ type: 'err', message: 'Nama tim wajib diisi.' })
-      return
-    }
-
-    const ok = await run(
-      'team-create',
-      () =>
-        api.createTeam({
-          name,
-          code: newTeam.code.trim() || null,
-        }),
-      `Tim "${name}" dibuat.`
-    )
-
-    if (ok) {
-      setNewTeam({ name: '', code: '' })
-      teamsResource.reload()
-    }
-  }
-
-  async function loadTeamDetail(teamId) {
-    try {
-      const response = await api.getTeam(teamId)
-
-      setTeamDetail((previous) => ({
-        ...previous,
-        [teamId]: normalizeTeam(unwrapItem(response)),
-      }))
-    } catch (error) {
-      setNotice({
-        type: 'err',
-        message: error?.message || 'Gagal memuat anggota tim.',
-      })
-    }
-  }
-
-  function toggleTeam(team) {
-    if (openTeam === team.id) {
-      setOpenTeam(null)
-      return
-    }
-
-    setOpenTeam(team.id)
-
-    if (!teamDetail[team.id]) loadTeamDetail(team.id)
-  }
-
-  async function addMember(team) {
-    const userId = memberChoice[team.id]
-
-    if (!userId) {
-      setNotice({ type: 'err', message: 'Pilih user yang ingin ditambahkan.' })
-      return
-    }
-
-    const ok = await run(
-      `add-${team.id}`,
-      () => api.addTeamMember(team.id, Number(userId)),
-      'Anggota ditambahkan ke tim.'
-    )
-
-    if (ok) {
-      setMemberChoice((previous) => ({ ...previous, [team.id]: '' }))
-      loadTeamDetail(team.id)
-      teamsResource.reload()
-    }
-  }
-
-  async function removeMember(team, user) {
-    const ok = await run(
-      `rm-${team.id}-${user.id}`,
-      () => api.removeTeamMember(team.id, user.id),
-      `${user.name} dihapus dari tim.`
-    )
-
-    if (ok) {
-      loadTeamDetail(team.id)
-      teamsResource.reload()
-    }
-  }
-
   async function createInvitation() {
     if (!invite.email.trim()) {
       setNotice({ type: 'err', message: 'Email undangan wajib diisi.' })
@@ -656,14 +504,13 @@ function AdminTimContent({ currentUser }) {
     if (ok) invitationsResource.reload()
   }
 
-  const teamMembersFor = (teamId) => teamDetail[teamId]?.users ?? []
 
   return (
     <div className="space-y-6">
       <PageHeader
         eyebrow="Akses"
-        title="Tim & Hak Akses"
-        subtitle={`Kelola user, role, status akun, tim, dan undangan. Masuk sebagai ${currentUser.roleLabel || 'Pengguna'}.`}
+        title="Akun & Undangan"
+        subtitle={`Kelola user, role, status akun, dan undangan. Masuk sebagai ${currentUser.roleLabel || 'Pengguna'}.`}
       />
 
       <Notice notice={notice} onDismiss={() => setNotice(null)} />
@@ -690,13 +537,7 @@ function AdminTimContent({ currentUser }) {
           Icon={UserCheck}
           tone="sage"
         />
-        <StatCard
-          label="Tim"
-          value={formatNumber(teams.length)}
-          hint="Grup kerja & cakupan"
-          Icon={UsersRound}
-          tone="lagoon"
-        />
+
       </StatCardGrid>
 
       {/* ===================== USERS ===================== */}
@@ -847,197 +688,6 @@ function AdminTimContent({ currentUser }) {
                 </tbody>
               </Table>
             </TableWrap>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* ===================== TEAMS ===================== */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <UsersRound className="h-4 w-4 text-lagoon-600" />
-            Tim
-          </CardTitle>
-
-          <Badge tone="lagoon">{formatNumber(teams.length)} tim</Badge>
-        </CardHeader>
-
-        <CardContent className="space-y-4">
-          <div className="grid gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
-            <Field label="Nama tim" htmlFor="team-name">
-              <input
-                id="team-name"
-                value={newTeam.name}
-                onChange={(event) =>
-                  setNewTeam((previous) => ({
-                    ...previous,
-                    name: event.target.value,
-                  }))
-                }
-                placeholder="Contoh: Tim Area Utara"
-                className={INPUT_CLASS}
-              />
-            </Field>
-
-            <Field label="Kode (opsional)" htmlFor="team-code">
-              <input
-                id="team-code"
-                value={newTeam.code}
-                onChange={(event) =>
-                  setNewTeam((previous) => ({
-                    ...previous,
-                    code: event.target.value,
-                  }))
-                }
-                placeholder="Contoh: TAU"
-                className={INPUT_CLASS}
-              />
-            </Field>
-
-            <Button
-              variant="primary"
-              disabled={busy === 'team-create'}
-              onClick={createTeam}
-            >
-              <Plus className="h-4 w-4" />
-              Tambah tim
-            </Button>
-          </div>
-
-          {teamsResource.error ? (
-            <EmptyState
-              icon={CircleAlert}
-              tone="clay"
-              title="Gagal memuat daftar tim"
-              description={teamsResource.error?.message}
-              action={
-                <Button variant="outline" onClick={() => teamsResource.reload()}>
-                  Coba lagi
-                </Button>
-              }
-            />
-          ) : teams.length === 0 ? (
-            <EmptyState
-              compact
-              icon={UsersRound}
-              title="Belum ada tim"
-              description="Buat tim untuk mengelompokkan anggota dan menugaskan area kerja."
-            />
-          ) : (
-            <ul className="divide-y divide-neutral-100 rounded-xl border border-neutral-200">
-              {teams.map((team) => {
-                const isOpen = openTeam === team.id
-                const members = teamMembersFor(team.id)
-                const memberIds = new Set(members.map((member) => member.id))
-                const candidates = users.filter(
-                  (user) => !memberIds.has(user.id)
-                )
-
-                return (
-                  <li key={team.id} className="px-4 py-3">
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="font-medium text-neutral-800">
-                          {team.name}
-                          {team.code && (
-                            <span className="ml-2 rounded-md bg-neutral-100 px-1.5 py-0.5 text-[11px] font-medium text-neutral-500">
-                              {team.code}
-                            </span>
-                          )}
-                        </p>
-                        <p className="mt-0.5 text-xs text-neutral-400">
-                          {formatNumber(team.usersCount ?? 0)} anggota
-                          {team.project ? ` · ${team.project.name}` : ''}
-                        </p>
-                      </div>
-
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => toggleTeam(team)}
-                      >
-                        {isOpen ? 'Tutup' : 'Kelola anggota'}
-                      </Button>
-                    </div>
-
-                    {isOpen && (
-                      <div className="mt-3 space-y-3 rounded-xl border border-neutral-200 bg-canvas px-3 py-3">
-                        {members.length === 0 ? (
-                          <p className="text-xs text-neutral-400">
-                            Belum ada anggota di tim ini.
-                          </p>
-                        ) : (
-                          <ul className="space-y-2">
-                            {members.map((member) => (
-                              <li
-                                key={member.id}
-                                className="flex items-center justify-between gap-3"
-                              >
-                                <span className="flex min-w-0 items-center gap-2">
-                                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-plum-500 to-lagoon-600 text-[10px] font-medium text-white">
-                                    {initialsOf(member.name)}
-                                  </span>
-                                  <span className="min-w-0">
-                                    <span className="block truncate text-sm text-neutral-700">
-                                      {member.name}
-                                    </span>
-                                    <span className="block truncate text-xs text-neutral-400">
-                                      {member.email}
-                                    </span>
-                                  </span>
-                                </span>
-
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  disabled={
-                                    busy === `rm-${team.id}-${member.id}`
-                                  }
-                                  onClick={() => removeMember(team, member)}
-                                  aria-label={`Hapus ${member.name} dari tim`}
-                                >
-                                  <Trash2 className="h-3.5 w-3.5 text-clay-600" />
-                                </Button>
-                              </li>
-                            ))}
-                          </ul>
-                        )}
-
-                        <div className="flex flex-wrap items-end gap-2">
-                          <select
-                            value={memberChoice[team.id] ?? ''}
-                            onChange={(event) =>
-                              setMemberChoice((previous) => ({
-                                ...previous,
-                                [team.id]: event.target.value,
-                              }))
-                            }
-                            className="h-9 min-w-0 flex-1 rounded-lg border border-neutral-200 bg-paper px-2 text-xs text-neutral-700 outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
-                          >
-                            <option value="">Pilih user…</option>
-                            {candidates.map((user) => (
-                              <option key={user.id} value={user.id}>
-                                {user.name} · {user.email}
-                              </option>
-                            ))}
-                          </select>
-
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            disabled={busy === `add-${team.id}`}
-                            onClick={() => addMember(team)}
-                          >
-                            <UserPlus className="h-3.5 w-3.5" />
-                            Tambah
-                          </Button>
-                        </div>
-                      </div>
-                    )}
-                  </li>
-                )
-              })}
-            </ul>
           )}
         </CardContent>
       </Card>
@@ -1225,117 +875,19 @@ function AdminTimContent({ currentUser }) {
   )
 }
 
-function RestrictedTimContent({ currentUser }) {
-  const currentRoleKey = String(currentUser.role ?? '')
-    .trim()
-    .toLowerCase()
-
-  return (
-    <div className="space-y-6">
-      <PageHeader
-        eyebrow="Akses"
-        title="Tim & Hak Akses"
-        subtitle="Pembagian peran Admin, Supervisor, dan PIC beserta cakupan area kerjanya."
-      />
-
-      <StatCardGrid columns={3}>
-        <StatCard
-          label="Role Anda"
-          value={currentUser.roleLabel || '—'}
-          hint={currentUser.email || 'Dari sesi login'}
-          Icon={UserCog}
-          tone="plum"
-        />
-        <StatCard
-          label="Peran Tersedia"
-          value={ROLE_REFERENCE.length}
-          hint="Admin, Supervisor, PIC"
-          Icon={ShieldCheck}
-          tone="brand"
-        />
-        <StatCard
-          label="Status Akun"
-          value={currentUser.statusLabel || 'Aktif'}
-          hint="Kelola oleh admin"
-          Icon={KeyRound}
-          tone="sage"
-        />
-      </StatCardGrid>
-
-      <div className="flex items-start gap-3 rounded-card border border-neutral-200 bg-canvas px-4 py-4">
-        <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-neutral-500" />
-
-        <p className="text-xs leading-5 text-neutral-500">
-          Manajemen user, tim, dan undangan hanya tersedia untuk
-          <strong> Admin</strong>. Halaman ini menampilkan referensi peran
-          sesuai hak akses akun Anda.
-        </p>
-      </div>
-
-      <div className="grid gap-4 lg:grid-cols-3">
-        {ROLE_REFERENCE.map((role) => {
-          const isCurrent = role.key === currentRoleKey
-
-          return (
-            <Card
-              key={role.key}
-              tone={role.tone}
-              className={isCurrent ? 'ring-2 ring-brand-200' : undefined}
-            >
-              <CardHeader>
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <CardTitle>{role.label}</CardTitle>
-                    <p className="mt-1 text-xs text-neutral-500">
-                      {role.scope}
-                    </p>
-                  </div>
-
-                  {isCurrent && (
-                    <Badge tone="brand">
-                      <ShieldCheck className="h-3 w-3" />
-                      Anda
-                    </Badge>
-                  )}
-                </div>
-              </CardHeader>
-
-              <CardContent className="space-y-4">
-                <p className="text-sm leading-6 text-neutral-600">
-                  {role.description}
-                </p>
-
-                <ul className="space-y-2">
-                  {role.capabilities.map((capability) => (
-                    <li
-                      key={capability}
-                      className="flex items-start gap-2 text-xs leading-5 text-neutral-600"
-                    >
-                      <span
-                        aria-hidden="true"
-                        className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-neutral-300"
-                      />
-                      {capability}
-                    </li>
-                  ))}
-                </ul>
-              </CardContent>
-            </Card>
-          )
-        })}
-      </div>
-    </div>
-  )
-}
-
 function TimContent() {
   const currentUser = useCurrentUser()
-
-  if (currentUser.role === 'admin') {
-    return <AdminTimContent currentUser={currentUser} />
-  }
-
-  return <RestrictedTimContent currentUser={currentUser} />
+  const { project, projectId, loading, error } = useProject()
+  if (loading) return <p role="status">Memuat proyek…</p>
+  if (error) return <EmptyState title="Gagal memuat proyek" description={error.message} />
+  return <div className="space-y-6">
+    {projectId ? <ProjectTeams key={projectId} project={project} currentUser={currentUser} />
+      : <EmptyState title="Belum ada proyek yang dapat diakses" description="Buat atau pilih proyek di menu Proyek terlebih dahulu." />}
+    {currentUser.role === 'admin' && <details className="rounded-card border border-neutral-200 p-4">
+      <summary className="cursor-pointer font-semibold">Administrasi akun & undangan (Admin)</summary>
+      <div className="mt-6"><AdminTimContent currentUser={currentUser} /></div>
+    </details>}
+  </div>
 }
 
 export default function TimPage() {

@@ -26,13 +26,13 @@ class PoleWorkItemController extends Controller
             ...$this->items->meta($items),
             'inherited' => $inherited,
             'needs_reconciliation' => ! $inherited && $items->contains(fn ($item) => $item->pole_id === null),
-            'can_manage' => request()->user()->can('updateProgress', $pole),
+            'can_manage' => request()->user()->can('update', $pole),
         ]]);
     }
 
     public function store(Request $request, Project $project, Pole $pole): JsonResponse
     {
-        $this->scope($project, $pole, 'updateProgress');
+        $this->scope($project, $pole, 'update');
 
         return DB::transaction(function () use ($request, $project, $pole) {
             $pole = $this->items->lock($pole);
@@ -47,7 +47,7 @@ class PoleWorkItemController extends Controller
 
     public function update(Request $request, Project $project, Pole $pole, WorkItem $workItem): JsonResponse
     {
-        $this->scope($project, $pole, 'updateProgress');
+        $this->scope($project, $pole, 'update');
         $this->itemScope($project, $pole, $workItem);
 
         return DB::transaction(function () use ($request, $project, $pole, $workItem) {
@@ -65,7 +65,7 @@ class PoleWorkItemController extends Controller
 
     public function destroy(Project $project, Pole $pole, WorkItem $workItem): JsonResponse
     {
-        $this->scope($project, $pole, 'updateProgress');
+        $this->scope($project, $pole, 'update');
         $this->itemScope($project, $pole, $workItem);
 
         return DB::transaction(function () use ($pole, $workItem) {
@@ -86,7 +86,7 @@ class PoleWorkItemController extends Controller
 
     public function applyTemplate(Project $project, Pole $pole): JsonResponse
     {
-        $this->scope($project, $pole, 'updateProgress');
+        $this->scope($project, $pole, 'update');
 
         return DB::transaction(function () use ($project, $pole) {
             $pole = $this->items->lock($pole);

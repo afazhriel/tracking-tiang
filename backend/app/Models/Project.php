@@ -16,13 +16,32 @@ class Project extends Model
         'start_date',
         'end_date',
         'total_target_poles',
+        'target_quantity',
+        'unit_code',
+        'progress_source',
         'status',
     ];
 
     protected $casts = [
         'start_date' => 'date',
         'end_date' => 'date',
+        'target_quantity' => 'decimal:4',
     ];
+
+    protected static function booted(): void
+    {
+        static::creating(function (Project $project): void {
+            // Old pole projects can be created without a quantity target.
+            // Keep them on the historical weighted calculation; quantity
+            // projects created with a target retain the new calculation.
+            // An explicitly selected source always wins.
+            if ($project->progress_source === null) {
+                $project->progress_source = $project->target_quantity !== null
+                    ? 'quantity_entries'
+                    : 'pole_weighted';
+            }
+        });
+    }
 
     public function regions(): HasMany
     {

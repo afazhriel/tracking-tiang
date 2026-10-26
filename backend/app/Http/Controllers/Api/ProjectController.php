@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Project;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class ProjectController extends Controller
 {
@@ -36,11 +37,36 @@ class ProjectController extends Controller
             'code' => ['required', 'string', 'max:255', 'unique:projects,code'],
             'start_date' => ['nullable', 'date'],
             'end_date' => ['nullable', 'date', 'after_or_equal:start_date'],
-            'total_target_poles' => ['nullable', 'integer', 'min:0'],
+            'target_quantity' => [
+                'required',
+                'regex:/^\d{1,10}(\.\d{1,4})?$/D',
+                'gt:0',
+            ],
+            'unit_code' => [
+                'required',
+                'string',
+                'regex:/^[a-z][a-z0-9_]{0,31}$/D',
+            ],
             'status' => ['nullable', 'string', 'max:50'],
         ]);
 
-        $project = Project::create($validated);
+        $project = DB::transaction(
+            function () use ($request, $validated) {
+                $project = new Project($validated);
+                $project->owner_user_id = $request->user()->getKey();
+                $project->save();
+
+                DB::table('project_user')->insert([
+                    'project_id' => $project->getKey(),
+                    'user_id' => $request->user()->getKey(),
+                    'role' => null,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+
+                return $project;
+            }
+        );
 
         return response()->json([
             'message' => 'Project berhasil dibuat.',

@@ -115,7 +115,55 @@
   },
   {
     "method": "GET",
+    "path": "/api/projects/{project}/baselines",
+    "authenticated": true,
+    "active_user": true
+  },
+  {
+    "method": "POST",
+    "path": "/api/projects/{project}/baselines",
+    "authenticated": true,
+    "active_user": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/projects/{project}/baselines/{baseline}",
+    "authenticated": true,
+    "active_user": true
+  },
+  {
+    "method": "PUT",
+    "path": "/api/projects/{project}/baselines/{baseline}",
+    "authenticated": true,
+    "active_user": true
+  },
+  {
+    "method": "POST",
+    "path": "/api/projects/{project}/baselines/{baseline}/approve",
+    "authenticated": true,
+    "active_user": true
+  },
+  {
+    "method": "GET",
     "path": "/api/projects/{project}/curve",
+    "authenticated": true,
+    "active_user": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/projects/{project}/members",
+    "authenticated": true,
+    "active_user": true
+  },
+  {
+    "method": "POST",
+    "path": "/api/projects/{project}/members",
+    "authenticated": true,
+    "active_user": true
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/projects/{project}/members/{user}",
     "authenticated": true,
     "active_user": true
   },
@@ -200,6 +248,24 @@
   {
     "method": "PUT",
     "path": "/api/projects/{project}/poles/{pole}/work-items/{workItem}",
+    "authenticated": true,
+    "active_user": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/projects/{project}/quantities",
+    "authenticated": true,
+    "active_user": true
+  },
+  {
+    "method": "POST",
+    "path": "/api/projects/{project}/quantities",
+    "authenticated": true,
+    "active_user": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/projects/{project}/team-candidates",
     "authenticated": true,
     "active_user": true
   },
@@ -306,6 +372,24 @@
     "active_user": true
   },
   {
+    "method": "GET",
+    "path": "/api/teams/{team}/assignments",
+    "authenticated": true,
+    "active_user": true
+  },
+  {
+    "method": "POST",
+    "path": "/api/teams/{team}/assignments",
+    "authenticated": true,
+    "active_user": true
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/teams/{team}/assignments/{assignment}",
+    "authenticated": true,
+    "active_user": true
+  },
+  {
     "method": "POST",
     "path": "/api/teams/{team}/members",
     "authenticated": true,
@@ -314,6 +398,12 @@
   {
     "method": "DELETE",
     "path": "/api/teams/{team}/members/{user}",
+    "authenticated": true,
+    "active_user": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/teams/{team}/pole-candidates",
     "authenticated": true,
     "active_user": true
   },

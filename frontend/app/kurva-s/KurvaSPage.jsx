@@ -20,6 +20,7 @@ import AppShell from '../../components/layout/AppShell'
 import { ActionButton, PageHeader } from '../../components/layout/PageHeader'
 import { useProject } from '../../lib/project-context'
 import SCurveChart from '../../components/kurva-s/SCurveChart'
+import BaselineManager from '../../components/kurva-s/BaselineManager'
 import CurveVarianceTable from '../../components/kurva-s/CurveVarianceTable'
 import { Badge } from '../../components/ui/badge'
 import {
@@ -109,7 +110,7 @@ function KurvaSContent() {
   const currentPeriodLabel = useMemo(() => {
     if (!summary?.currentPeriod) return '—'
 
-    return `Bulan ke-${summary.currentPeriod}${
+    return `${summary?.periodBasis === 'baseline' ? 'Periode' : 'Bulan'} ke-${summary.currentPeriod}${
       summary.totalMonths ? ` dari ${summary.totalMonths}` : ''
     }`
   }, [summary])
@@ -144,6 +145,15 @@ function KurvaSContent() {
           error={projectError || error}
           onRetry={reload}
           title="Data kurva S belum dapat dimuat"
+        />
+      )}
+
+      {projectId && curve?.project && (
+        <BaselineManager
+          key={projectId}
+          projectId={projectId}
+          project={curve.project}
+          onApproved={reload}
         />
       )}
 
@@ -271,9 +281,21 @@ function KurvaSContent() {
           ) : (
             <EmptyState
               icon={CircleAlert}
-              title="Data kurva belum tersedia"
-              description={`Endpoint /api/projects/${projectId ?? '{id}'}/curve belum mengembalikan planned_curve maupun actual_curve.`}
-              hint="Ready for API integration"
+              title={
+                curve?.baseline_status === 'not_approved'
+                  ? 'Baseline Kurva S belum disahkan'
+                  : 'Data kurva belum tersedia'
+              }
+              description={
+                curve?.baseline_status === 'not_approved'
+                  ? 'Rencana proyek belum ditampilkan karena belum ada baseline yang disahkan. Admin atau pemilik proyek dapat mengisi rencana kuantitas per periode melalui formulir baseline di atas.'
+                  : 'Belum ada titik rencana atau realisasi yang dapat ditampilkan.'
+              }
+              hint={
+                curve?.baseline_status === 'not_approved'
+                  ? 'Kurva rencana akan muncul setelah baseline disahkan.'
+                  : 'Muat ulang setelah data tersedia.'
+              }
             />
           )}
         </CardContent>

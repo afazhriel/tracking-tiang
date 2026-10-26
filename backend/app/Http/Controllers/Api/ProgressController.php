@@ -89,6 +89,7 @@ class ProgressController extends Controller
                         $workItem = $pole->workItems()->where('source_item_id', $workItem->id)->firstOrFail();
                     }
                 }
+                abort_unless($workItem->is_active, 422, 'Item pekerjaan nonaktif tidak boleh menerima progres.');
                 $progress = PoleWorkProgress::updateOrCreate(
                     [
                         'pole_id' => $pole->id,
@@ -196,7 +197,7 @@ class ProgressController extends Controller
     {
         $pole->loadMissing('workProgress.workItem');
 
-        $progress = $pole->workProgress->sum(function ($item) {
+        $progress = $pole->workProgress->filter(fn ($item) => (bool) $item->workItem?->is_active)->sum(function ($item) {
             return (
                 (float) $item->workItem->weight_percent
                 * (float) $item->progress_percent

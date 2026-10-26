@@ -54,7 +54,7 @@ class PolePolicy
             return false;
         }
 
-        if ($user->isSupervisor()) {
+        if ($user->isSupervisor() || (int) $pole->project->owner_user_id === (int) $user->id) {
             return true;
         }
 

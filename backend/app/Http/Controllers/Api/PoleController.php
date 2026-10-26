@@ -93,7 +93,7 @@ class PoleController extends Controller
             ->groupBy('poles.id', 'poles.province_id')
             ->select(
                 'poles.province_id',
-                DB::raw('COALESCE(SUM(pwp.progress_percent * wi.weight_percent / 100), 0) as pole_progress')
+                DB::raw('COALESCE(SUM(CASE WHEN wi.is_active THEN pwp.progress_percent * wi.weight_percent / 100 ELSE 0 END), 0) as pole_progress')
             )
             ->get();
 

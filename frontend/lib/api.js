@@ -362,6 +362,30 @@ export const api = {
     apiRequest(`/api/projects/${projectId}`, options),
   createProject: (payload, options) =>
     apiRequest('/api/projects', { ...options, method: 'POST', body: payload }),
+  listProjectQuantities: (projectId, options) =>
+    apiRequest(`/api/projects/${projectId}/quantities`, options),
+
+  recordProjectQuantity: (projectId, payload, options) =>
+    apiRequest(`/api/projects/${projectId}/quantities`, {
+      ...options,
+      method: 'POST',
+      body: payload,
+    }),
+
+
+  listProjectMembers: (projectId, options) =>
+    apiRequest(`/api/projects/${encodeURIComponent(projectId)}/members`, options),
+  addProjectMember: (projectId, userId, options) =>
+    apiRequest(`/api/projects/${encodeURIComponent(projectId)}/members`, {
+      ...options,
+      method: 'POST',
+      body: { user_id: Number(userId) },
+    }),
+  removeProjectMember: (projectId, userId, options) =>
+    apiRequest(`/api/projects/${encodeURIComponent(projectId)}/members/${encodeURIComponent(userId)}`, {
+      ...options,
+      method: 'DELETE',
+    }),
 
   /* --- Tiang (Pole) ---
      `PoleController@index` memakai `paginate(100)`. `per_page`
@@ -492,6 +516,33 @@ export const api = {
       { ...options, method: 'POST' }
     ),
 
+  /* --- Baseline Kurva S --- */
+  listBaselines: (projectId, options) =>
+    apiRequest(`/api/projects/${projectId}/baselines`, options),
+
+  getBaseline: (projectId, baselineId, options) =>
+    apiRequest(`/api/projects/${projectId}/baselines/${baselineId}`, options),
+
+  createBaseline: (projectId, payload, options) =>
+    apiRequest(`/api/projects/${projectId}/baselines`, {
+      ...options,
+      method: 'POST',
+      body: payload,
+    }),
+
+  updateBaseline: (projectId, baselineId, payload, options) =>
+    apiRequest(`/api/projects/${projectId}/baselines/${baselineId}`, {
+      ...options,
+      method: 'PUT',
+      body: payload,
+    }),
+
+  approveBaseline: (projectId, baselineId, options) =>
+    apiRequest(`/api/projects/${projectId}/baselines/${baselineId}/approve`, {
+      ...options,
+      method: 'POST',
+    }),
+
   /* --- Kurva S --- */
   getCurve: (projectId, options) =>
     apiRequest(`/api/projects/${projectId}/curve`, options),
@@ -586,6 +637,12 @@ export const api = {
       ...options,
       query: { project_id: projectId, status },
     }),
+  teamCandidates: (projectId, email, options) =>
+    apiRequest(`/api/projects/${projectId}/team-candidates`, { ...options, query: { email: email || undefined } }),
+  teamAssignments: (teamId, options) => apiRequest(`/api/teams/${teamId}/assignments`, options),
+  teamPoleCandidates: (teamId, search, options) => apiRequest(`/api/teams/${teamId}/pole-candidates`, { ...options, query: { search: search || undefined } }),
+  assignTeamPole: (teamId, poleId, options) => apiRequest(`/api/teams/${teamId}/assignments`, { ...options, method: 'POST', body: { pole_id: poleId } }),
+  revokeTeamPole: (teamId, assignmentId, options) => apiRequest(`/api/teams/${teamId}/assignments/${assignmentId}`, { ...options, method: 'DELETE' }),
   getTeam: (teamId, options) => apiRequest(`/api/teams/${teamId}`, options),
   createTeam: (payload, options) =>
     apiRequest('/api/teams', { ...options, method: 'POST', body: payload }),
@@ -798,12 +855,16 @@ export function normalizeRegion(region) {
 export function normalizeProject(project) {
   return {
     id: project?.id ?? null,
+    ownerUserId: project?.owner_user_id ?? null,
     name: project?.name ?? '—',
     code: project?.code ?? null,
     status: project?.status ?? null,
     startDate: project?.start_date ?? null,
     endDate: project?.end_date ?? null,
     totalTargetPoles: project?.total_target_poles ?? null,
+    targetQuantity: project?.target_quantity ?? null,
+    unitCode: project?.unit_code ?? null,
+    progressSource: project?.progress_source ?? null,
     polesCount: project?.poles_count ?? null,
     regionsCount: project?.regions_count ?? null,
     workItemsCount: project?.work_items_count ?? null,
@@ -877,7 +938,8 @@ export function normalizeUser(user) {
     projects: Array.isArray(user?.projects)
       ? user.projects.map((project) => ({
           id: project?.id ?? null,
-          name: project?.name ?? '—',
+          ownerUserId: project?.owner_user_id ?? null,
+    name: project?.name ?? '—',
         }))
       : [],
     /* Provinsi yang ditugaskan (non-admin). Admin tidak dibatasi,
@@ -905,7 +967,8 @@ export function normalizeTeam(team) {
       ? { id: team.project.id ?? null, name: team.project.name ?? '—' }
       : null,
     status: team?.status ?? null,
-    usersCount: team?.users_count ?? (users.length || null),
+    canManage: team?.can_manage === true,
+    usersCount: team?.users_count ?? users.length,
     users: users.map(normalizeUser),
     raw: team ?? null,
   }

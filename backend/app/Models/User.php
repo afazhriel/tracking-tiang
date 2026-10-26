@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\TeamAccess;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -192,19 +193,30 @@ class User extends Authenticatable
     /**
      * ID project yang boleh diakses user ini.
      *
-     * Admin dan Supervisor tidak dibatasi membership — mereka butuh
-     * tampilan seluruh project. PIC dibatasi ke `project_user`.
+     * Admin tidak dibatasi. Pengguna lain hanya boleh mengakses
+     * proyek miliknya atau proyek tempat ia menjadi anggota.
      */
     public function accessibleProjectIds(): ?array
     {
-        if ($this->isAdmin() || $this->isSupervisor()) {
-            return null; // null = tidak ada pembatasan
+        // Admin platform tetap memiliki akses administratif global.
+        if ($this->isAdmin()) {
+            return null;
         }
 
-        return DB::table('project_user')
+        $memberIds = DB::table('project_user')
             ->where('user_id', $this->getKey())
-            ->pluck('project_id')
+            ->pluck('project_id');
+
+        $ownedIds = DB::table('projects')
+            ->where('owner_user_id', $this->getKey())
+            ->pluck('id');
+
+        return $memberIds
+            ->merge($ownedIds)
+            ->merge(app(TeamAccess::class)->projectIds($this))
             ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values()
             ->all();
     }
 
@@ -212,11 +224,7 @@ class User extends Authenticatable
     {
         $ids = $this->accessibleProjectIds();
 
-        if ($ids === null) {
-            return true;
-        }
-
-        return in_array($projectId, $ids, true);
+        return $ids === null || in_array($projectId, $ids, true);
     }
 
     /**

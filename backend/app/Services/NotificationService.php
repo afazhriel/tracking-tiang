@@ -54,7 +54,7 @@ class NotificationService
         ?Pole $pole = null
     ): Collection {
         $recipients = User::whereIn('id', $this->projectRecipientIds($project))->get()
-            ->filter(fn (User $user) => $user->isActive() && ($pole === null || $user->can('view', $pole)))
+            ->filter(fn (User $user) => $user->isActive() && $user->canAccessProject((int) $project->id) && ($pole === null || $user->can('view', $pole)))
             ->map(fn (User $user) => (int) $user->id);
 
         if ($exceptUserId !== null) {
@@ -76,24 +76,23 @@ class NotificationService
 
     /**
      * ID user yang boleh menerima notifikasi project ini:
-     * anggota `project_user` + seluruh admin/supervisor aktif.
+     * anggota langsung/tim aktif, pemilik proyek, dan Admin.
      *
      * @return Collection<int, int>
      */
     private function projectRecipientIds(Project $project): Collection
     {
-        $members = DB::table('project_user')
-            ->where('project_id', $project->id)
-            ->pluck('user_id');
+        $members = DB::table('project_user')->where('project_id', $project->id)->pluck('user_id');
+        $teams = DB::table('team_members as tm')->join('teams as t', 't.id', '=', 'tm.team_id')
+            ->where('t.status', 'active')->where(function ($q) use ($project) {
+                $q->where('t.project_id', $project->id)->orWhereExists(function ($q) use ($project) {
+                    $q->selectRaw('1')->from('pole_assignments as pa')->join('poles as p', 'p.id', '=', 'pa.pole_id')
+                        ->whereColumn('pa.team_id', 't.id')->where('pa.status', 'active')->where('p.project_id', $project->id);
+                });
+            })->pluck('tm.user_id');
 
-        $managers = User::query()
-            ->whereIn('role', [User::ROLE_ADMIN, User::ROLE_SUPERVISOR])
-            ->pluck('id');
-
-        return $members
-            ->merge($managers)
-            ->map(fn ($id) => (int) $id)
-            ->unique()
-            ->values();
+        return $members->merge($teams)->push($project->owner_user_id)
+            ->merge(User::where('role', User::ROLE_ADMIN)->pluck('id'))
+            ->filter()->map(fn ($id) => (int) $id)->unique()->values();
     }
 }

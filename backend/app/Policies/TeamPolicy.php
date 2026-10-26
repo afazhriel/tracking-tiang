@@ -18,7 +18,9 @@ class TeamPolicy
             return false;
         }
 
-        if ($user->isAdmin() || $user->isSupervisor()) {
+        // Hanya Admin platform yang memiliki akses tim global.
+        // Supervisor dan PIC harus memiliki akses ke proyek tim.
+        if ($user->isAdmin()) {
             return true;
         }
 
@@ -31,16 +33,17 @@ class TeamPolicy
 
     public function create(User $user): bool
     {
-        return $user->isActive() && $user->isAdmin();
+        return $user->isActive();
     }
 
     public function update(User $user, Team $team): bool
     {
-        return $user->isActive() && $user->isAdmin();
+        return $user->isActive() && ($user->isAdmin()
+            || ($team->project_id !== null && $user->can('update', $team->project)));
     }
 
     public function manageMembers(User $user, Team $team): bool
     {
-        return $user->isActive() && $user->isAdmin();
+        return $this->update($user, $team);
     }
 }
