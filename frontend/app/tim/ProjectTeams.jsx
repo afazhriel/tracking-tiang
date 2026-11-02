@@ -141,7 +141,7 @@ export default function ProjectTeams({ project, currentUser }) {
   const [status, setStatus] = useState('all')
   const [openId, setOpenId] = useState(null)
   const [creating, setCreating] = useState(false)
-  const manage = currentUser.role === 'admin' || (project.ownerUserId != null && String(project.ownerUserId) === String(currentUser.id))
+  const manage = ['admin', 'supervisor'].includes(currentUser.role) || (project.ownerUserId != null && String(project.ownerUserId) === String(currentUser.id))
   const list = (teams.data ?? []).filter(t => (status === 'all' || t.status === status) && `${t.name} ${t.code || ''}`.toLowerCase().includes(search.toLowerCase()))
   return <div className="space-y-5">
     <PageHeader eyebrow={project.code || 'Proyek aktif'} title="Tim Proyek" subtitle={`${project.name} · ${manage ? 'Kelola tim, anggota, dan penugasan.' : 'Lihat tim, anggota, dan penugasan sesuai akses Anda.'}`} />

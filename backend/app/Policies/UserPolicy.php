@@ -16,21 +16,21 @@ class UserPolicy
 {
     public function viewAny(User $user): bool
     {
-        return $user->isAdmin();
+        return $user->canAdminister();
     }
 
     public function create(User $user): bool
     {
-        return $user->isAdmin();
+        return $user->canAdminister();
     }
 
     public function update(User $user, User $target): bool
     {
-        return $user->isAdmin();
+        return $user->canAdminister();
     }
 
     public function delete(User $user, User $target): bool
     {
-        return $user->isAdmin();
+        return $user->canAdminister();
     }
 }

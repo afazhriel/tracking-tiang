@@ -20,7 +20,7 @@ class TeamPolicy
 
         // Hanya Admin platform yang memiliki akses tim global.
         // Supervisor dan PIC harus memiliki akses ke proyek tim.
-        if ($user->isAdmin()) {
+        if ($user->canAdminister()) {
             return true;
         }
 
@@ -38,7 +38,7 @@ class TeamPolicy
 
     public function update(User $user, Team $team): bool
     {
-        return $user->isActive() && ($user->isAdmin()
+        return $user->isActive() && ($user->canAdminister()
             || ($team->project_id !== null && $user->can('update', $team->project)));
     }
 

@@ -38,7 +38,7 @@ class TeamProjectAccessTest extends TestCase
             $this->assertDatabaseHas('team_members', ['team_id' => $teamId, 'user_id' => $member->id, 'role' => 'Ketua']);
             $this->assertSame('pic', $member->fresh()->role);
             $this->putJson("/api/teams/$teamId", ['name' => 'Tim baru'])->assertOk()->assertJsonPath('name', 'Tim baru');
-            if ($role !== 'admin') {
+            if ($role === 'pic') {
                 $foreign = $this->project(User::factory()->pic()->create(), 'foreign-'.$role);
                 $this->putJson("/api/teams/$teamId", ['project_id' => $foreign->id])->assertForbidden();
                 $this->postJson('/api/teams', ['name' => 'Illegal', 'project_id' => $foreign->id])->assertForbidden();
@@ -47,13 +47,13 @@ class TeamProjectAccessTest extends TestCase
         }
     }
 
-    public function test_non_owner_supervisor_and_pic_can_browse_but_cannot_manage_or_list_foreign_teams(): void
+    public function test_non_owner_pic_can_browse_but_cannot_manage_or_list_foreign_teams(): void
     {
         $project = $this->project(User::factory()->pic()->create());
         $team = $this->team($project);
         $other = $this->project(User::factory()->pic()->create(), 'OTHER');
         $foreign = $this->team($other);
-        foreach (['supervisor', 'pic'] as $role) {
+        foreach (['pic'] as $role) {
             $viewer = User::factory()->create(['role' => $role, 'status' => 'active']);
             $team->users()->attach($viewer);
             $this->actingAs($viewer, 'sanctum')->getJson('/api/teams?project_id='.$project->id)->assertOk()->assertJsonCount(1)->assertJsonPath('0.can_manage', false);

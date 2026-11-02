@@ -72,7 +72,7 @@ export function UpdateProgressModal({
     <Modal
       open={open}
       onClose={onClose}
-      title={`Catat Progress — ${pole?.poleCode ?? 'Tiang'}`}
+      title={`Catat Realisasi — ${pole?.poleCode ?? 'Tiang'}`}
       description="Simpan realisasi beserta foto sebagai satu catatan riwayat."
       footer={null}
     >
@@ -137,6 +137,7 @@ function ProgressForm({
   const [completedAt, setCompletedAt] = useState(
     toDateInput(existing?.completedAt)
   )
+  const [recordedAt, setRecordedAt] = useState('')
   const [notes, setNotes] = useState(existing?.notes ?? '')
   const [photos, setPhotos] = useState([])
   const [photoError, setPhotoError] = useState(null)
@@ -205,6 +206,7 @@ function ProgressForm({
     notes !== (existing?.notes ?? '') ||
     toDateInput(existing?.startedAt) !== startedAt ||
     toDateInput(existing?.completedAt) !== completedAt ||
+    recordedAt !== '' ||
     photos.length > 0
 
   function clearFieldError(field) {
@@ -246,6 +248,7 @@ function ProgressForm({
     if (photos.length) payload.photos = photos
 
     try {
+      if (recordedAt) payload.recorded_at = new Date(recordedAt).toISOString()
       const response = await api.savePoleProgress(projectId, poleId, payload)
 
       setSaving(false)
@@ -291,6 +294,13 @@ function ProgressForm({
         </div>
       )}
 
+      <FormField label="Waktu realisasi" htmlFor="progress-recorded-at"
+        error={fieldErrors?.recorded_at?.[0]}
+        hint="Waktu lokal perangkat. Kosongkan untuk waktu saat disimpan. Harus setelah awal proyek dan catatan terakhir pekerjaan ini.">
+        <input id="progress-recorded-at" type="datetime-local" value={recordedAt}
+          onChange={(event) => { setRecordedAt(event.target.value); clearFieldError('recorded_at') }}
+          className="w-full rounded-lg border border-neutral-300 p-2" />
+      </FormField>
       <FormField
         label="Realisasi"
         htmlFor="progress-percent"
@@ -503,7 +513,7 @@ export function UpdateProgressButton({ onClick, disabled, className }) {
       title={disabled ? 'Project atau item pekerjaan belum siap dimuat' : undefined}
       className={className}
     >
-      Catat Progress
+      Catat Realisasi
     </ActionButton>
   )
 }

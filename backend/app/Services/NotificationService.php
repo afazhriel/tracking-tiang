@@ -92,7 +92,7 @@ class NotificationService
             })->pluck('tm.user_id');
 
         return $members->merge($teams)->push($project->owner_user_id)
-            ->merge(User::where('role', User::ROLE_ADMIN)->pluck('id'))
+            ->merge(User::whereIn('role', [User::ROLE_ADMIN, User::ROLE_SUPERVISOR])->pluck('id'))
             ->filter()->map(fn ($id) => (int) $id)->unique()->values();
     }
 }

@@ -1,15 +1,15 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 
 import AppShell from '../../components/layout/AppShell'
 import QuantityPanel from './QuantityPanel'
 import {
   api,
-  getStoredUser,
   unwrapItem,
   unwrapList,
 } from '../../lib/api'
+import { useCurrentUser } from '../../lib/use-current-user'
 import { useProject } from '../../lib/project-context'
 
 const emptyForm = {
@@ -49,13 +49,15 @@ function ProyekContent() {
     error: projectsError,
   } = useProject()
 
-  const currentUser = useMemo(() => getStoredUser(), [])
+  const currentUser = useCurrentUser()
   const userId = currentUser?.id
   const rawRole = currentUser?.role
   const role = String(
     typeof rawRole === 'object' ? rawRole?.name : rawRole ?? ''
   ).toLowerCase()
-  const isAdmin = role === 'admin'
+  const isAdmin = ['admin', 'supervisor'].includes(role)
+
+  const canCreateProject = isAdmin && !['pending', 'suspended'].includes(currentUser?.status)
 
   const [form, setForm] = useState(emptyForm)
   const [saving, setSaving] = useState(false)
@@ -133,7 +135,7 @@ function ProyekContent() {
 
   async function createProject(event) {
     event.preventDefault()
-    if (saving) return
+    if (saving || !canCreateProject) return
 
     setSaving(true)
     setFormError('')
@@ -253,7 +255,7 @@ function ProyekContent() {
 
               {!loading && !projects?.length && (
                 <p className="rounded-xl bg-neutral-50 p-4 text-sm text-neutral-600">
-                  Belum ada proyek yang dapat Anda akses. Buat proyek pertama Anda.
+                  Belum ada proyek yang dapat Anda akses. Admin atau Supervisor dapat membuat proyek dan mengatur akses.
                 </p>
               )}
 
@@ -284,7 +286,7 @@ function ProyekContent() {
             </div>
           </section>
 
-          <section className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
+          {canCreateProject && (<section className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
             <h2 className="text-lg font-semibold text-neutral-900">
               Buat Proyek Baru
             </h2>
@@ -383,6 +385,7 @@ function ProyekContent() {
               </button>
             </form>
           </section>
+          )}
         </div>
 
         {detail?.progress_source === 'quantity_entries' && (

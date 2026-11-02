@@ -111,7 +111,7 @@ class ProjectMemberController extends Controller
             );
 
             abort_if(
-                $user->isAdmin(),
+                $user->canAdminister(),
                 409,
                 'Admin platform memiliki akses global; aksesnya tidak dapat dicabut melalui keanggotaan proyek.'
             );

@@ -23,6 +23,17 @@ async function session(email, options = {}) {
   await page.locator('input[type=password]').fill('browser-fixture-password')
   await page.locator('button[type=submit]').click()
   await page.waitForURL('**/dashboard')
+  // A global manager can see several projects. Select the fixture explicitly.
+  if (email === 'browser-supervisor@example.test') {
+    const selector = page.getByRole('combobox', { name: 'Proyek aktif', exact: true })
+    await selector.waitFor()
+    if (await selector.inputValue() !== String(fixture.project_id)) {
+      await Promise.all([
+        page.waitForNavigation({ waitUntil: 'load' }),
+        selector.selectOption(String(fixture.project_id)),
+      ])
+    }
+  }
   await page.goto('/tim')
   await page.getByRole('heading', { name: 'Tim Proyek' }).waitFor()
   return { context, page }
@@ -79,20 +90,21 @@ try {
   console.log('PASS owner UI creates team, adds PIC by exact email and assigns scoped pole')
 
   const supervisor = await session('browser-supervisor@example.test')
-  await supervisor.page.getByText('Tim CI E2E').waitFor()
-  assert.equal(await supervisor.page.getByRole('button', { name: 'Buat tim' }).count(), 0)
+  await supervisor.page.getByRole('heading', { name: 'Tim CI E2E', exact: true }).waitFor()
+  assert.equal((await supervisor.context.request.get(`/api/projects/${fixture.foreign_project_id}`)).status(), 200)
+  assert.equal(await supervisor.page.getByRole('button', { name: 'Buat tim' }).count(), 1)
   await supervisor.page.getByRole('button', { name: 'Buka tim' }).click()
-  assert.equal(await supervisor.page.getByRole('button', { name: 'Tambah anggota' }).count(), 0)
+  await supervisor.page.getByRole('button', { name: 'Tambah anggota' }).waitFor()
   assert.equal((await supervisor.context.request.put(`/api/teams/${teamId}`, {
     headers: { 'X-Tracking-Client': 'browser', Origin: baseURL },
-    data: { name: 'Not allowed' },
-  })).status(), 403)
+    data: { name: 'Tim CI E2E' },
+  })).status(), 200)
 
   const outsider = await session('browser-other@example.test')
   assert.equal((await outsider.context.request.get(`/api/teams/${teamId}`)).status(), 403)
   assert.equal((await outsider.context.request.get(`/api/teams?project_id=${fixture.project_id}`)).status(), 403)
   assert.equal(await outsider.page.getByText('Tim CI E2E').count(), 0)
-  console.log('PASS Supervisor read-only, unrelated project isolated')
+  console.log('PASS Supervisor manages team, unrelated PIC project stays isolated')
 
   await addMember(owner.page, fixture.supervisor_id, 'browser-supervisor@example.test')
   const members = (await getTeam(owner.context, teamId)).users
@@ -125,7 +137,7 @@ try {
   await member.page.setViewportSize({ width: 393, height: 852 })
   await member.page.goto('/tim')
   await member.page.getByText('Tim CI E2E').waitFor()
-  assert.equal(await member.page.getByRole('button', { name: 'Buat tim' }).count(), 0)
+  assert.equal(await member.page.getByRole('button', { name: 'Buat tim' }).count(), 0, 'PIC without project ownership must not manage teams')
   assert.equal((await member.context.request.get(`/api/projects/${fixture.foreign_project_id}`)).status(), 403)
   console.log('PASS Admin access, PIC project-specific mobile view')
 } finally {

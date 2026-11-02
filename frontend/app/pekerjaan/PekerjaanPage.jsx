@@ -134,7 +134,7 @@ function PekerjaanContent() {
   const { projectId, error: projectError } = useProject()
 
   const currentUser = useCurrentUser()
-  const isAdmin = currentUser?.role === 'admin'
+  const isAdmin = ['admin', 'supervisor'].includes(currentUser?.role)
 
   const itemsLoader = useCallback(async () => {
     if (!projectId) return { items: [], meta: null }
@@ -187,7 +187,7 @@ function PekerjaanContent() {
     : registeredPoleCount
 
   const totalWeight = useMemo(
-    () => workItems.reduce((total, item) => total + item.weight, 0),
+    () => workItems.filter((item) => item.isActive).reduce((total, item) => total + item.weight, 0),
     [workItems]
   )
 
@@ -263,6 +263,15 @@ function PekerjaanContent() {
 
     return value !== null && value >= 100
   }).length
+
+  if (itemsData?.meta?.progress_source === 'quantity_entries') {
+    return <div className="space-y-4">
+      <h1 className="text-2xl font-semibold">Realisasi Kuantitas</h1>
+      <p>Proyek ini memakai kuantitas terhadap target, bukan bobot pekerjaan tiang.</p>
+      <p>Progres: {formatPercent(itemsData.meta.actual_current_percent)}</p>
+      <ActionButton href="/proyek">Buka Catat Realisasi</ActionButton>
+    </div>
+  }
 
   return (
     <div className="space-y-6">

@@ -67,7 +67,7 @@ class LegacyPoleWorkItemsTest extends TestCase
         $this->assertSame($copy->id, $photo->fresh()->work_item_id);
         $this->assertSame($history->id, $photo->fresh()->progress_history_id);
         $this->assertSame('Original history', $history->fresh()->notes);
-        $this->assertSame('100.00', $history->fresh()->weight_percent_snapshot);
+        $this->assertNull($history->fresh()->weight_percent_snapshot);
         $this->assertSame('Do not lose', $progress->fresh()->notes);
         $this->assertSame($this->template->id, $otherProgress->fresh()->work_item_id);
         $this->assertSame('Pondasi', $this->template->fresh()->name);
@@ -144,12 +144,14 @@ class LegacyPoleWorkItemsTest extends TestCase
         $this->assertEqualsWithDelta(100, $this->pole->workItems()->sum('weight_percent'), 0.001);
     }
 
-    public function test_weight_changes_do_not_rewrite_the_historical_curve(): void
+    public function test_weight_changes_restate_curve_without_inventing_unknown_historical_weights(): void
     {
         $this->records();
         $this->postJson($this->url, ['name' => 'New job', 'weight_percent' => 100])->assertCreated();
         $this->getJson("/api/projects/{$this->project->id}/poles/{$this->pole->id}/curve")
-            ->assertOk()->assertJsonPath('actual_curve.0.progress_percent', 75)
+            ->assertOk()->assertJsonPath('actual_curve.0.progress_percent', 37.5)
+            ->assertJsonPath('legacy_snapshot_curve.0.progress_percent', null)
+            ->assertJsonPath('data_quality.missing_weight_snapshots', 1)
             ->assertJsonPath('actual_current_percent', 37.5);
     }
 

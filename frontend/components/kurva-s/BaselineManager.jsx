@@ -49,7 +49,7 @@ export default function BaselineManager({ projectId, project, onApproved }) {
     resolvedOwnerId
 
   const canManageBaseline =
-    user?.role === 'admin' ||
+    ['admin', 'supervisor'].includes(user?.role) ||
     (
       viewerId != null &&
       ownerId != null &&

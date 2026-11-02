@@ -105,6 +105,6 @@ class PoleAssignmentController extends Controller
 
     private function isAdmin(Request $request): bool
     {
-        return $request->user()?->isAdmin() === true;
+        return $request->user()?->canAdminister() === true;
     }
 }

@@ -253,7 +253,7 @@ class PoleController extends Controller
          */
         $user = $request->user();
 
-        if ($user && ! $user->isAdmin()) {
+        if ($user && ! $user->canAdminister()) {
             $provinceId = $validated['province_id'] ?? null;
 
             if (empty($provinceId) || ! $user->canManageProvince($provinceId)) {

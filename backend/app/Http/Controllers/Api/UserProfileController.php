@@ -207,7 +207,7 @@ class UserProfileController extends Controller
     {
         abort_unless(
             (int) request()->user()->id === (int) $user->id
-                || request()->user()->isAdmin(),
+                || request()->user()->canAdminister(),
             403
         );
         abort_unless($user->avatar, 404);

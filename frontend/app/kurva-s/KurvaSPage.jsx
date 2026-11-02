@@ -1,5 +1,7 @@
 'use client'
 
+import CurveBasisNotice from '../../components/kurva-s/CurveBasisNotice'
+
 import { useCallback, useMemo } from 'react'
 import Link from 'next/link'
 import {
@@ -240,6 +242,7 @@ function KurvaSContent() {
         </CardHeader>
 
         <CardContent className="space-y-5">
+                  <CurveBasisNotice curve={curve} />
           {loading ? (
             <Skeleton className="h-[380px] w-full" />
           ) : summary?.hasPlanned || summary?.hasActual ? (

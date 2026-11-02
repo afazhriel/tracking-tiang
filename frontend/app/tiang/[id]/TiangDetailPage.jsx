@@ -1,5 +1,7 @@
 "use client";
 
+import CurveBasisNotice from '../../../components/kurva-s/CurveBasisNotice'
+
 import {
   useCallback,
   useEffect,
@@ -570,6 +572,7 @@ function TiangDetailContent() {
                 </CardHeader>
 
                 <CardContent className="space-y-5">
+                  <CurveBasisNotice curve={curvePayload} />
                   {curveLoading ? (
                     <Skeleton className="h-[380px] w-full" />
                   ) : curveError ? (
@@ -831,7 +834,7 @@ function TiangDetailContent() {
               pole={pole}
               workItems={poleWorkItems ?? []}
               currentProgress={workProgress}
-              onSaved={() => reloadProgress()}
+              onSaved={() => { reloadPole(); reloadProgress(); reloadWorkItems(); reloadActivities(); reloadCurve(); }}
             />
           )}
         </>
