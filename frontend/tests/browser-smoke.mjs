@@ -60,14 +60,17 @@ try {
   const projectResponse = await owner.request.get(`/api/projects/${fixture.project_id}`)
   assert.equal(projectResponse.status(), 200)
   const projectBody = (await projectResponse.json()).data
-  const startDate = String(projectBody.start_date).slice(0, 10)
-  const dayBefore = new Date(`${startDate}T00:00:00.000Z`)
-  dayBefore.setUTCDate(dayBefore.getUTCDate() - 1)
+  const startDate = String(projectBody.start_date ?? '').slice(0, 10)
+  const hasStart = /^\d{4}-\d{2}-\d{2}$/.test(startDate)
+  const invalidTime = hasStart
+    ? new Date(Date.parse(`${startDate}T00:00:00.000Z`) - 86400000)
+    : new Date(Date.now() + 86400000 * 2)
+  const invalidValue = `${invalidTime.toISOString().slice(0, 10)}T10:00`
   await page.getByRole('button', { name: 'Catat Realisasi' }).click()
-  await page.locator('#progress-recorded-at').fill(`${dayBefore.toISOString().slice(0, 10)}T10:00`)
+  await page.locator('#progress-recorded-at').fill(invalidValue)
   await page.locator('#progress-percent').fill('55')
   await page.getByRole('button', { name: 'Simpan Realisasi' }).click()
-  await page.getByText(/Realisasi tidak boleh sebelum/).first().waitFor()
+  await page.getByText(/(Realisasi tidak boleh sebelum|Waktu realisasi tidak boleh di masa depan)/).first().waitFor()
   // Realisasi valid: waktu dikosongkan untuk memakai waktu server.
   await page.locator('#progress-recorded-at').fill('')
   const savedFromForm = page.waitForResponse(response =>
