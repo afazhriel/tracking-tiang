@@ -18,8 +18,8 @@ import { toneHex } from '../../lib/theme'
  * Warna seri diambil dari lib/theme.js, bukan hex hardcode,
  * supaya garis kurva S ikut berubah kalau palet aplikasi berubah.
  *
- * Planned  = espresso  (netral, "rencana")
- * Actual   = lagoon    (warna aksi / data lapangan)
+ * Rencana  = espresso  (netral, "rencana")
+ * Realisasi   = lagoon    (warna aksi / data lapangan)
  */
 const PLANNED_HEX = toneHex('espresso')
 const ACTUAL_HEX = toneHex('lagoon')
@@ -48,7 +48,7 @@ function CurveTooltip({ active, payload, label }) {
               className="h-2 w-2 rounded-full"
               style={{ backgroundColor: PLANNED_HEX }}
             />
-            Planned
+            Rencana
           </span>
           <span className="font-medium tabular-nums text-neutral-800">
             {formatPercent(point.planned)}
@@ -61,7 +61,7 @@ function CurveTooltip({ active, payload, label }) {
               className="h-2 w-2 rounded-full"
               style={{ backgroundColor: ACTUAL_HEX }}
             />
-            Actual
+            Realisasi
           </span>
           <span className="font-medium tabular-nums text-neutral-800">
             {formatPercent(point.actual)}
@@ -69,7 +69,7 @@ function CurveTooltip({ active, payload, label }) {
         </li>
 
         <li className="flex items-center justify-between gap-6 border-t border-neutral-100 pt-1.5 text-xs">
-          <span className="text-neutral-500">Variance</span>
+          <span className="text-neutral-500">Selisih</span>
           <span
             className={`font-medium tabular-nums ${
               point.variance === null
@@ -105,8 +105,14 @@ export default function SCurveChart({ series = [], height = 380 }) {
     )
   }
 
+  const values = series.flatMap(point => [point.planned, point.actual]).filter(Number.isFinite)
+  const largest = Math.max(0, ...values)
+  const axisMax = largest <= 10 ? 10 : largest <= 20 ? 20 : largest <= 50 ? 50 : 100
+
   return (
-    <div style={{ height }} className="w-full">
+    <div className="w-full">
+      <p className="mb-2 text-xs text-neutral-500">Skala 0–{axisMax}% agar perubahan progres mudah terlihat. Target penuh tetap 100%.</p>
+      <div style={{ height }}>
       <ResponsiveContainer width="100%" height="100%">
         <LineChart
           data={series}
@@ -127,8 +133,8 @@ export default function SCurveChart({ series = [], height = 380 }) {
           />
 
           <YAxis
-            domain={[0, 100]}
-            ticks={[0, 20, 40, 60, 80, 100]}
+            domain={[0, axisMax]}
+            ticks={[0, axisMax / 2, axisMax]}
             tick={AXIS_STYLE}
             tickLine={false}
             axisLine={false}
@@ -152,7 +158,7 @@ export default function SCurveChart({ series = [], height = 380 }) {
           <Line
             type="stepAfter"
             dataKey="planned"
-            name="Planned"
+            name="Rencana"
             stroke={PLANNED_HEX}
             strokeWidth={2}
             strokeDasharray="6 4"
@@ -164,15 +170,16 @@ export default function SCurveChart({ series = [], height = 380 }) {
           <Line
             type="monotone"
             dataKey="actual"
-            name="Actual"
+            name="Realisasi"
             stroke={ACTUAL_HEX}
             strokeWidth={2.5}
-            dot={{ r: 2.5, fill: ACTUAL_HEX, strokeWidth: 0 }}
+            dot={false}
             activeDot={{ r: 5 }}
             connectNulls={false}
           />
         </LineChart>
       </ResponsiveContainer>
+      </div>
     </div>
   )
 }
