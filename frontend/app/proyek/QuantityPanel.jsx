@@ -113,11 +113,11 @@ export default function QuantityPanel({
   return (
     <section className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
       <h2 className="text-lg font-semibold text-neutral-900">
-        Realisasi Kuantitas
+        Tambah Realisasi Proyek
       </h2>
 
       <p className="mt-1 text-sm text-neutral-500">
-        Catat realisasi atau koreksi proyek dalam satuan {unitCode}.
+        Masukkan jumlah pekerjaan yang sudah terealisasi dalam satuan {unitCode}.
         Perubahan akan memengaruhi Kurva S aktual.
       </p>
 
