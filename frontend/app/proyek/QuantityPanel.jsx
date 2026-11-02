@@ -195,7 +195,7 @@ export default function QuantityPanel({
               <input
                 type="date"
                 min={startDate ? String(startDate).slice(0, 10) : undefined}
-                max={new Date().toISOString().slice(0, 10)}
+                max={[new Date().getFullYear(), String(new Date().getMonth() + 1).padStart(2, '0'), String(new Date().getDate()).padStart(2, '0')].join('-')}
                 className={fieldClass}
                 value={date}
                 onChange={(event) =>
