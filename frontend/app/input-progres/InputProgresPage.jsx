@@ -100,6 +100,8 @@ function InputProgresContent() {
           <QuantityPanel
             key={String(projectId)}
             projectId={projectId}
+            startDate={detail.start_date}
+            targetQuantity={detail.target_quantity}
             unitCode={detail.unit_code || 'unit'}
             canWrite={canWrite}
           />
