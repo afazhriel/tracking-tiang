@@ -8,6 +8,8 @@ const fieldClass =
 
 export default function QuantityPanel({
   projectId,
+  startDate = null,
+  targetQuantity = null,
   unitCode = 'unit',
   canWrite = false,
 }) {
@@ -55,11 +57,32 @@ export default function QuantityPanel({
   function change(setter, value) {
     requestKey.current = null
     setter(value)
+    setError('')
+    setMessage('')
   }
 
   async function submit(event) {
     event.preventDefault()
     if (!canWrite || busy) return
+
+    const delta = Number(quantity)
+    const current = Number(summary?.actual_current_quantity ?? 0)
+    const max = Number(targetQuantity)
+    if (!/^-?\d{1,10}(?:\.\d{1,4})?$/.test(quantity) || !Number.isFinite(delta) || delta === 0) {
+      setError('Masukkan jumlah selain nol, maksimal empat angka di belakang koma.')
+      return
+    }
+    const next = Math.round((current + delta) * 10000)
+    if (next < 0 || (targetQuantity !== null && next > Math.round(max * 10000))) {
+      setError(`Total realisasi harus antara 0 dan target ${targetQuantity} ${unitCode}.`)
+      return
+    }
+    const start = String(startDate ?? '').slice(0, 10)
+    const today = [new Date().getFullYear(), String(new Date().getMonth()+1).padStart(2,'0'), String(new Date().getDate()).padStart(2,'0')].join('-')
+    if (date && ((start && date < start) || date > today)) {
+      setError(`Tanggal realisasi harus antara ${start || 'awal proyek'} dan hari ini.`)
+      return
+    }
 
     setBusy(true)
     setError('')
@@ -96,15 +119,21 @@ export default function QuantityPanel({
       }
 
       await api.recordProjectQuantity(projectId, payload)
-      await reload()
 
+      // Penyimpanan sudah berhasil: jangan laporkan "gagal simpan" hanya
+      // karena pembacaan ulang riwayat terputus sesudah commit database.
       requestKey.current = null
       setQuantity('')
       setDate('')
       setNotes('')
-      setMessage('Realisasi kuantitas berhasil dicatat.')
+      setMessage('Realisasi kuantitas berhasil disimpan di server.')
+      try {
+        await reload()
+      } catch {
+        setError('Data sudah tersimpan, tetapi daftar riwayat belum berhasil diperbarui. Muat ulang halaman untuk memeriksa.')
+      }
     } catch (err) {
-      setError(err.message || 'Gagal menyimpan realisasi.')
+      setError(Object.values(err.fieldErrors ?? {}).flat()[0] || err.message || 'Gagal menyimpan realisasi.')
     } finally {
       setBusy(false)
     }
@@ -165,6 +194,8 @@ export default function QuantityPanel({
               <span>Tanggal realisasi (opsional)</span>
               <input
                 type="date"
+                min={startDate ? String(startDate).slice(0, 10) : undefined}
+                max={[new Date().getFullYear(), String(new Date().getMonth() + 1).padStart(2, '0'), String(new Date().getDate()).padStart(2, '0')].join('-')}
                 className={fieldClass}
                 value={date}
                 onChange={(event) =>
@@ -187,6 +218,7 @@ export default function QuantityPanel({
             />
           </label>
 
+          <p className="text-xs text-neutral-500">Kosongkan tanggal untuk memakai waktu penyimpanan saat ini. Total realisasi tidak boleh negatif atau melebihi target.</p>
           <button
             type="submit"
             disabled={busy}
@@ -198,7 +230,7 @@ export default function QuantityPanel({
       )}
 
       {error && (
-        <p role="alert" className="mt-3 text-sm text-red-700">
+        <p role="alert" className="mt-3 rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-medium text-red-700">
           {error}
         </p>
       )}

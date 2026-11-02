@@ -583,12 +583,12 @@ function TiangDetailContent() {
                     />
                   ) : curveSummary?.hasPlanned || curveSummary?.hasActual ? (
                     <>
-                      <SCurveChart series={curveSummary.series} height={380} />
+                      <SCurveChart series={curveSummary.series} height={290} />
 
                       <dl className="grid grid-cols-3 gap-3">
                         <div className="rounded-xl bg-canvas p-3 text-center">
                           <dt className="text-[11px] text-neutral-400">
-                            Planned
+                            Rencana
                           </dt>
                           <dd className="mt-0.5 text-sm font-semibold tabular-nums text-neutral-800">
                             {formatPercent(curveSummary.plannedProgress)}
@@ -597,7 +597,7 @@ function TiangDetailContent() {
 
                         <div className="rounded-xl bg-canvas p-3 text-center">
                           <dt className="text-[11px] text-neutral-400">
-                            Actual
+                            Realisasi
                           </dt>
                           <dd className="mt-0.5 text-sm font-semibold tabular-nums text-neutral-800">
                             {formatPercent(curveSummary.actualProgress)}
@@ -606,7 +606,7 @@ function TiangDetailContent() {
 
                         <div className="rounded-xl bg-canvas p-3 text-center">
                           <dt className="text-[11px] text-neutral-400">
-                            Variance
+                            Selisih
                           </dt>
                           <dd
                             className={`mt-0.5 text-sm font-semibold tabular-nums ${
@@ -622,7 +622,10 @@ function TiangDetailContent() {
                         </div>
                       </dl>
 
-                      <CurveVarianceTable series={curveSummary.series} />
+                      <details className="rounded-xl border border-neutral-200 p-3">
+                          <summary className="cursor-pointer text-sm font-medium text-neutral-700">Tampilkan rincian angka</summary>
+                          <div className="mt-3"><CurveVarianceTable series={curveSummary.series} /></div>
+                        </details>
                     </>
                   ) : (
                     <EmptyState
@@ -831,6 +834,7 @@ function TiangDetailContent() {
               open={progressOpen}
               onClose={() => setProgressOpen(false)}
               projectId={projectId}
+              projectStartDate={project?.startDate}
               pole={pole}
               workItems={poleWorkItems ?? []}
               currentProgress={workProgress}

@@ -55,6 +55,33 @@ try {
   assert.equal((await owner.request.get(savedPhoto)).status(), 200)
   await page.goto(`/tiang/${fixture.pole_id}`)
   await page.waitForFunction(() => [...document.images].some((img) => img.src.includes('/api/photos/') && img.complete && img.naturalWidth > 0))
+  // Browser UAT: backend menolak tanggal sebelum awal proyek, dan UI
+  // harus menjelaskan penyebabnya sebelum pengguna mengirim data.
+  const projectResponse = await owner.request.get(`/api/projects/${fixture.project_id}`)
+  assert.equal(projectResponse.status(), 200)
+  const projectBody = (await projectResponse.json()).data
+  const startDate = String(projectBody.start_date ?? '').slice(0, 10)
+  const hasStart = /^\d{4}-\d{2}-\d{2}$/.test(startDate)
+  const invalidTime = hasStart
+    ? new Date(Date.parse(`${startDate}T00:00:00.000Z`) - 86400000)
+    : new Date(Date.now() + 86400000 * 2)
+  const invalidValue = `${invalidTime.toISOString().slice(0, 10)}T10:00`
+  await page.getByRole('button', { name: 'Catat Realisasi' }).click()
+  await page.locator('#progress-recorded-at').fill(invalidValue)
+  await page.locator('#progress-percent').fill('55')
+  await page.getByRole('button', { name: 'Simpan Realisasi' }).click()
+  await page.getByText(/(Realisasi tidak boleh sebelum|Waktu realisasi tidak boleh di masa depan)/).first().waitFor()
+  // Realisasi valid: waktu dikosongkan untuk memakai waktu server.
+  await page.locator('#progress-recorded-at').fill('')
+  const savedFromForm = page.waitForResponse(response =>
+    response.url().includes(`/api/projects/${fixture.project_id}/poles/${fixture.pole_id}/progress`)
+    && response.request().method() === 'POST')
+  await page.getByRole('button', { name: 'Simpan Realisasi' }).click()
+  const persisted = await savedFromForm
+  assert.equal(persisted.status(), 200, 'Valid realization must be saved through browser form')
+  await page.getByText('Catat Realisasi —', { exact: false }).waitFor({ state: 'hidden' })
+  console.log('PASS field validation, user-visible errors, and successful realization form save')
+
   await page.goto('/profil')
   await page.waitForFunction(() => [...document.images].some((img) => img.src.includes('/api/user/avatar/') && img.complete && img.naturalWidth > 0))
   assert.equal((await owner.request.post('/api/logout', { headers: { 'X-Tracking-Client': 'browser', Origin: 'https://attacker.example' } })).status(), 419)

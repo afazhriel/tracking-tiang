@@ -161,7 +161,7 @@ function KurvaSContent() {
 
       <StatCardGrid>
         <StatCard
-          label="Planned Progress"
+          label="Rencana"
           value={loading ? '…' : formatPercent(summary?.plannedProgress ?? null)}
           hint={
             summary?.lastPlannedDate
@@ -172,7 +172,7 @@ function KurvaSContent() {
         />
 
         <StatCard
-          label="Actual Progress"
+          label="Realisasi"
           value={loading ? '…' : formatPercent(summary?.actualProgress ?? null)}
           hint={
             summary?.lastActualDate
@@ -184,7 +184,7 @@ function KurvaSContent() {
         />
 
         <StatCard
-          label="Variance"
+          label="Selisih"
           value={loading ? '…' : formatSignedPercent(variance)}
           hint={
             variance === null
@@ -200,7 +200,7 @@ function KurvaSContent() {
         />
 
         <StatCard
-          label="Current Period"
+          label="Periode berjalan"
           value={loading ? '…' : currentPeriodLabel}
           hint={
             curve?.project?.end_date
@@ -220,9 +220,9 @@ function KurvaSContent() {
             </div>
 
             <div>
-              <CardTitle>Planned vs Actual</CardTitle>
+              <CardTitle>Grafik Rencana dan Realisasi</CardTitle>
               <CardDescription>
-                Sumber data: GET /api/projects/{'{id}'}/curve
+                Data dari catatan realisasi dan jadwal proyek
               </CardDescription>
             </div>
           </div>
@@ -255,11 +255,11 @@ function KurvaSContent() {
               <div className="flex flex-wrap gap-4 text-xs text-neutral-500">
                 <span className="flex items-center gap-1.5">
                   <span className="h-0.5 w-6 border-t-2 border-dashed border-neutral-900" />
-                  Planned (rencana)
+                  Rencana
                 </span>
                 <span className="flex items-center gap-1.5">
                   <span className="h-0.5 w-6 bg-blue-600" />
-                  Actual (realisasi)
+                  Realisasi
                 </span>
                 <span className="ml-auto text-neutral-400">
                   {summary.hasActual
@@ -384,7 +384,7 @@ function KurvaSContent() {
             </div>
 
             <div>
-              <CardTitle>Tabel Kurva</CardTitle>
+              <CardTitle>Rincian Angka Per Periode</CardTitle>
               <CardDescription>
                 Rincian rencana, realisasi, dan deviasi per periode
               </CardDescription>
@@ -393,10 +393,10 @@ function KurvaSContent() {
         </CardHeader>
 
         <CardContent>
-          <CurveVarianceTable
-            series={summary?.series ?? []}
-            loading={loading}
-          />
+          <details>
+            <summary className="cursor-pointer rounded-xl border border-neutral-200 p-3 text-sm font-medium text-neutral-700">Tampilkan tabel lengkap</summary>
+            <div className="mt-4"><CurveVarianceTable series={summary?.series ?? []} loading={loading} /></div>
+          </details>
         </CardContent>
       </Card>
     </div>

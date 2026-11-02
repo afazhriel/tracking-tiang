@@ -392,6 +392,8 @@ function ProyekContent() {
           <QuantityPanel
             key={projectId}
             projectId={projectId}
+            startDate={detail.start_date}
+            targetQuantity={detail.target_quantity}
             unitCode={detail.unit_code}
             canWrite={canManage}
           />
