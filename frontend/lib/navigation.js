@@ -1,46 +1,37 @@
 import {
-  Activity,
   BarChart3,
   Bell,
   ClipboardList,
   FolderKanban,
   LayoutDashboard,
-  MapPin,
   User,
   Users,
 } from 'lucide-react'
 
-/**
- * Definisi navigasi utama aplikasi.
- * Satu sumber kebenaran untuk Sidebar, mobile bar, dan status aktif.
- */
+// Lima menu utama, sementara URL halaman lama tetap dapat dibuka.
 export const NAV_ITEMS = [
   { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { label: 'Proyek', href: '/proyek', icon: FolderKanban },
-  { label: 'Tiang', href: '/tiang', icon: MapPin },
-  { label: 'Pekerjaan', href: '/pekerjaan', icon: ClipboardList },
-  { label: 'Kurva S', href: '/kurva-s', icon: BarChart3 },
-  { label: 'Aktivitas', href: '/aktivitas', icon: Activity },
+  { label: 'Input Progres', href: '/input-progres', icon: ClipboardList },
+  { label: 'Laporan', href: '/laporan', icon: BarChart3 },
+  { label: 'Tim', href: '/tim', icon: Users },
 ]
 
-/**
- * Navigasi sekunder: notifikasi, tim, dan profil.
- *
- * Dipisah dari `NAV_ITEMS` karena ketiganya bukan "monitoring
- * harian". `/tim` kini terhubung ke endpoint user/team asli:
- * admin melihat manajemen penuh, peran lain melihat referensi
- * peran sesuai hak aksesnya.
- */
 export const NAV_SECONDARY = [
   { label: 'Notifikasi', href: '/notifikasi', icon: Bell },
-  { label: 'Tim', href: '/tim', icon: Users },
   { label: 'Profil', href: '/profil', icon: User },
 ]
 
+function matches(pathname, href) {
+  return pathname === href || pathname.startsWith(`${href}/`)
+}
+
 export function isActivePath(pathname, href) {
   if (!pathname) return false
-
-  if (href === '/dashboard') return pathname === '/dashboard'
-
-  return pathname === href || pathname.startsWith(`${href}/`)
+  if (matches(pathname, href)) return true
+  if (href === '/input-progres') return matches(pathname, '/tiang')
+  if (href === '/laporan') {
+    return ['/kurva-s', '/pekerjaan', '/aktivitas'].some((legacy) => matches(pathname, legacy))
+  }
+  return false
 }
