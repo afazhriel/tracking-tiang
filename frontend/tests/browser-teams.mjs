@@ -90,7 +90,7 @@ try {
   console.log('PASS owner UI creates team, adds PIC by exact email and assigns scoped pole')
 
   const supervisor = await session('browser-supervisor@example.test')
-  await supervisor.page.getByText('Tim CI E2E').waitFor()
+  await supervisor.page.getByRole('heading', { name: 'Tim CI E2E', exact: true }).waitFor()
   assert.equal((await supervisor.context.request.get(`/api/projects/${fixture.foreign_project_id}`)).status(), 200)
   assert.equal(await supervisor.page.getByRole('button', { name: 'Buat tim' }).count(), 1)
   await supervisor.page.getByRole('button', { name: 'Buka tim' }).click()
