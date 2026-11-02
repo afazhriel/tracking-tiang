@@ -49,6 +49,7 @@ export function UpdateProgressModal({
   open,
   onClose,
   projectId,
+  projectStartDate,
   pole,
   workItems,
   currentProgress,
@@ -109,6 +110,7 @@ export function UpdateProgressModal({
         <ProgressForm
           key={workItemId}
           projectId={projectId}
+          projectStartDate={projectStartDate}
           poleId={pole?.id}
           workItemId={workItemId}
           existing={existing}
@@ -126,6 +128,7 @@ export function UpdateProgressModal({
 
 function ProgressForm({
   projectId,
+  projectStartDate,
   poleId,
   workItemId,
   existing,
@@ -226,6 +229,26 @@ function ProgressForm({
 
     if (saving) return
 
+    const validation = {}
+    const amount = Number(percent)
+    if (String(percent).trim() === '' || !Number.isFinite(amount) || amount < 0 || amount > 100) {
+      validation.progress_percent = ['Masukkan persentase antara 0 dan 100.']
+    }
+    if (recordedAt) {
+      const date = new Date(recordedAt)
+      if (!Number.isFinite(date.getTime())) validation.recorded_at = ['Waktu realisasi tidak valid.']
+      else if (date.getTime() > Date.now()) validation.recorded_at = ['Waktu realisasi tidak boleh di masa depan.']
+      else if (projectStartDate && recordedAt.slice(0, 10) < String(projectStartDate).slice(0, 10)) {
+        validation.recorded_at = [`Realisasi tidak boleh sebelum ${String(projectStartDate).slice(0, 10)} (awal proyek). Kosongkan waktu untuk memakai saat penyimpanan.`]
+      }
+    }
+    if (startedAt && completedAt && completedAt < startedAt) validation.completed_at = ['Tanggal selesai tidak boleh mendahului tanggal mulai.']
+    if (Object.keys(validation).length) {
+      setFieldErrors(validation)
+      setFormError(null)
+      return
+    }
+
     setSaving(true)
     setFieldErrors(null)
     setFormError(null)
@@ -242,8 +265,9 @@ function ProgressForm({
     /* Tanggal kosong berarti "tidak diisi" — bukan mengirim null yang
        bisa menghapus nilai lama. Dikosongkan saja lebih aman untuk
        koreksi kesalahan input. */
-    if (startedAt) payload.started_at = startedAt
-    if (completedAt) payload.completed_at = completedAt
+    // Jangan kirim ulang tanggal historis yang tidak diubah.
+    if (startedAt && startedAt !== toDateInput(existing?.startedAt)) payload.started_at = startedAt
+    if (completedAt && completedAt !== toDateInput(existing?.completedAt)) payload.completed_at = completedAt
     if (notes.trim()) payload.notes = notes.trim()
     if (photos.length) payload.photos = photos
 
@@ -265,6 +289,8 @@ function ProgressForm({
     }
   }
 
+  const validationMessage = Object.values(fieldErrors ?? {}).flat().filter(Boolean)[0] || null
+
   const previewTone =
     numericPercent >= 100 ? 'sage' : numericPercent > 0 ? 'lagoon' : 'sand'
 
@@ -275,7 +301,7 @@ function ProgressForm({
       className="space-y-4"
       noValidate
     >
-      {formError && (
+      {(formError || validationMessage) && (
         <div
           role="alert"
           className="flex items-start gap-3 rounded-xl border border-clay-300/70 bg-clay-50 px-4 py-3"
@@ -284,11 +310,11 @@ function ProgressForm({
 
           <div>
             <p className="text-sm font-medium text-clay-800">
-              {formError.outcomeUnknown ? 'Status penyimpanan belum dapat dipastikan' : 'Progress gagal disimpan'}
+              {formError?.outcomeUnknown ? 'Status penyimpanan belum dapat dipastikan' : 'Realisasi belum tersimpan'}
             </p>
             <p className="mt-0.5 text-xs leading-5 text-clay-700">
-              {formError.message}
-              {formError.outcomeUnknown && ' Muat ulang data tiang sebelum mengirim ulang untuk menghindari catatan ganda.'}
+              {validationMessage || formError?.message}
+              {formError?.outcomeUnknown && ' Muat ulang data tiang sebelum mengirim ulang untuk menghindari catatan ganda.'}
             </p>
           </div>
         </div>
@@ -296,8 +322,9 @@ function ProgressForm({
 
       <FormField label="Waktu realisasi" htmlFor="progress-recorded-at"
         error={fieldErrors?.recorded_at?.[0]}
-        hint="Waktu lokal perangkat. Kosongkan untuk waktu saat disimpan. Harus setelah awal proyek dan catatan terakhir pekerjaan ini.">
+        hint={`Kosongkan untuk otomatis memakai waktu sekarang (disarankan). Awal proyek ${String(projectStartDate || 'belum diketahui').slice(0, 10)}.`}>
         <input id="progress-recorded-at" type="datetime-local" value={recordedAt}
+          min={projectStartDate ? String(projectStartDate).slice(0, 10) + 'T00:00' : undefined}
           onChange={(event) => { setRecordedAt(event.target.value); clearFieldError('recorded_at') }}
           className="w-full rounded-lg border border-neutral-300 p-2" />
       </FormField>
@@ -490,11 +517,12 @@ function ProgressForm({
             : 'Tidak ada perubahan dari nilai yang tersimpan.'}
         </p>
 
+        {validationMessage && <p role="alert" className="w-full text-xs font-medium text-red-700">Periksa isian: {validationMessage}</p>}
         <div className="flex items-center gap-2">
           <ActionButton onClick={onClose}>Batal</ActionButton>
 
           <SubmitButton loading={saving} loadingLabel="Menyimpan..." disabled={!dirty}>
-            Simpan Progress
+            Simpan Realisasi
           </SubmitButton>
         </div>
       </div>
