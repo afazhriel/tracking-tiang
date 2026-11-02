@@ -94,7 +94,7 @@ try {
   assert.equal((await supervisor.context.request.get(`/api/projects/${fixture.foreign_project_id}`)).status(), 200)
   assert.equal(await supervisor.page.getByRole('button', { name: 'Buat tim' }).count(), 1)
   await supervisor.page.getByRole('button', { name: 'Buka tim' }).click()
-  assert.equal(await supervisor.page.getByRole('button', { name: 'Tambah anggota' }).count(), 1)
+  await supervisor.page.getByRole('button', { name: 'Tambah anggota' }).waitFor()
   assert.equal((await supervisor.context.request.put(`/api/teams/${teamId}`, {
     headers: { 'X-Tracking-Client': 'browser', Origin: baseURL },
     data: { name: 'Tim CI E2E' },
@@ -137,7 +137,7 @@ try {
   await member.page.setViewportSize({ width: 393, height: 852 })
   await member.page.goto('/tim')
   await member.page.getByText('Tim CI E2E').waitFor()
-  assert.equal(await member.page.getByRole('button', { name: 'Buat tim' }).count(), 1)
+  assert.equal(await member.page.getByRole('button', { name: 'Buat tim' }).count(), 0, 'PIC without project ownership must not manage teams')
   assert.equal((await member.context.request.get(`/api/projects/${fixture.foreign_project_id}`)).status(), 403)
   console.log('PASS Admin access, PIC project-specific mobile view')
 } finally {
