@@ -119,13 +119,19 @@ export default function QuantityPanel({
       }
 
       await api.recordProjectQuantity(projectId, payload)
-      await reload()
 
+      // Penyimpanan sudah berhasil: jangan laporkan "gagal simpan" hanya
+      // karena pembacaan ulang riwayat terputus sesudah commit database.
       requestKey.current = null
       setQuantity('')
       setDate('')
       setNotes('')
-      setMessage('Realisasi kuantitas berhasil dicatat.')
+      setMessage('Realisasi kuantitas berhasil disimpan di server.')
+      try {
+        await reload()
+      } catch {
+        setError('Data sudah tersimpan, tetapi daftar riwayat belum berhasil diperbarui. Muat ulang halaman untuk memeriksa.')
+      }
     } catch (err) {
       setError(Object.values(err.fieldErrors ?? {}).flat()[0] || err.message || 'Gagal menyimpan realisasi.')
     } finally {
