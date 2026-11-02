@@ -168,14 +168,14 @@ class ProvinceProgressTest extends TestCase
         ]);
     }
 
-    public function test_supervisor_without_province_cannot_record_progress(): void
+    public function test_pic_without_province_cannot_record_progress(): void
     {
         $project = $this->makeProject();
         $workItem = $this->makeWorkItem($project);
         $pole = $this->makePole($project, '32');
-        $supervisor = User::factory()->supervisor()->create();
+        $pic = User::factory()->pic()->create();
 
-        $this->actingAs($supervisor, 'sanctum')
+        $this->actingAs($pic, 'sanctum')
             ->postJson("/api/projects/{$project->id}/poles/{$pole->id}/progress", [
                 'work_item_id' => $workItem->id,
                 'progress_percent' => 50,

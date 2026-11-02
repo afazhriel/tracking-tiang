@@ -286,9 +286,9 @@ function ProvinceAssignModal({ user, provinces, busy, onClose, onSave }) {
 }
 
 function ProvinceCell({ user, disabled, onManage }) {
-  if (user.role === 'admin') {
+  if (['admin', 'supervisor'].includes(user.role)) {
     return (
-      <span className="text-xs text-neutral-400">Semua provinsi (admin)</span>
+      <span className="text-xs text-neutral-400">Semua provinsi (Admin/Supervisor)</span>
     )
   }
 
@@ -883,7 +883,7 @@ function TimContent() {
   return <div className="space-y-6">
     {projectId ? <ProjectTeams key={projectId} project={project} currentUser={currentUser} />
       : <EmptyState title="Belum ada proyek yang dapat diakses" description="Buat atau pilih proyek di menu Proyek terlebih dahulu." />}
-    {currentUser.role === 'admin' && <details className="rounded-card border border-neutral-200 p-4">
+    {['admin', 'supervisor'].includes(currentUser.role) && <details className="rounded-card border border-neutral-200 p-4">
       <summary className="cursor-pointer font-semibold">Administrasi akun & undangan (Admin)</summary>
       <div className="mt-6"><AdminTimContent currentUser={currentUser} /></div>
     </details>}

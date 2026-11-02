@@ -27,7 +27,7 @@ class TeamController extends Controller
         $teams = Team::with('project:id,name,owner_user_id')->withCount('users')
             ->when(isset($values['project_id']), fn ($q) => $q->where('project_id', $values['project_id']))
             ->when(isset($values['status']), fn ($q) => $q->where('status', $values['status']))
-            ->when(! $user->isAdmin(), fn ($q) => $q->whereIn('project_id', $user->accessibleProjectIds() ?? []))
+            ->when(! $user->canAdminister(), fn ($q) => $q->whereIn('project_id', $user->accessibleProjectIds() ?? []))
             ->orderBy('name')->get();
         $teams->each(fn ($team) => $team->setAttribute('can_manage', $user->can('update', $team)));
 

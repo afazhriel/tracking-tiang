@@ -11,7 +11,7 @@ class PoleVisibility
     public static function apply($query, User $user, string $table = 'poles'): void
     {
         // Admin platform memiliki akses global.
-        if ($user->isAdmin()) {
+        if ($user->canAdminister()) {
             return;
         }
 

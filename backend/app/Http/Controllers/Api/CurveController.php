@@ -6,12 +6,13 @@ use App\Http\Controllers\Controller;
 use App\Models\Pole;
 use App\Models\PoleProgressHistory;
 use App\Models\Project;
+use App\Services\CurrentWeightCurve;
+use App\Services\PoleWorkItems;
 use App\Services\ProgressIntegrity;
 use App\Services\ProjectBaselineCurve;
 use App\Services\ProjectQuantityProgress;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Support\Facades\Schema;
 
 class CurveController extends Controller
 {
@@ -34,31 +35,16 @@ class CurveController extends Controller
      * Sumber item untuk kurva rencana.
      *
      * - Proyek : seluruh item template (`pole_id` NULL).
-     * - Tiang  : item milik tiang itu; bila tidak ada yang punya bulan
-     *            rencana, jatuh kembali ke template project.
+     * - Tiang: item yang terlihat pada tiang, termasuk template warisan.
+     *   Tiang dengan konfigurasi sendiri tidak memakai jadwal template pengganti.
      */
     private function planWorkItems(Project $project, ?Pole $pole = null)
     {
-        if ($pole !== null) {
-            $poleItems = $pole->workItems()
-                ->whereNotNull('planned_start_month')
-                ->whereNotNull('planned_end_month')
-                ->orderBy('sequence')
-                ->orderBy('id')
-                ->get();
+        $items = $pole !== null
+            ? app(PoleWorkItems::class)->visible($pole)
+            : $project->workItems()->whereNull('pole_id')->orderBy('sequence')->orderBy('id')->get();
 
-            if ($poleItems->isNotEmpty()) {
-                return $poleItems;
-            }
-        }
-
-        return $project->workItems()
-            ->when(Schema::hasColumn('work_items', 'pole_id'), fn ($query) => $query->whereNull('pole_id'))
-            ->whereNotNull('planned_start_month')
-            ->whereNotNull('planned_end_month')
-            ->orderBy('sequence')
-            ->orderBy('id')
-            ->get();
+        return $items->where('is_active', true)->values();
     }
 
     private function buildCurveResponse(Project $project, ?Pole $pole = null): JsonResponse
@@ -102,13 +88,16 @@ class CurveController extends Controller
          * ==========================================
          *
          * Panjang array mengikuti bulan rencana terjauh pada item
-         * (minimal 9 bulan), supaya item dengan planned_end_month > 9
+         * (tanpa memaksakan minimum bulan), supaya item dengan planned_end_month > 9
          * tidak memicu "Undefined array key".
          */
-        $maxMonth = 9;
+        $invalidSchedule = $workItems->contains(fn ($item) => ! $item->planned_start_month
+            || ! $item->planned_end_month || $item->planned_start_month < 1
+            || $item->planned_end_month < $item->planned_start_month || $item->planned_end_month > 60);
+        $maxMonth = 0;
 
         foreach ($workItems as $item) {
-            if (! $item->planned_start_month || ! $item->planned_end_month) {
+            if (! $item->planned_start_month || ! $item->planned_end_month || $item->planned_end_month > 60) {
                 continue;
             }
 
@@ -119,13 +108,13 @@ class CurveController extends Controller
             }
         }
 
-        $monthly = array_fill(1, $maxMonth, 0);
+        $monthly = $maxMonth > 0 ? array_fill(1, $maxMonth, 0) : [];
 
         foreach ($workItems as $item) {
             $start = $item->planned_start_month;
             $end = $item->planned_end_month;
 
-            if (! $start || ! $end) {
+            if (! $start || ! $end || $start < 1 || $end < $start || $end > 60) {
                 continue;
             }
 
@@ -163,11 +152,15 @@ class CurveController extends Controller
             $cumulative += $weight;
 
             $date = $projectStart->copy()
-                ->addMonths($month)
+                ->addMonthsNoOverflow($month)
                 ->subDay();
 
             if ($date->gt(Carbon::parse($project->end_date))) {
                 $date = Carbon::parse($project->end_date);
+            }
+
+            if ($date->format('Y-m-d') <= $planned[array_key_last($planned)]['date']) {
+                continue;
             }
 
             $planned[] = [
@@ -176,6 +169,23 @@ class CurveController extends Controller
                 'monthly_percent' => round($weight, 2),
                 'cumulative_percent' => round($cumulative, 2),
             ];
+        }
+
+        $planIssues = [];
+        if ($invalidSchedule) {
+            $planIssues[] = 'incomplete_or_invalid_work_schedule';
+            $planned = [];
+        }
+        if (! $project->start_date || ! $project->end_date || $project->end_date < $project->start_date) {
+            $planIssues[] = 'missing_or_invalid_project_dates';
+            $planned = [];
+        } elseif ($maxMonth && $projectStart->copy()->addMonthsNoOverflow($maxMonth)->subDay()->gt(Carbon::parse($project->end_date))) {
+            // Do not silently compress a multi-month schedule into a shorter project.
+            $planIssues[] = 'work_schedule_exceeds_project_end';
+            $planned = [];
+        }
+        if ($workItems->isEmpty()) {
+            $planned = [];
         }
 
         // Rencana proyek hanya berasal dari baseline yang disahkan.
@@ -228,14 +238,22 @@ class CurveController extends Controller
                 $currentState[$history->pole_id][$history->workItem?->source_item_id ?? $history->work_item_id] = [
                     'progress_percent' => (float) $history->progress_percent,
                     'work_item_id' => $history->work_item_id,
-                    'weight_percent' => (float) ($history->weight_percent_snapshot ?? $history->workItem->weight_percent ?? 0),
+                    'weight_percent' => $history->weight_percent_snapshot,
+                    'is_active' => $history->is_active_snapshot,
                 ];
             }
 
             $totalPoleProgress = 0;
+            $unknown = false;
 
             foreach ($currentState as $poleProgress) {
                 foreach ($poleProgress as $state) {
+                    if ($state['weight_percent'] === null || $state['is_active'] === null) {
+                        $unknown = true;
+                    }
+                    if ($state['is_active'] === false) {
+                        continue;
+                    }
                     $totalPoleProgress += (
                         (float) $state['weight_percent']
                         * (float) $state['progress_percent']
@@ -245,9 +263,9 @@ class CurveController extends Controller
 
             $actual[] = [
                 'date' => $date,
-                'progress_percent' => $scale > 0
+                'progress_percent' => $unknown ? null : ($scale > 0
                     ? round($totalPoleProgress / $scale, 4)
-                    : 0,
+                    : 0),
             ];
         }
 
@@ -294,6 +312,28 @@ class CurveController extends Controller
                 : 0;
         }
 
+        $weights = [];
+        $scopeWeights = [];
+        $scopePoles = $pole !== null ? collect([$pole]) : $project->poles;
+        foreach ($scopePoles as $scopePole) {
+            $scopePole->loadMissing('workProgress.workItem');
+            $progressItems = $scopePole->workProgress->keyBy(fn ($row) => $row->workItem?->source_item_id ?? $row->work_item_id);
+            $canonical = app(PoleWorkItems::class)->visible($scopePole)
+                ->groupBy(fn ($item) => $item->source_item_id ?? $item->id)
+                ->map(function ($group, $key) use ($scopePole, $progressItems) {
+                    $copies = $group->where('pole_id', $scopePole->id);
+                    abort_if($copies->count() > 1, 409, 'Salinan pekerjaan ganda memerlukan rekonsiliasi.');
+
+                    return $progressItems->get($key)?->workItem ?? $copies->first() ?? $group->first();
+                })->filter(fn ($item) => $item->is_active);
+            $scopeWeights[] = ['pole_id' => $scopePole->id, 'total_weight' => round((float) $canonical->sum('weight_percent'), 2)];
+            foreach ($canonical as $key => $item) {
+                $weights[$scopePole->id.':'.$key] = (float) $item->weight_percent;
+            }
+        }
+        $restated = app(CurrentWeightCurve::class)->build($histories, $weights, $scale);
+        $last = count($restated) ? $restated[array_key_last($restated)]['progress_percent'] : 0;
+
         $response = [
             'project' => [
                 'id' => $project->id,
@@ -306,7 +346,17 @@ class CurveController extends Controller
             ],
 
             'planned_curve' => $planned,
-            'actual_curve' => $actual,
+            'actual_curve' => $restated,
+            'calculation_basis' => 'current_active_weights',
+            'legacy_snapshot_curve' => $actual,
+            'legacy_snapshot_curve_status' => 'unversioned_mixed_weights_not_comparable',
+            'data_quality' => [
+                'scope_weights' => $scopeWeights,
+                'missing_weight_snapshots' => $histories->whereNull('weight_percent_snapshot')->count(),
+                'records_before_project_start' => $project->start_date ? $histories->filter(fn ($row) => $row->recorded_at->lt(Carbon::parse($project->start_date)))->count() : 0,
+                'current_matches_latest_history' => abs($last - $currentPercent) < 0.0001,
+                'plan_issues' => $pole !== null ? $planIssues : [],
+            ],
             'actual_current_percent' => $currentPercent,
         ];
 

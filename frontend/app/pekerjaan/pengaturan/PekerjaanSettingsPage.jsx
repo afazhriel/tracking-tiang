@@ -439,7 +439,7 @@ function PekerjaanSettingsContent() {
   const { projectId, project, reload: reloadProject } = useProject()
 
   const currentUser = useCurrentUser()
-  const isAdmin = currentUser?.role === 'admin'
+  const isAdmin = ['admin', 'supervisor'].includes(currentUser?.role)
 
   const [createOpen, setCreateOpen] = useState(false)
   const [editing, setEditing] = useState(null)

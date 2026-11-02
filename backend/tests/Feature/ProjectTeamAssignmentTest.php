@@ -25,7 +25,7 @@ class ProjectTeamAssignmentTest extends TestCase
         $this->postJson("/api/users/{$pic->id}/poles", ['pole_id' => $poleId, 'team_id' => $teamId])->assertCreated()->assertJsonPath('pole.pole_code', 'FLOW-1');
         $this->getJson("/api/users/{$pic->id}/poles")->assertOk()->assertJsonPath('0.pole.pole_code', 'FLOW-1');
         $this->actingAs($pic, 'sanctum')->getJson("/api/projects/{$projectId}/poles/{$poleId}")->assertOk();
-        $this->postJson('/api/projects', ['name' => 'Own project', 'code' => 'OWN', 'target_quantity' => '100', 'unit_code' => 'unit'])->assertCreated();
+        $this->postJson('/api/projects', ['name' => 'Own project', 'code' => 'OWN', 'target_quantity' => '100', 'unit_code' => 'unit'])->assertForbidden();
         $this->postJson("/api/teams/{$teamId}/members", ['user_id' => $admin->id])->assertForbidden();
         $this->actingAs($admin, 'sanctum')->deleteJson("/api/users/{$pic->id}/poles/{$poleId}")->assertOk();
         $this->assertDatabaseHas('pole_assignments', ['pole_id' => $poleId, 'user_id' => $pic->id, 'status' => 'revoked']);

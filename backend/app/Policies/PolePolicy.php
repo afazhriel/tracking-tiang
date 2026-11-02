@@ -39,14 +39,13 @@ class PolePolicy
     /**
      * Boleh melihat satu tiang?
      *
-     * Admin: project mana pun.
-     * Supervisor: project yang punya akses.
+     * Admin/Supervisor aktif: project mana pun.
      * PIC: provinsi yang ditugaskan, atau tiang yang ditugaskan
      *      langsung/lewat timnya. Kalau tidak, ini jadi celah IDOR.
      */
     public function view(User $user, Pole $pole): bool
     {
-        if ($user->isAdmin()) {
+        if ($user->canAdminister()) {
             return true;
         }
 
@@ -63,14 +62,11 @@ class PolePolicy
     }
 
     /**
-     * Boleh mengubah data master tiang? Hanya admin.
-     *
-     * PIC dan supervisor hanya boleh menulis progress, bukan mengubah
-     * master data.
+     * Data master tiang dikelola Admin dan Supervisor aktif.
      */
     public function update(User $user, Pole $pole): bool
     {
-        return $user->isAdmin();
+        return $user->canAdminister();
     }
 
     /**
@@ -82,7 +78,7 @@ class PolePolicy
      */
     public function updateProgress(User $user, Pole $pole): bool
     {
-        if ($user->isAdmin()) {
+        if ($user->canAdminister()) {
             return true;
         }
 

@@ -20,23 +20,22 @@ class ProjectPolicy
 
     public function create(User $user): bool
     {
-        return $user->isActive();
+        return $user->canAdminister();
     }
 
     public function update(User $user, Project $project): bool
     {
         return $user->isActive()
             && (
-                $user->isAdmin()
+                $user->canAdminister()
                 || (int) $project->owner_user_id === (int) $user->id
                    && $project->owner_user_id !== null
             );
     }
 
-    // Penghapusan proyek tetap khusus Admin sampai tersedia
-    // mekanisme arsip aman yang mempertahankan riwayat.
+    // Penghapusan hanya untuk pengelola aktif; controller tetap menjaga riwayat.
     public function delete(User $user, Project $project): bool
     {
-        return $user->isActive() && $user->isAdmin();
+        return $user->isActive() && $user->canAdminister();
     }
 }

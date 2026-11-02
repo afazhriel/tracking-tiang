@@ -360,7 +360,7 @@ function UserMenu({ compact = false }) {
 }
 
 function ShellContent({ children, title }) {
-  const { error, loading, reload } = useProject()
+  const { error, loading, reload, projects, projectId, selectProject } = useProject()
 
   return (
     <div className="flex min-h-screen flex-col bg-canvas text-neutral-900 md:flex-row">
@@ -389,6 +389,18 @@ function ShellContent({ children, title }) {
             </div>
           )}
 
+          {projects.length > 0 && (
+            <label className="mx-4 mt-4 block text-sm sm:mx-6">
+              <span className="font-medium">Proyek aktif</span>
+              <select aria-label="Proyek aktif" value={projectId ?? ''}
+                onChange={(event) => selectProject(event.target.value)}
+                className="ml-3 max-w-full rounded-lg border border-neutral-300 bg-white p-2">
+                {projects.map((item) => <option key={item.id} value={item.id}>
+                  {item.code ? `${item.code} · ${item.name}` : item.name}
+                </option>)}
+              </select>
+            </label>
+          )}
           <main className="flex-1 px-4 py-4 sm:px-6 sm:py-6">
             <div className="mx-auto w-full max-w-[1500px]">{children}</div>
           </main>

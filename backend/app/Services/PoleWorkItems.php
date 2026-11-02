@@ -51,9 +51,6 @@ class PoleWorkItems
             ]);
             $legacyProgress = DB::table('pole_work_progress')->where('pole_id', $pole->id)->where('work_item_id', $template->id)->exists();
             abort_if($legacyProgress && DB::table('pole_work_progress')->where('pole_id', $pole->id)->where('work_item_id', $copy->id)->exists(), 409, 'Progres template dan salinan sama-sama ada. Data dipertahankan untuk rekonsiliasi.');
-            DB::table('pole_progress_histories')->where('pole_id', $pole->id)->where('work_item_id', $template->id)->whereNull('weight_percent_snapshot')->update([
-                'weight_percent_snapshot' => $template->weight_percent, 'is_active_snapshot' => $template->is_active,
-            ]);
             foreach (['pole_work_progress', 'pole_progress_histories', 'progress_photos'] as $table) {
                 DB::table($table)->where('pole_id', $pole->id)->where('work_item_id', $template->id)->update(['work_item_id' => $copy->id]);
             }
@@ -76,13 +73,8 @@ class PoleWorkItems
 
     public function preserveHistoryWeights(Collection $items): void
     {
-        foreach ($items as $item) {
-            DB::table('pole_progress_histories')->where('work_item_id', $item->id)
-                ->whereNull('weight_percent_snapshot')->update([
-                    'weight_percent_snapshot' => $item->weight_percent,
-                    'is_active_snapshot' => $item->is_active,
-                ]);
-        }
+        // Unknown historical weights must remain unknown. Current weights cannot
+        // establish what was valid when an older realization was recorded.
     }
 
     public function normalize(Collection $items): void

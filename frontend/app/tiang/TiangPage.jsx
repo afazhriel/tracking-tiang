@@ -232,7 +232,7 @@ function TiangContent() {
   const { project, projectId, error: projectError } = useProject()
 
   const currentUser = useCurrentUser()
-  const isAdmin = currentUser?.role === 'admin'
+  const isAdmin = ['admin', 'supervisor'].includes(currentUser?.role)
 
   /* Admin bebas; supervisor/PIC hanya boleh menambah tiang di
      provinsi yang ditugaskan. `allowedProvinces === null` = tanpa

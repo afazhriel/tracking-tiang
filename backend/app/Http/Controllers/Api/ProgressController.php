@@ -14,11 +14,13 @@ use App\Services\NotificationService;
 use App\Services\PendingPhotos;
 use App\Services\PoleWorkItems;
 use App\Services\ProgressIntegrity;
+use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use Throwable;
 
 class ProgressController extends Controller
@@ -63,6 +65,7 @@ class ProgressController extends Controller
             'started_at' => ['nullable', 'date'],
             'completed_at' => ['nullable', 'date'],
             'notes' => ['nullable', 'string'],
+            'recorded_at' => ['nullable', 'date', 'before_or_equal:now'],
             'photos' => ['nullable', 'array', 'max:5'],
             'photos.*' => ['file', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
         ]);
@@ -90,6 +93,19 @@ class ProgressController extends Controller
                     }
                 }
                 abort_unless($workItem->is_active, 422, 'Item pekerjaan nonaktif tidak boleh menerima progres.');
+                $recordedAt = isset($validated['recorded_at']) ? Carbon::parse($validated['recorded_at'])->utc() : now();
+                $latest = PoleProgressHistory::where('pole_id', $pole->id)->where('work_item_id', $workItem->id)
+                    ->orderByDesc('recorded_at')->orderByDesc('id')->first();
+                if (($project->start_date && $recordedAt->lt(Carbon::parse($project->start_date)))
+                    || ($latest && $recordedAt->lt($latest->recorded_at))) {
+                    throw ValidationException::withMessages(['recorded_at' => 'Tanggal realisasi tidak boleh mendahului awal proyek atau catatan terakhir pekerjaan ini.']);
+                }
+                $previous = PoleWorkProgress::where('pole_id', $pole->id)->where('work_item_id', $workItem->id)->first();
+                $dates = array_replace($previous?->only(['started_at', 'completed_at']) ?? [], Arr::only($validated, ['started_at', 'completed_at']));
+                if (! empty($dates['started_at']) && ! empty($dates['completed_at'])
+                    && Carbon::parse($dates['completed_at'])->lt(Carbon::parse($dates['started_at']))) {
+                    throw ValidationException::withMessages(['completed_at' => 'Tanggal selesai tidak boleh mendahului tanggal mulai.']);
+                }
                 $progress = PoleWorkProgress::updateOrCreate(
                     [
                         'pole_id' => $pole->id,
@@ -105,7 +121,7 @@ class ProgressController extends Controller
                     'pole_id' => $pole->id,
                     'work_item_id' => $workItem->id,
                     'progress_percent' => $validated['progress_percent'],
-                    'recorded_at' => now(),
+                    'recorded_at' => $recordedAt,
                     'weight_percent_snapshot' => $workItem->weight_percent,
                     'is_active_snapshot' => $workItem->is_active,
                     'recorded_by' => $userId,

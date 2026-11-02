@@ -79,6 +79,11 @@ class User extends Authenticatable
         return $this->role === self::ROLE_ADMIN;
     }
 
+    public function canAdminister(): bool
+    {
+        return $this->isActive() && ($this->isAdmin() || $this->isSupervisor());
+    }
+
     public function isSupervisor(): bool
     {
         return $this->role === self::ROLE_SUPERVISOR;
@@ -193,13 +198,13 @@ class User extends Authenticatable
     /**
      * ID project yang boleh diakses user ini.
      *
-     * Admin tidak dibatasi. Pengguna lain hanya boleh mengakses
+     * Admin dan Supervisor aktif tidak dibatasi. Pengguna lain hanya boleh mengakses
      * proyek miliknya atau proyek tempat ia menjadi anggota.
      */
     public function accessibleProjectIds(): ?array
     {
-        // Admin platform tetap memiliki akses administratif global.
-        if ($this->isAdmin()) {
+        // Admin dan Supervisor aktif memiliki akses administratif global.
+        if ($this->canAdminister()) {
             return null;
         }
 
@@ -222,6 +227,10 @@ class User extends Authenticatable
 
     public function canAccessProject(int $projectId): bool
     {
+        if (! $this->isActive()) {
+            return false;
+        }
+
         $ids = $this->accessibleProjectIds();
 
         return $ids === null || in_array($projectId, $ids, true);
@@ -265,12 +274,12 @@ class User extends Authenticatable
     /**
      * ID provinsi yang boleh dikelola user ini.
      *
-     * Admin -> `null` (tidak dibatasi; seluruh provinsi).
-     * Selain admin -> daftar province_id dari `province_user`.
+     * Admin/Supervisor aktif -> `null` (tidak dibatasi; seluruh provinsi).
+     * Selain pengelola -> daftar province_id dari `province_user`.
      */
     public function managedProvinceIds(): ?array
     {
-        if ($this->isAdmin()) {
+        if ($this->canAdminister()) {
             return null;
         }
 
@@ -283,12 +292,12 @@ class User extends Authenticatable
     /**
      * Boleh menambah tiang / mencatat progress di provinsi ini?
      *
-     * Admin selalu boleh. Selain admin, provinsi wajib diisi dan
+     * Admin/Supervisor aktif boleh. Selain pengelola, provinsi wajib diisi dan
      * harus termasuk penugasan mereka.
      */
     public function canManageProvince(?string $provinceId): bool
     {
-        if ($this->isAdmin()) {
+        if ($this->canAdminister()) {
             return true;
         }
 

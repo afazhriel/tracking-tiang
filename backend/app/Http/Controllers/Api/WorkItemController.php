@@ -8,6 +8,7 @@ use App\Models\Project;
 use App\Models\WorkItem;
 use App\Services\PoleWorkItems;
 use App\Services\ProgressIntegrity;
+use App\Services\ProjectQuantityProgress;
 use App\Services\WorkItemInput;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -29,6 +30,20 @@ class WorkItemController extends Controller
             $pole = $project->poles()->findOrFail($values['pole_id']);
 
             return app(PoleWorkItemController::class)->index($project, $pole);
+        }
+
+        if ($project->progress_source === 'quantity_entries') {
+            $state = app(ProjectQuantityProgress::class)->state($project);
+
+            return response()->json(['data' => $this->templates($project), 'meta' => [
+                'progress_source' => 'quantity_entries',
+                'actual_current_percent' => $state['actual_current_percent'],
+                'actual_current_quantity' => $state['actual_current_quantity'],
+                'target_quantity' => $project->target_quantity,
+                'unit_code' => $project->unit_code,
+                'total_weight' => null,
+                'is_balanced' => null,
+            ]]);
         }
 
         app(ProgressIntegrity::class)->assertUnambiguous($project);

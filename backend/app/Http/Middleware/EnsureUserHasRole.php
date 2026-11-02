@@ -31,7 +31,8 @@ class EnsureUserHasRole
 
         $allowed = array_intersect($roles, User::roles());
 
-        if (! in_array($user->role, $allowed, true)) {
+        if (! $user->isActive() || (! in_array($user->role, $allowed, true)
+            && ! ($user->canAdminister() && in_array(User::ROLE_ADMIN, $allowed, true)))) {
             return response()->json([
                 'message' => 'Forbidden.',
             ], 403);
