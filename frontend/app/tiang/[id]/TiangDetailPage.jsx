@@ -831,6 +831,7 @@ function TiangDetailContent() {
               open={progressOpen}
               onClose={() => setProgressOpen(false)}
               projectId={projectId}
+              projectStartDate={project?.startDate}
               pole={pole}
               workItems={poleWorkItems ?? []}
               currentProgress={workProgress}
