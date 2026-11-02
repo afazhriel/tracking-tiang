@@ -15,13 +15,13 @@ function InputProgresContent() {
   const { project, projectId, projects, selectProject, loading: loadingProject } = useProject()
   const currentUser = useCurrentUser()
   const loadDetail = useCallback(
-    () => (projectId ? api.getProject(projectId) : Promise.resolve(null)),
+    () => (projectId ? api.getProject(projectId).then(response => ({ projectId: String(projectId), response })) : Promise.resolve(null)),
     [projectId]
   )
   const { data, error, loading, reload } = useResource(loadDetail, [projectId], {
     enabled: Boolean(projectId),
   })
-  const detail = useMemo(() => (data ? unwrapItem(data) : null), [data])
+  const detail = useMemo(() => (data?.projectId === String(projectId) ? unwrapItem(data.response) : null), [data, projectId])
   const role = String(currentUser?.role ?? '').toLowerCase()
   const ownerId = detail?.owner_user_id
   const canWrite = Boolean(detail) &&
