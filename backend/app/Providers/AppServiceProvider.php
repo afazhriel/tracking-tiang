@@ -46,15 +46,18 @@ class AppServiceProvider extends ServiceProvider
         });
 
         /*
-         * Limiter ketat untuk login/register. Dibatasi ganda: per IP
-         * (mencegah banyak akun dari satu sumber) dan per email
-         * (mencegah brute-force satu akun dari banyak IP).
+         * Limiter untuk login/register. Dibatasi ganda: per IP dan per
+         * email (mencegah brute-force satu akun dari banyak IP). Batas
+         * per IP dilonggarkan (20/menit) atas permintaan user 25 Nov
+         * 2026: satu kantor bisa berbagi satu IP publik, jadi batas
+         * ketat membuat kegagalan login beberapa orang saling
+         * mengunci. Perlindungan utama tetap di batas per email.
          */
         RateLimiter::for('login', function (Request $request) {
             $email = strtolower((string) $request->input('email'));
 
             return [
-                Limit::perMinute(5)->by('login-ip:'.$request->ip()),
+                Limit::perMinute(20)->by('login-ip:'.$request->ip()),
                 Limit::perMinute(10)->by('login-email:'.$email),
             ];
         });
