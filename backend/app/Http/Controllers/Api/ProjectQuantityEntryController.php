@@ -21,7 +21,7 @@ class ProjectQuantityEntryController extends Controller
         abort_unless(
             $project->progress_source === 'quantity_entries',
             422,
-            'Proyek ini tidak menggunakan realisasi kuantitas.'
+            'Proyek ini tidak mencatat progres per jumlah.'
         );
 
         return response()->json([
@@ -90,7 +90,7 @@ class ProjectQuantityEntryController extends Controller
             abort_unless(
                 $locked->progress_source === 'quantity_entries',
                 422,
-                'Proyek ini tidak menggunakan realisasi kuantitas.'
+                'Proyek ini tidak mencatat progres per jumlah.'
             );
 
             $previous = DB::table('project_quantity_entries')
@@ -116,21 +116,30 @@ class ProjectQuantityEntryController extends Controller
                 ]);
             }
 
-            $recordedAt = Carbon::parse(
-                $data['recorded_at'] ?? now()
-            );
+            // Tanggal dinilai menurut kalender Asia/Jakarta (zona waktu
+            // pengguna), bukan UTC: tanggal hari ini di WIB sempat ditolak
+            // sebagai "masa depan" sebelum pukul 07:00 WIB, dan tanggal
+            // kosong yang disimpan dini hari dicatat sebagai kemarin.
+            $timezone = 'Asia/Jakarta';
+            $recordedAt = isset($data['recorded_at'])
+                ? Carbon::parse($data['recorded_at'], $timezone)
+                : now($timezone);
+            $recordedDate = $recordedAt->copy()
+                ->setTimezone($timezone)
+                ->toDateString();
+            $today = now($timezone)->toDateString();
 
             abort_if(
-                $recordedAt->isFuture(),
+                $recordedDate > $today,
                 422,
-                'Tanggal realisasi tidak boleh di masa depan.'
+                'Tanggal progres tidak boleh di masa depan.'
             );
 
             abort_if(
                 $locked->start_date &&
-                $recordedAt->lt($locked->start_date->copy()->startOfDay()),
+                $recordedDate < $locked->start_date->toDateString(),
                 422,
-                'Realisasi tidak boleh lebih awal dari tanggal mulai proyek.'
+                'Progres tidak boleh dicatat sebelum tanggal mulai proyek.'
             );
 
             $id = DB::table('project_quantity_entries')
@@ -157,7 +166,7 @@ class ProjectQuantityEntryController extends Controller
             }
 
             return response()->json([
-                'message' => 'Realisasi kuantitas berhasil dicatat.',
+                'message' => 'Progres berhasil dicatat.',
                 'data' => DB::table('project_quantity_entries')
                     ->where('id', $id)
                     ->first(),

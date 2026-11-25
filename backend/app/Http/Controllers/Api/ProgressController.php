@@ -68,6 +68,8 @@ class ProgressController extends Controller
             'recorded_at' => ['nullable', 'date', 'before_or_equal:now'],
             'photos' => ['nullable', 'array', 'max:5'],
             'photos.*' => ['file', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
+        ], [
+            'recorded_at.before_or_equal' => 'Tanggal progres tidak boleh di masa depan.',
         ]);
 
         $userId = $request->user()?->id;
@@ -96,9 +98,14 @@ class ProgressController extends Controller
                 $recordedAt = isset($validated['recorded_at']) ? Carbon::parse($validated['recorded_at'])->utc() : now();
                 $latest = PoleProgressHistory::where('pole_id', $pole->id)->where('work_item_id', $workItem->id)
                     ->orderByDesc('recorded_at')->orderByDesc('id')->first();
-                if (($project->start_date && $recordedAt->lt(Carbon::parse($project->start_date)))
+                // Awal proyek dibandingkan menurut tanggal kalender
+                // Asia/Jakarta, bukan jam UTC: pencatatan di pagi hari WIB
+                // sempat ditolak karena jam UTC masih kemarin.
+                $recordedDate = $recordedAt->copy()->setTimezone('Asia/Jakarta')->toDateString();
+                $startDate = $project->start_date ? Carbon::parse($project->start_date)->toDateString() : null;
+                if (($startDate && $recordedDate < $startDate)
                     || ($latest && $recordedAt->lt($latest->recorded_at))) {
-                    throw ValidationException::withMessages(['recorded_at' => 'Tanggal realisasi tidak boleh mendahului awal proyek atau catatan terakhir pekerjaan ini.']);
+                    throw ValidationException::withMessages(['recorded_at' => 'Tanggal progres tidak boleh mendahului awal proyek atau catatan terakhir pekerjaan ini.']);
                 }
                 $previous = PoleWorkProgress::where('pole_id', $pole->id)->where('work_item_id', $workItem->id)->first();
                 $dates = array_replace($previous?->only(['started_at', 'completed_at']) ?? [], Arr::only($validated, ['started_at', 'completed_at']));

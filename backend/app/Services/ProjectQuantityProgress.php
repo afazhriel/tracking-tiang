@@ -52,7 +52,7 @@ class ProjectQuantityProgress
 
             if ($balance < 0 || $balance > $target) {
                 throw new \DomainException(
-                    'Realisasi historis tidak boleh negatif atau melebihi target.'
+                    'Progres historis tidak boleh negatif atau melebihi target.'
                 );
             }
 

@@ -93,7 +93,7 @@ PROMPT;
                 ->sum('quantity_delta');
             $target = (float) ($project->target_quantity ?? 0);
             $overall = $target > 0 ? round($realized / $target * 100, 1) : 0.0;
-            $progressLine = 'Progres keseluruhan: '.$overall.'% (realisasi '.$realized.' dari target '.$target.' '.$project->unit_code.')';
+            $progressLine = 'Progres keseluruhan: '.$overall.'% (tercatat '.$realized.' dari target '.$target.' '.$project->unit_code.')';
         } else {
             $overall = $progressValues->isEmpty() ? 0.0 : round($progressValues->avg(), 1);
             $progressLine = 'Progres keseluruhan: '.$overall.'% (rata-rata progres '.$total.' titik lokasi)';
