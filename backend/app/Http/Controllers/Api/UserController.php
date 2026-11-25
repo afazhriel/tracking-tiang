@@ -115,13 +115,17 @@ class UserController extends Controller
             'status' => ['required', Rule::in(User::statuses())],
         ]);
 
+        $previousStatus = $user->status;
+
         $user = $this->persistAccountChange($user, $validated);
 
         return response()->json([
             'message' => match ($validated['status']) {
                 User::STATUS_SUSPENDED => 'Akun dinonaktifkan.',
                 User::STATUS_PENDING => 'Akun menunggu persetujuan.',
-                default => 'Akun diaktifkan kembali.',
+                default => $previousStatus === User::STATUS_PENDING
+                    ? 'Akun diaktifkan.'
+                    : 'Akun diaktifkan kembali.',
             },
             'data' => $user->fresh()->toAuthPayload(),
         ]);

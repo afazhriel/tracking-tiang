@@ -14,6 +14,7 @@ use App\Http\Controllers\Api\ProjectBaselineController;
 use App\Http\Controllers\Api\ProjectController;
 use App\Http\Controllers\Api\ProjectMemberController;
 use App\Http\Controllers\Api\ProjectQuantityEntryController;
+use App\Http\Controllers\Api\PublicShowcaseController;
 use App\Http\Controllers\Api\RegionController;
 use App\Http\Controllers\Api\TeamAssignmentController;
 use App\Http\Controllers\Api\TeamController;
@@ -64,6 +65,12 @@ Route::get('/regions/provinces', [RegionController::class, 'provinces']);
 Route::get('/regions/provinces/{province}/regencies', [RegionController::class, 'regencies']);
 Route::get('/regions/regencies/{regency}/districts', [RegionController::class, 'districts']);
 Route::get('/regions/districts/{district}/villages', [RegionController::class, 'villages']);
+
+/*
+ * Etalase publik landing page: proyek aktif + titik tiang berkoordinat.
+ * Sengaja dibatasi pada data tampilan publik saja (lihat controller).
+ */
+Route::get('/public/showcase', [PublicShowcaseController::class, 'show']);
 
 /*
 |--------------------------------------------------------------------------
