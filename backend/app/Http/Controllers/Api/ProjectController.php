@@ -7,6 +7,7 @@ use App\Models\Project;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 
 class ProjectController extends Controller
 {
@@ -77,6 +78,68 @@ class ProjectController extends Controller
             'message' => 'Project berhasil dibuat.',
             'data' => $project,
         ], 201);
+    }
+
+    public function update(Request $request, Project $project): JsonResponse
+    {
+        $this->authorize('update', $project);
+
+        $validated = $request->validate([
+            'name' => ['sometimes', 'string', 'max:255'],
+            'code' => [
+                'sometimes',
+                'string',
+                'max:255',
+                Rule::unique('projects', 'code')->ignore($project->id),
+            ],
+            'start_date' => ['sometimes', 'nullable', 'date'],
+            'end_date' => ['sometimes', 'nullable', 'date'],
+            'target_quantity' => [
+                'sometimes',
+                'regex:/^\d{1,10}(\.\d{1,4})?$/D',
+                'gt:0',
+            ],
+            'unit_code' => [
+                'sometimes',
+                'string',
+                'regex:/^[a-z][a-z0-9_]{0,31}$/D',
+            ],
+            'status' => ['sometimes', 'string', 'max:50'],
+            'progress_source' => [
+                'sometimes',
+                'string',
+                'in:pole_weighted,quantity_entries',
+            ],
+        ]);
+
+        $start = $validated['start_date'] ?? $project->start_date;
+        $end = $validated['end_date'] ?? $project->end_date;
+        if ($start && $end && $end < $start) {
+            return response()->json([
+                'message' => 'Tanggal selesai tidak boleh sebelum tanggal mulai.',
+            ], 422);
+        }
+
+        if (array_key_exists('progress_source', $validated)
+            && $validated['progress_source'] !== $project->progress_source) {
+            $hasData = $project->poles()->exists()
+                || DB::table('project_quantity_entries')
+                    ->where('project_id', $project->id)
+                    ->exists();
+
+            if ($hasData) {
+                return response()->json([
+                    'message' => 'Mode pencatatan tidak dapat diubah karena proyek sudah memiliki data titik lokasi atau catatan kuantitas.',
+                ], 422);
+            }
+        }
+
+        $project->fill($validated)->save();
+
+        return response()->json([
+            'message' => 'Proyek berhasil diperbarui.',
+            'data' => $project,
+        ]);
     }
 
     public function show(Project $project): JsonResponse

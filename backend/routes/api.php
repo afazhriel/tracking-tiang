@@ -104,6 +104,8 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
     Route::get('/projects', [ProjectController::class, 'index']);
     Route::post('/projects', [ProjectController::class, 'store']);
     Route::get('/projects/{project}', [ProjectController::class, 'show']);
+    Route::patch('/projects/{project}', [ProjectController::class, 'update']);
+    Route::put('/projects/{project}', [ProjectController::class, 'update']);
     Route::get('/projects/{project}/members', [ProjectMemberController::class, 'index']);
     Route::post('/projects/{project}/members', [ProjectMemberController::class, 'store']);
     Route::delete('/projects/{project}/members/{user}', [ProjectMemberController::class, 'destroy']);
