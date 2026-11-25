@@ -67,8 +67,37 @@ PROMPT;
             ->groupBy('status')
             ->pluck('total', 'status');
 
-        $done = (int) ($poles['selesai'] ?? 0);
         $total = (int) $project->poles_count;
+
+        /* Progres nyata per titik: jumlah berbobot dari pole_work_progress
+           (pola yang sama dipakai PoleController). Status tiang saja tidak
+           cukup — tiang berstatus "proses" bisa sudah 100%. */
+        $perPole = \Illuminate\Support\Facades\DB::table('poles')
+            ->leftJoin('pole_work_progress as pwp', 'pwp.pole_id', '=', 'poles.id')
+            ->leftJoin('work_items as wi', 'wi.id', '=', 'pwp.work_item_id')
+            ->where('poles.project_id', $project->id)
+            ->groupBy('poles.id', 'poles.pole_code')
+            ->select(
+                'poles.pole_code',
+                \Illuminate\Support\Facades\DB::raw('COALESCE(SUM(CASE WHEN wi.is_active THEN pwp.progress_percent * wi.weight_percent / 100 ELSE 0 END), 0) as pole_progress')
+            )
+            ->get();
+
+        $progressValues = $perPole->map(fn ($row) => (float) $row->pole_progress);
+        $finished = $perPole->filter(fn ($row) => (float) $row->pole_progress >= 100)->map(fn ($row) => $row->pole_code)->values();
+        $notStarted = $perPole->filter(fn ($row) => (float) $row->pole_progress <= 0)->map(fn ($row) => $row->pole_code)->values();
+
+        if (($project->progress_source ?? '') === 'quantity_entries') {
+            $realized = (float) \Illuminate\Support\Facades\DB::table('project_quantity_entries')
+                ->where('project_id', $project->id)
+                ->sum('quantity_delta');
+            $target = (float) ($project->target_quantity ?? 0);
+            $overall = $target > 0 ? round($realized / $target * 100, 1) : 0.0;
+            $progressLine = 'Progres keseluruhan: '.$overall.'% (realisasi '.$realized.' dari target '.$target.' '.$project->unit_code.')';
+        } else {
+            $overall = $progressValues->isEmpty() ? 0.0 : round($progressValues->avg(), 1);
+            $progressLine = 'Progres keseluruhan: '.$overall.'% (rata-rata progres '.$total.' titik lokasi)';
+        }
 
         $lines = [
             'Proyek: '.$project->name.' ('.$project->code.')',
@@ -76,7 +105,10 @@ PROMPT;
             'Periode: '.($project->start_date ?? '—').' s.d. '.($project->end_date ?? '—'),
             'Target: '.($project->target_quantity ?? '—').' '.($project->unit_code ?? ''),
             'Mode pencatatan: '.($project->progress_source ?? '—'),
-            'Titik lokasi tercatat: '.$total.' (selesai 100%: '.$done.')',
+            'Titik lokasi tercatat: '.$total,
+            $progressLine,
+            'Titik selesai 100%: '.$finished->count().($finished->isNotEmpty() ? ' ('.implode(', ', $finished->take(10)->all()).')' : ''),
+            'Titik belum mulai (0%): '.$notStarted->count().($notStarted->isNotEmpty() ? ' ('.implode(', ', $notStarted->take(10)->all()).')' : ''),
         ];
 
         foreach ($poles as $status => $count) {
