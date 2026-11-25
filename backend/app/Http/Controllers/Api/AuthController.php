@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\Organization;
 use App\Models\User;
 use App\Services\BrowserSession;
 use Illuminate\Http\JsonResponse;
@@ -77,17 +78,18 @@ class AuthController extends Controller
     }
 
     /**
-     * Pendaftaran mandiri (self sign-up).
+     * Pendaftaran mandiri (self sign-up) dengan nama PT/organisasi.
      *
-     * Berbeda dari `POST /api/invitations/{token}/accept` — di sana
-     * admin yang mengundang dan akun langsung aktif — pendaftar
-     * sendiri TIDAK langsung mendapat akses:
+     * Satu organisasi = satu admin:
      *
-     *   - role  : `User::DEFAULT_ROLE` (pic), paling rendah.
-     *   - status: `pending`, menunggu persetujuan admin.
+     *   - PT belum terdaftar -> organisasi baru dibuat dan pendaftar
+     *     pertama menjadi admin organisasi itu (role admin, langsung
+     *     aktif). Nama PT inilah yang tampil sebagai kop Surat Job.
+     *   - PT sudah ada -> pendaftar masuk sebagai PIC dengan status
+     *     `pending`, menunggu persetujuan admin organisasi itu.
      *
-     * Tidak ada token yang dikembalikan: akun `pending` belum bisa
-     * login, jadi mengirim token di sini hanya menyesatkan.
+     * Tidak ada token yang dikembalikan untuk akun `pending`: akun
+     * itu belum bisa login, jadi mengirim token hanya menyesatkan.
      */
     public function register(Request $request): JsonResponse
     {
@@ -97,18 +99,34 @@ class AuthController extends Controller
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'string', 'email', 'max:255', 'unique:users,email'],
             'password' => ['required', 'confirmed', Password::min(8)],
+            'organization_name' => ['required', 'string', 'max:255'],
         ]);
+
+        $orgName = preg_replace('/\s+/', ' ', trim($validated['organization_name']));
+
+        $organization = Organization::query()
+            ->whereRaw('LOWER(name) = ?', [mb_strtolower($orgName)])
+            ->first();
+
+        $isNewOrg = $organization === null;
+
+        if ($isNewOrg) {
+            $organization = Organization::create(['name' => $orgName]);
+        }
 
         $user = User::create([
             'name' => $validated['name'],
             'email' => $validated['email'],
             'password' => $validated['password'],
-            'role' => User::DEFAULT_ROLE,
-            'status' => User::STATUS_PENDING,
+            'org_id' => $organization->id,
+            'role' => $isNewOrg ? User::ROLE_ADMIN : User::DEFAULT_ROLE,
+            'status' => $isNewOrg ? User::STATUS_ACTIVE : User::STATUS_PENDING,
         ]);
 
         return response()->json([
-            'message' => 'Pendaftaran berhasil. Akun Anda menunggu persetujuan admin sebelum bisa masuk.',
+            'message' => $isNewOrg
+                ? 'Organisasi '.$organization->name.' berhasil dibuat. Anda menjadi admin organisasi dan bisa langsung masuk.'
+                : 'Pendaftaran berhasil. Akun Anda menunggu persetujuan admin '.$organization->name.' sebelum bisa masuk.',
             'user' => $user->toAuthPayload(),
         ], 201);
     }

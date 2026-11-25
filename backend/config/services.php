@@ -35,4 +35,16 @@ return [
         ],
     ],
 
+    /*
+     * Asisten AI — mesin yang sama dengan AI Si Tani (OpenAI-compatible:
+     * Groq/NVIDIA). Nilai dibaca dari .env backend; tanpa kunci, endpoint
+     * /api/ai/chat menjawab 503 yang jelas.
+     */
+    'ai' => [
+        'key' => env('AI_API_KEY'),
+        'base_url' => env('AI_BASE_URL'),
+        'model' => env('AI_MODEL', 'meta/llama-3.3-70b-instruct'),
+        'timeout' => (int) env('AI_TIMEOUT_SECONDS', 45),
+    ],
+
 ];

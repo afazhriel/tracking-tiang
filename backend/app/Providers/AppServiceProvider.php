@@ -29,7 +29,7 @@ class AppServiceProvider extends ServiceProvider
          * sebagai error 500; dengan pola ini rute tidak cocok dan
          * Laravel menjawab 404.
          */
-        foreach (['project', 'pole', 'user', 'team', 'workItem', 'baseline', 'assignment', 'invitation', 'notification'] as $param) {
+        foreach (['project', 'pole', 'user', 'team', 'workItem', 'baseline', 'assignment', 'invitation', 'notification', 'organization'] as $param) {
             Route::pattern($param, '[0-9]+');
         }
 

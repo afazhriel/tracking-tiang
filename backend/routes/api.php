@@ -1,10 +1,12 @@
 <?php
 
 use App\Http\Controllers\Api\ActivityController;
+use App\Http\Controllers\Api\AiChatController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\CurveController;
 use App\Http\Controllers\Api\InvitationController;
 use App\Http\Controllers\Api\NotificationController;
+use App\Http\Controllers\Api\OrganizationController;
 use App\Http\Controllers\Api\PhotoController;
 use App\Http\Controllers\Api\PoleAssignmentController;
 use App\Http\Controllers\Api\PoleController;
@@ -92,6 +94,14 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
 
     /* Auth */
     Route::get('/me', [AuthController::class, 'me']);
+
+    /* Organisasi (PT klien) — kop Surat Job berasal dari sini. */
+    Route::get('/organizations/{organization}', [OrganizationController::class, 'show']);
+    Route::patch('/organizations/{organization}', [OrganizationController::class, 'update']);
+
+    /* Asisten AI — sama mesinnya dengan AI Si Tani (OpenAI-compatible,
+       kunci dari env AI_API_KEY). */
+    Route::post('/ai/chat', [AiChatController::class, 'chat']);
 
     /* Profil sendiri — selalu menempel pada user yang login. */
     Route::get('/user/profile', [UserProfileController::class, 'show']);

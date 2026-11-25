@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Services\TeamAccess;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
@@ -53,6 +54,7 @@ class User extends Authenticatable
         'avatar',
         'role',
         'status',
+        'org_id',
     ];
 
     protected $hidden = [
@@ -77,6 +79,44 @@ class User extends Authenticatable
     public function isAdmin(): bool
     {
         return $this->role === self::ROLE_ADMIN;
+    }
+
+    /**
+     * Admin platform: role admin TANPA organisasi. Tidak terikat
+     * satu PT, bisa melihat dan mengelola semua organisasi.
+     * Ini akun admin lama (admin@trackingtiang.local).
+     */
+    public function isPlatformAdmin(): bool
+    {
+        return $this->isAdmin() && $this->org_id === null;
+    }
+
+    /**
+     * Admin satu organisasi: role admin DENGAN organisasi.
+     * Hanya mengelola user/proyek di organisasinya sendiri.
+     */
+    public function isOrgAdmin(): bool
+    {
+        return $this->isAdmin() && $this->org_id !== null;
+    }
+
+    /**
+     * Boleh mengelola user dari organisasi ini?
+     *
+     * Dipakai UserController: admin platform boleh di mana saja,
+     * pengelola (admin/supervisor) hanya di organisasinya sendiri.
+     */
+    public function canManageUsers(?int $orgId): bool
+    {
+        if (! $this->canAdminister()) {
+            return false;
+        }
+
+        if ($this->isPlatformAdmin()) {
+            return true;
+        }
+
+        return $this->org_id !== null && $this->org_id === $orgId;
     }
 
     public function canAdminister(): bool
@@ -149,6 +189,11 @@ class User extends Authenticatable
      * =========================================================
      */
 
+    public function organization(): BelongsTo
+    {
+        return $this->belongsTo(Organization::class, 'org_id');
+    }
+
     public function teamMemberships(): HasMany
     {
         return $this->hasMany(TeamMember::class);
@@ -198,14 +243,23 @@ class User extends Authenticatable
     /**
      * ID project yang boleh diakses user ini.
      *
-     * Admin dan Supervisor aktif tidak dibatasi. Pengguna lain hanya boleh mengakses
-     * proyek miliknya atau proyek tempat ia menjadi anggota.
+     * - Admin platform: tidak dibatasi (null = semua).
+     * - Admin/Supervisor organisasi: seluruh proyek organisasinya.
+     * - PIC: hanya proyek tempat ia menjadi anggota/pemilik/tim —
+     *   dan hanya yang satu organisasi dengannya.
      */
     public function accessibleProjectIds(): ?array
     {
-        // Admin dan Supervisor aktif memiliki akses administratif global.
-        if ($this->canAdminister()) {
+        if ($this->isPlatformAdmin()) {
             return null;
+        }
+
+        if ($this->canAdminister()) {
+            return DB::table('projects')
+                ->where('org_id', $this->org_id)
+                ->pluck('id')
+                ->map(fn ($id) => (int) $id)
+                ->all();
         }
 
         $memberIds = DB::table('project_user')
@@ -216,13 +270,21 @@ class User extends Authenticatable
             ->where('owner_user_id', $this->getKey())
             ->pluck('id');
 
-        return $memberIds
+        $ids = $memberIds
             ->merge($ownedIds)
             ->merge(app(TeamAccess::class)->projectIds($this))
             ->map(fn ($id) => (int) $id)
             ->unique()
-            ->values()
-            ->all();
+            ->values();
+
+        // PIC yang pindah organisasi tidak lagi melihat proyek
+        // organisasi lamanya lewat keanggotaan lama.
+        $orgProjectIds = DB::table('projects')
+            ->where('org_id', $this->org_id)
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id);
+
+        return $ids->intersect($orgProjectIds)->values()->all();
     }
 
     public function canAccessProject(int $projectId): bool
@@ -340,6 +402,8 @@ class User extends Authenticatable
      */
     public function toAuthPayload(): array
     {
+        $this->loadMissing('organization');
+
         return [
             'id' => $this->id,
             'name' => $this->name,
@@ -350,6 +414,10 @@ class User extends Authenticatable
             'role' => $this->role,
             'role_label' => self::roleLabel($this->role),
             'status' => $this->status,
+            'org_id' => $this->org_id,
+            'organization' => $this->organization
+                ? $this->organization->toPublicPayload()
+                : null,
             'provinces' => $this->provinces
                 ->map(fn (Province $province) => [
                     'id' => $province->id,

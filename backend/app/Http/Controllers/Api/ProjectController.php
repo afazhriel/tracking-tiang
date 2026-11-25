@@ -60,6 +60,9 @@ class ProjectController extends Controller
             function () use ($request, $validated) {
                 $project = new Project($validated);
                 $project->owner_user_id = $request->user()->getKey();
+                // Proyek mengikuti organisasi pembuatnya. Admin platform
+                // (tanpa organisasi) membuat proyek platform (org NULL).
+                $project->org_id = $request->user()->org_id;
                 $project->save();
 
                 DB::table('project_user')->insert([
@@ -147,6 +150,7 @@ class ProjectController extends Controller
         $this->authorize('view', $project);
 
         $project->load([
+            'organization',
             'regions',
             'workItems' => fn ($query) => $query
                 ->whereNull('pole_id')

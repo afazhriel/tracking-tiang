@@ -172,6 +172,10 @@ class InvitationController extends Controller
                 'name' => $validated['name'],
                 'email' => $invitation->email,
                 'password' => $validated['password'],
+                // Undangan selalu masuk ke organisasi pengundang.
+                'org_id' => $invitation->invited_by
+                    ? User::whereKey($invitation->invited_by)->value('org_id')
+                    : null,
                 'role' => $invitation->role,
                 'status' => User::STATUS_ACTIVE,
             ]);
@@ -259,13 +263,13 @@ class InvitationController extends Controller
         try {
             Mail::raw(
                 'Halo '.($invitation->name ?: $invitation->email).",\n\n"
-                .'Anda diundang masuk ke Tracking Tiang dengan role: '
+                .'Anda diundang masuk ke Tracking Pekerjaan dengan role: '
                 .(User::roleLabel($invitation->role) ?? $invitation->role).".\n\n"
                 ."Selesaikan pendaftaran di:\n{$url}\n\n"
                 .'Undangan berlaku sampai: '.$invitation->expires_at->toDayDateTimeString()."\n",
                 fn ($message) => $message
                     ->to($invitation->email)
-                    ->subject('Undangan akses Tracking Tiang')
+                    ->subject('Undangan akses Tracking Pekerjaan')
             );
 
             return true;
