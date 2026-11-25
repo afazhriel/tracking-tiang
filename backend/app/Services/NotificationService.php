@@ -39,7 +39,10 @@ class NotificationService
     }
 
     /**
-     * Kirim ke seluruh user yang punya akses project, kecuali $exceptUserId.
+     * Kirim ke seluruh user yang punya akses project, kecuali $exceptUserId
+     * dan siapa pun di $exceptUserIds (mis. penerima notifikasi langsung
+     * untuk peristiwa yang sama — satu peristiwa = satu notifikasi
+     * per orang, jangan ganda).
      *
      * @return Collection<int, Notification>
      */
@@ -51,7 +54,8 @@ class NotificationService
         ?string $href = null,
         array $data = [],
         ?int $exceptUserId = null,
-        ?Pole $pole = null
+        ?Pole $pole = null,
+        array $exceptUserIds = []
     ): Collection {
         $recipients = User::whereIn('id', $this->projectRecipientIds($project))->get()
             ->filter(fn (User $user) => $user->isActive() && $user->canAccessProject((int) $project->id) && ($pole === null || $user->can('view', $pole)))
@@ -59,6 +63,10 @@ class NotificationService
 
         if ($exceptUserId !== null) {
             $recipients = $recipients->reject(fn (int $id) => $id === $exceptUserId);
+        }
+
+        if ($exceptUserIds !== []) {
+            $recipients = $recipients->reject(fn (int $id) => in_array($id, $exceptUserIds, true));
         }
 
         return $recipients->map(

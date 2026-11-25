@@ -31,7 +31,13 @@ class PoleController extends Controller
         $perPage = (int) ($validated['per_page'] ?? 100);
 
         $poles = $project->poles()
-            ->with(['region', 'province:id,name'])
+            ->with([
+                'region',
+                'province:id,name',
+                'activeAssignments.user:id,name',
+                'activeAssignments.team:id,name',
+                'workProgress.workItem',
+            ])
             ->when(
                 $validated['province_id'] ?? null,
                 fn ($query, $provinceId) => $query->where('province_id', $provinceId)
@@ -52,7 +58,18 @@ class PoleController extends Controller
             ->orderBy('pole_code')
             ->paginate($perPage);
 
+        $poles->getCollection()->transform(fn (Pole $pole) => $this->polePayload($pole));
+
         return response()->json($poles);
+    }
+
+    /**
+     * Bentuk titik yang dikirim ke frontend: atribut dasar + PIC
+     * yang ditugaskan + progres + status turunan + tenggat.
+     */
+    private function polePayload(Pole $pole): array
+    {
+        return array_merge($pole->toArray(), $pole->cardPayload());
     }
 
     /**
@@ -163,6 +180,7 @@ class PoleController extends Controller
             'latitude' => ['nullable', 'numeric', 'between:-90,90'],
             'longitude' => ['nullable', 'numeric', 'between:-180,180'],
             'status' => ['nullable', 'string', 'max:50'],
+            'due_date' => ['nullable', 'date'],
         ]);
 
         /*
@@ -282,8 +300,43 @@ class PoleController extends Controller
 
         return response()->json([
             'message' => 'Tiang berhasil dibuat.',
-            'data' => $pole->load(['region', 'province:id,name']),
+            'data' => $this->polePayload($pole->load([
+                'region',
+                'province:id,name',
+                'activeAssignments.user:id,name',
+                'activeAssignments.team:id,name',
+                'workProgress.workItem',
+            ])),
         ], 201);
+    }
+
+    /**
+     * Ubah tenggat titik. Hanya Admin/Supervisor.
+     */
+    public function update(Request $request, Project $project, Pole $pole): JsonResponse
+    {
+        abort_unless((int) $pole->project_id === (int) $project->id, 404);
+
+        $this->authorize('update', $pole);
+
+        $validated = $request->validate([
+            'due_date' => ['nullable', 'date'],
+        ]);
+
+        $pole->update($validated);
+
+        $pole->load([
+            'region',
+            'province:id,name',
+            'activeAssignments.user:id,name',
+            'activeAssignments.team:id,name',
+            'workProgress.workItem',
+        ]);
+
+        return response()->json([
+            'message' => 'Tenggat titik diperbarui.',
+            'data' => $this->polePayload($pole),
+        ]);
     }
 
     public function show(Project $project, Pole $pole): JsonResponse
@@ -295,11 +348,13 @@ class PoleController extends Controller
         $pole->load([
             'region',
             'province:id,name',
+            'activeAssignments.user:id,name',
+            'activeAssignments.team:id,name',
             'workProgress.workItem',
         ]);
 
         return response()->json([
-            'data' => $pole,
+            'data' => $this->polePayload($pole),
         ]);
     }
 }

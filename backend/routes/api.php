@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\ActivityController;
 use App\Http\Controllers\Api\AiChatController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\CurveController;
+use App\Http\Controllers\Api\HafiWebhookController;
 use App\Http\Controllers\Api\InvitationController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\OrganizationController;
@@ -75,6 +76,14 @@ Route::get('/regions/districts/{district}/villages', [RegionController::class, '
 Route::get('/public/showcase', [PublicShowcaseController::class, 'show']);
 
 /*
+ * Webhook HAFI Pay: pemberitahuan pembayaran terverifikasi (payment.paid).
+ * Tanpa login; keasliannya diperiksa lewat tanda tangan HMAC di controller.
+ * Tracking Pekerjaan belum punya model pembayaran, jadi event hanya dicatat
+ * untuk audit — belum ada aksi bisnis yang dipicu.
+ */
+Route::post('/hooks/hafi', [HafiWebhookController::class, 'handle']);
+
+/*
 |--------------------------------------------------------------------------
 | Protected routes
 |--------------------------------------------------------------------------
@@ -118,6 +127,7 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
     Route::put('/projects/{project}', [ProjectController::class, 'update']);
     Route::get('/projects/{project}/members', [ProjectMemberController::class, 'index']);
     Route::post('/projects/{project}/members', [ProjectMemberController::class, 'store']);
+    Route::patch('/projects/{project}/members/{user}', [ProjectMemberController::class, 'update']);
     Route::delete('/projects/{project}/members/{user}', [ProjectMemberController::class, 'destroy']);
 
     Route::get(
@@ -135,6 +145,7 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
     Route::get('/projects/{project}/poles/summary', [PoleController::class, 'summary']);
     Route::post('/projects/{project}/poles', [PoleController::class, 'store']);
     Route::get('/projects/{project}/poles/{pole}', [PoleController::class, 'show']);
+    Route::patch('/projects/{project}/poles/{pole}', [PoleController::class, 'update']);
 
     /* Work Item */
     Route::get('/projects/{project}/work-items', [WorkItemController::class, 'index']);
@@ -196,7 +207,9 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
 
     /*
      * Pole assignment.
+     * "Tugas saya": titik-titik yang ditugaskan ke user yang login.
      */
+    Route::get('/me/assigned-poles', [PoleAssignmentController::class, 'myAssignments']);
     Route::get('/users/{user}/poles', [PoleAssignmentController::class, 'index']);
     Route::post('/users/{user}/poles', [PoleAssignmentController::class, 'store']);
     Route::delete('/users/{user}/poles/{pole}', [PoleAssignmentController::class, 'destroy']);

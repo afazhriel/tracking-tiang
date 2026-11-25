@@ -4,6 +4,9 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Project;
+use App\Models\ProjectActivity;
+use App\Services\ActivityLogger;
+use App\Services\NotificationService;
 use App\Services\ProjectQuantityProgress;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
@@ -12,6 +15,7 @@ use Illuminate\Support\Facades\DB;
 
 class ProjectQuantityEntryController extends Controller
 {
+    public function __construct(private NotificationService $notifications, private ActivityLogger $activity) {}
     public function index(
         Project $project,
         ProjectQuantityProgress $progress
@@ -39,7 +43,9 @@ class ProjectQuantityEntryController extends Controller
         Project $project,
         ProjectQuantityProgress $progress
     ): JsonResponse {
-        $this->authorize('update', $project);
+        // Anggota proyek dengan peran pengelola/pelaksana boleh mencatat;
+        // pelihat tidak. Admin/Supervisor/pemilik proyek selalu boleh.
+        $this->authorize('recordProgress', $project);
 
         $data = $request->validate([
             'quantity_delta' => [
@@ -85,7 +91,7 @@ class ProjectQuantityEntryController extends Controller
                 ->lockForUpdate()
                 ->firstOrFail();
 
-            $this->authorize('update', $locked);
+            $this->authorize('recordProgress', $locked);
 
             abort_unless(
                 $locked->progress_source === 'quantity_entries',
@@ -164,6 +170,37 @@ class ProjectQuantityEntryController extends Controller
             } catch (\DomainException $e) {
                 abort(422, $e->getMessage());
             }
+
+            // Kabari anggota proyek lain + catat ke riwayat aktivitas.
+            // (Jalur replay request_key di atas tidak sampai ke sini,
+            // jadi satu pencatatan = satu notifikasi.)
+            $actor = $request->user();
+            $total = $summary['actual_current_quantity'] ?? null;
+            $percent = $summary['actual_current_percent'] ?? null;
+            $deltaLabel = ((float) $data['quantity_delta'] > 0 ? '+' : '').$data['quantity_delta'];
+            $description = "{$actor->name} mencatat {$deltaLabel} {$locked->unit_code}"
+                .($total !== null
+                    ? " — total {$total} dari target {$locked->target_quantity} ({$percent}%)."
+                    : '.');
+            $this->notifications->sendToProjectMembers(
+                $locked,
+                'progress',
+                "Progress {$locked->name} diperbarui",
+                $description,
+                '/proyek',
+                ['project_id' => $locked->id, 'quantity_delta' => (float) $data['quantity_delta']],
+                $actor->id
+            );
+            $this->activity->log(
+                $locked,
+                $actor,
+                ProjectActivity::ACTION_PROGRESS_KUANTITAS,
+                "Progress {$locked->name} diperbarui",
+                $description,
+                'project',
+                $locked->id,
+                ['project_id' => $locked->id, 'quantity_delta' => (float) $data['quantity_delta']]
+            );
 
             return response()->json([
                 'message' => 'Progres berhasil dicatat.',

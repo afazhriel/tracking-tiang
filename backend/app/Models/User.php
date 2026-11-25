@@ -299,6 +299,52 @@ class User extends Authenticatable
     }
 
     /**
+     * Peran user di proyek ini: pengelola/pelaksana/pelihat.
+     * Anggota lama tanpa peran dianggap pelaksana.
+     * Bukan anggota -> null.
+     */
+    public function projectRole(int $projectId): ?string
+    {
+        $row = DB::table('project_user')
+            ->where('project_id', $projectId)
+            ->where('user_id', $this->getKey())
+            ->first(['role']);
+
+        if (! $row) {
+            return null;
+        }
+
+        return $row->role ?: ProjectUser::ROLE_PELAKSANA;
+    }
+
+    /**
+     * Boleh mencatat progres kuantitas proyek?
+     * Admin/Supervisor/pemilik proyek selalu boleh; anggota proyek
+     * boleh kalau perannya pengelola/pelaksana (pelihat tidak).
+     */
+    public function canRecordProjectProgress(Project $project): bool
+    {
+        if (! $this->isActive()) {
+            return false;
+        }
+
+        if ($this->canAdminister()) {
+            return true;
+        }
+
+        if ($project->owner_user_id !== null
+            && (int) $project->owner_user_id === (int) $this->getKey()) {
+            return true;
+        }
+
+        return in_array(
+            $this->projectRole((int) $project->id),
+            [ProjectUser::ROLE_PENGELOLA, ProjectUser::ROLE_PELAKSANA],
+            true
+        );
+    }
+
+    /**
      * ID tiang yang ditugaskan ke user ini.
      *
      * Termasuk penugasan lewat tim, karena tim anggota user tersebut
