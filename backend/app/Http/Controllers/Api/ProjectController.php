@@ -47,6 +47,11 @@ class ProjectController extends Controller
                 'string',
                 'regex:/^[a-z][a-z0-9_]{0,31}$/D',
             ],
+            'progress_source' => [
+                'nullable',
+                'string',
+                'in:pole_weighted,quantity_entries',
+            ],
             'status' => ['nullable', 'string', 'max:50'],
         ]);
 

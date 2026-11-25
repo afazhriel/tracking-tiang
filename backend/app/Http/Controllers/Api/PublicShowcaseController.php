@@ -46,6 +46,11 @@ class PublicShowcaseController extends Controller
                     'start_date' => optional($project->start_date)->toDateString(),
                     'end_date' => optional($project->end_date)->toDateString(),
                     'total_target_poles' => $project->total_target_poles,
+                    'target_quantity' => $project->target_quantity !== null
+                        ? (float) $project->target_quantity
+                        : null,
+                    'unit_code' => $project->unit_code,
+                    'progress_source' => $project->progress_source,
                     'poles_count' => Pole::query()->where('project_id', $project->id)->count(),
                 ],
                 'poles' => $poles,
