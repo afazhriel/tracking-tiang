@@ -14,6 +14,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 
 class PoleController extends Controller
 {
@@ -154,7 +155,10 @@ class PoleController extends Controller
             'regency_id' => ['nullable', 'string', 'exists:regencies,id'],
             'district_id' => ['nullable', 'string', 'exists:districts,id'],
             'village_id' => ['nullable', 'string', 'exists:villages,id'],
-            'pole_code' => ['required', 'string', 'max:255'],
+            'pole_code' => ['required', 'string', 'max:255',
+                Rule::unique('poles', 'pole_code')->where(
+                    fn ($query) => $query->where('project_id', $project->id)
+                )],
             'address' => ['nullable', 'string'],
             'latitude' => ['nullable', 'numeric', 'between:-90,90'],
             'longitude' => ['nullable', 'numeric', 'between:-180,180'],

@@ -5,6 +5,7 @@ namespace App\Providers;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -22,6 +23,16 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        /*
+         * Parameter rute yang berupa id model selalu numerik. Tanpa pola
+         * ini, id seperti "abc" lolos ke query PostgreSQL dan meledak
+         * sebagai error 500; dengan pola ini rute tidak cocok dan
+         * Laravel menjawab 404.
+         */
+        foreach (['project', 'pole', 'user', 'team', 'workItem', 'baseline', 'assignment', 'invitation', 'notification'] as $param) {
+            Route::pattern($param, '[0-9]+');
+        }
+
         /*
          * Limiter umum untuk seluruh grup `api`. Dikunci per user bila
          * sudah terautentikasi, kalau belum per IP. 120 permintaan per

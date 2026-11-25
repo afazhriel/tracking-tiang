@@ -41,6 +41,17 @@ class Project extends Model
                     : 'pole_weighted';
             }
         });
+
+        static::saving(function (Project $project): void {
+            // Kolom lama `total_target_poles` masih dipakai penyebut progres
+            // dan trigger penjaga baseline di database. Samakan selalu
+            // dengan `target_quantity` supaya proyek yang dibuat dari API
+            // tidak kehilangan targetnya (baseline gagal disahkan dan
+            // progres salah penyebut bila kolom ini tertinggal 0).
+            if ($project->target_quantity !== null) {
+                $project->total_target_poles = (int) round((float) $project->target_quantity);
+            }
+        });
     }
 
     public function regions(): HasMany

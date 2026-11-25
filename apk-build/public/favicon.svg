@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" fill="none">
+  <!--
+    Mark aplikasi Tracking Proyek: pin terracotta di atas ubin
+    espresso. File ini adalah sumber favicon, ikon PWA, dan icon
+    launcher; PNG-nya dihasilkan oleh scripts/generate-icons.mjs.
+  -->
+  <defs>
+    <linearGradient id="terracotta" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#e08b5c" />
+      <stop offset="1" stop-color="#b85a32" />
+    </linearGradient>
+  </defs>
+
+  <rect width="64" height="64" rx="15" fill="#1c1614" />
+
+  <g transform="translate(6.8 7.8) scale(2.1)" fill="url(#terracotta)" fill-rule="evenodd">
+    <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5a2.5 2.5 0 0 1 0-5 2.5 2.5 0 0 1 0 5z" />
+  </g>
+</svg>

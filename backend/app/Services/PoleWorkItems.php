@@ -42,6 +42,13 @@ class PoleWorkItems
             $templatesQuery->whereIn('id', $legacyIds->unique());
         }
         $templates = $templatesQuery->orderBy('sequence')->orderBy('id')->get();
+        if ($inherit && $templates->isEmpty()) {
+            // Titik dibuat sebelum proyek punya item pekerjaan: belum ada
+            // yang bisa diwarisi. Jangan cap sebagai "sudah disesuaikan",
+            // supaya template yang dibuat belakangan tetap bisa diwarisi
+            // dan progres tetap bisa dicatat untuk titik ini.
+            return $items;
+        }
         foreach ($templates as $template) {
             $copies = $items->where('source_item_id', $template->id);
             abort_if($copies->count() > 1, 409, 'Ada salinan pekerjaan ganda. Perlu rekonsiliasi sebelum perubahan.');

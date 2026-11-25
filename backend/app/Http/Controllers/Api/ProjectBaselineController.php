@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Project;
 use App\Models\ProjectBaseline;
 use App\Services\ProjectBaselineApproval;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -165,7 +166,19 @@ class ProjectBaselineController extends Controller
         abort_unless((int) $baseline->project_id === (int) $project->id, 404);
         $this->authorize('update', $project);
 
-        $approved = $approval->approve($baseline->id, request()->user());
+        try {
+            $approved = $approval->approve($baseline->id, request()->user());
+        } catch (QueryException $e) {
+            // Trigger penjaga baseline di database menolak dengan pesan
+            // Bahasa Indonesia yang memang ditulis untuk pengguna; teruskan
+            // sebagai 422, bukan 500 "Server Error".
+            $message = 'Baseline belum memenuhi syarat pengesahan.';
+            if (preg_match('/ERROR:\s*(.+?)(?:\s*\(Connection|\s*\(SQLSTATE|$)/s', $e->getMessage(), $m)) {
+                $message = trim($m[1]);
+            }
+
+            return response()->json(['message' => $message], 422);
+        }
 
         return response()->json([
             'message' => 'Baseline berhasil disahkan.',
