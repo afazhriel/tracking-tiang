@@ -17,6 +17,8 @@ import {
   validateRows,
 } from '../../lib/csv-import'
 import { formatNumber } from '../../lib/format'
+import { useProject } from '../../lib/project-context'
+import { projectUnitLabel, projectUnitLower } from '../../lib/unit-label'
 import { tone } from '../../lib/theme'
 import { cn } from '../../lib/utils'
 import { ActionButton } from '../layout/PageHeader'
@@ -44,6 +46,9 @@ const MAX_PREVIEW_ROWS = 200
  * daripada menampilkan requirement yang jelas.
  */
 export function ImportPolesModal({ open, onClose, regions }) {
+  const { project } = useProject()
+  const unitName = projectUnitLabel(project)
+  const unitLower = projectUnitLower(project)
   const fileRef = useRef(null)
 
   const [fileName, setFileName] = useState(null)
@@ -155,8 +160,8 @@ export function ImportPolesModal({ open, onClose, regions }) {
       open={open}
       onClose={handleClose}
       size="xl"
-      title="Import Tiang dari CSV"
-      description="Validasi file di perangkat ini dulu. Pengiriman ke server belum tersedia di backend."
+      title={`Import ${unitName} dari CSV`}
+      description="File hanya divalidasi di perangkat ini — belum bisa dikirim ke server."
       footer={
         <>
           <ActionButton onClick={downloadTemplate} icon={Download}>
@@ -167,7 +172,7 @@ export function ImportPolesModal({ open, onClose, regions }) {
         </>
       }
     >
-      <div className="space-y-5">
+      <div className="space-y-4">
         {parseError && (
           <div
             role="alert"
@@ -179,7 +184,7 @@ export function ImportPolesModal({ open, onClose, regions }) {
           </div>
         )}
 
-        <div className="rounded-card border-2 border-dashed border-neutral-300 bg-canvas px-5 py-6 text-center">
+        <div className="rounded-card border-2 border-dashed border-neutral-300 bg-canvas px-4 py-5 text-center">
           <FileSpreadsheet className="mx-auto h-8 w-8 text-neutral-400" />
 
           <p className="mt-3 text-sm font-medium text-neutral-800">
@@ -219,7 +224,7 @@ export function ImportPolesModal({ open, onClose, regions }) {
 
             <div>
               <p className="text-sm font-semibold text-amber-900">
-                Judul kolom kode tiang tidak ditemukan
+                Judul kolom kode {unitLower} tidak ditemukan
               </p>
               <p className="mt-0.5 text-xs leading-5 text-amber-800">
                 Yang dikenali:{' '}
@@ -234,7 +239,7 @@ export function ImportPolesModal({ open, onClose, regions }) {
 
         {validation && !missingRequired && (
           <>
-            <div className="grid gap-3 sm:grid-cols-3">
+            <div className="grid gap-3">
               <StatTile
                 label="Baris terbaca"
                 value={formatNumber(stats.total)}
@@ -294,7 +299,7 @@ export function ImportPolesModal({ open, onClose, regions }) {
                   <thead>
                     <tr>
                       <Th align="center">Baris</Th>
-                      <Th>Kode Tiang</Th>
+                      <Th>Kode {unitName}</Th>
                       <Th>Wilayah</Th>
                       <Th align="right">Lat</Th>
                       <Th align="right">Lng</Th>
@@ -360,7 +365,7 @@ export function ImportPolesModal({ open, onClose, regions }) {
                 title="Tidak ada baris untuk ditampilkan"
                 description={
                   stats.total === 0
-                    ? 'File hanya berisi judul kolom, tanpa data tiang.'
+                    ? `File hanya berisi judul kolom, tanpa data ${unitLower}.`
                     : 'Semua baris valid dan tidak ada yang perlu diperbaiki.'
                 }
               />

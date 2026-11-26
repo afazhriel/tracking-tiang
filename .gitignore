@@ -35,3 +35,4 @@ database/*.sqlite3
 # Local patch backups are not release source.
 *.bak
 *.bak-*
+frontend-next/

@@ -362,6 +362,12 @@ export const api = {
     apiRequest(`/api/projects/${projectId}`, options),
   createProject: (payload, options) =>
     apiRequest('/api/projects', { ...options, method: 'POST', body: payload }),
+  updateProject: (projectId, payload, options) =>
+    apiRequest(`/api/projects/${projectId}`, {
+      ...options,
+      method: 'PATCH',
+      body: payload,
+    }),
   listProjectQuantities: (projectId, options) =>
     apiRequest(`/api/projects/${projectId}/quantities`, options),
 
@@ -375,11 +381,17 @@ export const api = {
 
   listProjectMembers: (projectId, options) =>
     apiRequest(`/api/projects/${encodeURIComponent(projectId)}/members`, options),
-  addProjectMember: (projectId, userId, options) =>
+  addProjectMember: (projectId, userId, role = 'pelaksana', options) =>
     apiRequest(`/api/projects/${encodeURIComponent(projectId)}/members`, {
       ...options,
       method: 'POST',
-      body: { user_id: Number(userId) },
+      body: { user_id: Number(userId), role },
+    }),
+  updateProjectMemberRole: (projectId, userId, role, options) =>
+    apiRequest(`/api/projects/${encodeURIComponent(projectId)}/members/${encodeURIComponent(userId)}`, {
+      ...options,
+      method: 'PATCH',
+      body: { role },
     }),
   removeProjectMember: (projectId, userId, options) =>
     apiRequest(`/api/projects/${encodeURIComponent(projectId)}/members/${encodeURIComponent(userId)}`, {
@@ -409,6 +421,33 @@ export const api = {
       ...options,
       method: 'POST',
       body: payload,
+    }),
+  /* Ubah tiang — dipakai untuk tenggat (`due_date`, PATCH
+     /api/projects/{project}/poles/{pole}, admin/supervisor). */
+  updatePole: (projectId, poleId, payload, options) =>
+    apiRequest(`/api/projects/${projectId}/poles/${poleId}`, {
+      ...options,
+      method: 'PATCH',
+      body: payload,
+    }),
+
+  /* --- Penugasan PIC per titik (gaya Asana) ---
+     `POST /api/users/{user}/poles` + `DELETE /api/users/{user}/poles/{pole}`
+     hanya untuk admin/supervisor; satu titik bisa punya beberapa PIC
+     (langsung atau lewat tim). */
+  myAssignedPoles: (options) => apiRequest('/api/me/assigned-poles', options),
+  listUserPoleAssignments: (userId, options) =>
+    apiRequest(`/api/users/${userId}/poles`, options),
+  assignPoleToUser: (userId, poleId, options) =>
+    apiRequest(`/api/users/${userId}/poles`, {
+      ...options,
+      method: 'POST',
+      body: { pole_id: Number(poleId) },
+    }),
+  revokePoleFromUser: (userId, poleId, options) =>
+    apiRequest(`/api/users/${userId}/poles/${poleId}`, {
+      ...options,
+      method: 'DELETE',
     }),
 
   /* --- Progress ---
@@ -603,6 +642,85 @@ export const api = {
       auth: false,
     }),
 
+  /* Organisasi (PT klien) — kop Surat Job. */
+  getOrganization: (orgId, options) =>
+    apiRequest(`/api/organizations/${orgId}`, options),
+  updateOrganization: (orgId, payload, options) =>
+    apiRequest(`/api/organizations/${orgId}`, {
+      ...options,
+      method: 'PATCH',
+      body: payload,
+    }),
+  /* Logo organisasi untuk kop Surat Job / RAB. Multipart seperti
+     upload avatar; hanya admin organisasi / admin platform. */
+  uploadOrgLogo: (orgId, file, options) => {
+    const form = new FormData()
+    form.append('logo', file)
+
+    return apiRequest(`/api/organizations/${orgId}/logo`, {
+      ...options,
+      method: 'POST',
+      body: form,
+    })
+  },
+
+  /* --- KPI per user (Tim) ---
+     Aturan lihat ditegakkan server: user biasa hanya melihat
+     dirinya sendiri, PIC melihat semua anggota organisasinya,
+     admin/supervisor melihat semua. UI menampilkan apa adanya. */
+  listKpi: (options) => apiRequest('/api/kpi', options),
+  getUserKpi: (userId, options) =>
+    apiRequest(`/api/users/${userId}/kpi`, options),
+
+  /* --- RAB pengajuan per proyek ---
+     Draf → diajukan → disetujui/ditolak. Yang disetujui terkunci;
+     revisi dibuat lewat duplicate (draf baru). */
+  listBudgets: (projectId, options) =>
+    apiRequest(`/api/projects/${projectId}/budgets`, options),
+  getBudget: (projectId, budgetId, options) =>
+    apiRequest(`/api/projects/${projectId}/budgets/${budgetId}`, options),
+  createBudget: (projectId, payload, options) =>
+    apiRequest(`/api/projects/${projectId}/budgets`, {
+      ...options,
+      method: 'POST',
+      body: payload,
+    }),
+  updateBudget: (projectId, budgetId, payload, options) =>
+    apiRequest(`/api/projects/${projectId}/budgets/${budgetId}`, {
+      ...options,
+      method: 'PUT',
+      body: payload,
+    }),
+  deleteBudget: (projectId, budgetId, options) =>
+    apiRequest(`/api/projects/${projectId}/budgets/${budgetId}`, {
+      ...options,
+      method: 'DELETE',
+    }),
+  submitBudget: (projectId, budgetId, options) =>
+    apiRequest(`/api/projects/${projectId}/budgets/${budgetId}/submit`, {
+      ...options,
+      method: 'POST',
+    }),
+  decideBudget: (projectId, budgetId, decision, note, options) =>
+    apiRequest(`/api/projects/${projectId}/budgets/${budgetId}/decide`, {
+      ...options,
+      method: 'POST',
+      body: { decision, note: note || null },
+    }),
+  duplicateBudget: (projectId, budgetId, options) =>
+    apiRequest(`/api/projects/${projectId}/budgets/${budgetId}/duplicate`, {
+      ...options,
+      method: 'POST',
+    }),
+
+  /* Asisten AI — mesin yang sama dengan AI Si Tani. */
+  aiChat: (payload, options) =>
+    apiRequest('/api/ai/chat', {
+      ...options,
+      method: 'POST',
+      body: payload,
+    }),
+
   /* --- User management (admin-only di backend) ---
      `GET /api/users` membalas `{ data: [...] }`. `PUT /api/users/{id}`
      hanya menerima `name` + `role` (email sengaja tidak bisa diubah).
@@ -777,6 +895,24 @@ export function normalizePole(pole) {
         }
       : null,
     provinceName: pole?.province?.name ?? null,
+    projectName: pole?.project?.name ?? null,
+    /* Penugasan + status turunan (dari `cardPayload()` backend). */
+    progressPercent:
+      pole?.progress_percent === null || pole?.progress_percent === undefined
+        ? null
+        : Number(pole.progress_percent),
+    statusKey: pole?.status_key ?? null,
+    statusLabel: pole?.status_label ?? null,
+    isOverdue: pole?.is_overdue === true,
+    dueDate: pole?.due_date ?? null,
+    assignedUsers: Array.isArray(pole?.assigned_users)
+      ? pole.assigned_users.map((item) => ({
+          id: item?.id ?? null,
+          name: item?.name ?? '—',
+          teamId: item?.team_id ?? null,
+          teamName: item?.team_name ?? null,
+        }))
+      : [],
   }
 }
 
@@ -865,6 +1001,9 @@ export function normalizeProject(project) {
     targetQuantity: project?.target_quantity ?? null,
     unitCode: project?.unit_code ?? null,
     progressSource: project?.progress_source ?? null,
+    /* Hak user yang sedang login atas proyek ini (dihitung server). */
+    myProjectRole: project?.my_project_role ?? null,
+    canRecordProgress: project?.can_record_progress ?? false,
     polesCount: project?.poles_count ?? null,
     regionsCount: project?.regions_count ?? null,
     workItemsCount: project?.work_items_count ?? null,
@@ -874,6 +1013,75 @@ export function normalizeProject(project) {
       : Array.isArray(project?.workItems)
         ? project.workItems.map(normalizeWorkItem)
         : [],
+    /* Organisasi pemilik proyek — sumber kop Surat Job. */
+    organization: project?.organization
+      ? {
+          id: project.organization.id ?? null,
+          name: project.organization.name ?? null,
+          address: project.organization.address ?? null,
+          phone: project.organization.phone ?? null,
+          email: project.organization.email ?? null,
+          logoUrl: project.organization.logo_url ?? null,
+        }
+      : null,
+  }
+}
+
+/* KPI satu user dari `GET /api/kpi` / `GET /api/users/{id}/kpi`. */
+export function normalizeKpi(row) {
+  const user = row?.user ?? null
+  const kpi = row?.kpi ?? {}
+
+  return {
+    user: user
+      ? {
+          id: user.id ?? null,
+          name: user.name ?? '—',
+          email: user.email ?? null,
+          role: user.role ?? null,
+          roleLabel: user.role_label ?? userRoleLabel(user.role ?? null),
+        }
+      : null,
+    assigned: Number(kpi.assigned ?? 0),
+    done: Number(kpi.done ?? 0),
+    avgProgress: Number(kpi.avg_progress ?? 0),
+    onTime: Number(kpi.on_time ?? 0),
+    late: Number(kpi.late ?? 0),
+    progressRecords: Number(kpi.progress_records ?? 0),
+  }
+}
+
+/* RAB satu proyek dari `ProjectBudget::toPayload()`. */
+export function normalizeBudget(budget) {
+  return {
+    id: budget?.id ?? null,
+    projectId: budget?.project_id ?? null,
+    title: budget?.title ?? null,
+    status: budget?.status ?? null,
+    statusLabel: budget?.status_label ?? null,
+    total: Number(budget?.total ?? 0),
+    items: Array.isArray(budget?.items)
+      ? budget.items.map((item) => ({
+          id: item?.id ?? null,
+          name: item?.name ?? '',
+          category: item?.category ?? null,
+          volume: Number(item?.volume ?? 0),
+          unit: item?.unit ?? '',
+          unitPrice: Number(item?.unit_price ?? 0),
+          lineTotal: Number(item?.line_total ?? 0),
+        }))
+      : [],
+    submittedBy: budget?.submitted_by ?? null,
+    submittedByName: budget?.submitted_by_name ?? null,
+    submittedAt: budget?.submitted_at ?? null,
+    decidedBy: budget?.decided_by ?? null,
+    decidedByName: budget?.decided_by_name ?? null,
+    decidedAt: budget?.decided_at ?? null,
+    rejectionNote: budget?.rejection_note ?? null,
+    isLocked: budget?.is_locked === true,
+    isEditable: budget?.is_editable === true,
+    createdAt: budget?.created_at ?? null,
+    updatedAt: budget?.updated_at ?? null,
   }
 }
 
@@ -934,6 +1142,16 @@ export function normalizeUser(user) {
     avatar: user?.avatar ?? null,
     avatarUrl: user?.avatar_url ?? null,
     initials: user?.initials ?? derivedInitial,
+    organization: user?.organization
+      ? {
+          id: user.organization.id ?? null,
+          name: user.organization.name ?? null,
+          address: user.organization.address ?? null,
+          phone: user.organization.phone ?? null,
+          email: user.organization.email ?? null,
+          logoUrl: user.organization.logo_url ?? null,
+        }
+      : null,
     teams: Array.isArray(user?.teams) ? user.teams.map(normalizeTeam) : [],
     projects: Array.isArray(user?.projects)
       ? user.projects.map((project) => ({

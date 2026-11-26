@@ -19,6 +19,23 @@ use Illuminate\Validation\ValidationException;
  */
 class UserController extends Controller
 {
+    /**
+     * Pengelola hanya melihat user organisasinya sendiri; admin
+     * platform melihat semuanya.
+     */
+    private function guardSameOrganization(Request $request, User $target): void
+    {
+        $actor = $request->user();
+
+        if ($actor->isPlatformAdmin()) {
+            return;
+        }
+
+        if ($actor->org_id === null || $target->org_id !== $actor->org_id) {
+            abort(403, 'User ini berada di organisasi lain.');
+        }
+    }
+
     public function index(Request $request): JsonResponse
     {
         $this->authorize('create', User::class);
@@ -29,12 +46,16 @@ class UserController extends Controller
             'search' => ['nullable', 'string', 'max:255'],
         ]);
 
+        $actor = $request->user();
+
         $users = User::query()
             ->with([
+                'organization',
                 'teams:id,name,code',
                 'projectMemberships.project:id,name',
                 'provinces:id,name',
             ])
+            ->when(! $actor->isPlatformAdmin(), fn ($q) => $q->where('org_id', $actor->org_id))
             ->when($validated['role'] ?? null, fn ($q, $role) => $q->where('role', $role))
             ->when($validated['status'] ?? null, fn ($q, $status) => $q->where('status', $status))
             ->when($validated['search'] ?? null, fn ($q, $search) => $q
@@ -66,6 +87,7 @@ class UserController extends Controller
     public function show(Request $request, User $user): JsonResponse
     {
         $this->authorize('create', User::class);
+        $this->guardSameOrganization($request, $user);
 
         return response()->json([
             'data' => [
@@ -86,6 +108,7 @@ class UserController extends Controller
     public function update(Request $request, User $user): JsonResponse
     {
         $this->authorize('create', User::class);
+        $this->guardSameOrganization($request, $user);
 
         $validated = $request->validate([
             'name' => ['sometimes', 'required', 'string', 'max:255'],
@@ -110,10 +133,13 @@ class UserController extends Controller
     public function updateStatus(Request $request, User $user): JsonResponse
     {
         $this->authorize('create', User::class);
+        $this->guardSameOrganization($request, $user);
 
         $validated = $request->validate([
             'status' => ['required', Rule::in(User::statuses())],
         ]);
+
+        $previousStatus = $user->status;
 
         $user = $this->persistAccountChange($user, $validated);
 
@@ -121,7 +147,9 @@ class UserController extends Controller
             'message' => match ($validated['status']) {
                 User::STATUS_SUSPENDED => 'Akun dinonaktifkan.',
                 User::STATUS_PENDING => 'Akun menunggu persetujuan.',
-                default => 'Akun diaktifkan kembali.',
+                default => $previousStatus === User::STATUS_PENDING
+                    ? 'Akun diaktifkan.'
+                    : 'Akun diaktifkan kembali.',
             },
             'data' => $user->fresh()->toAuthPayload(),
         ]);
@@ -137,6 +165,7 @@ class UserController extends Controller
     public function updateProvinces(Request $request, User $user): JsonResponse
     {
         $this->authorize('create', User::class);
+        $this->guardSameOrganization($request, $user);
 
         $validated = $request->validate([
             'province_ids' => ['present', 'array'],
@@ -156,8 +185,15 @@ class UserController extends Controller
         return DB::transaction(function () use ($target, $values) {
             // Lock the shared admin set in a stable order before counting. Locking
             // only the target allows two different admins to disable themselves.
-            User::where('role', User::ROLE_ADMIN)->orderBy('id')->lockForUpdate()->get(['id']);
+            // Kunci dibatasi pada organisasi yang sama: admin organisasi A
+            // tidak boleh mengunci admin organisasi B.
+            User::where('role', User::ROLE_ADMIN)
+                ->when($target->org_id === null,
+                    fn ($q) => $q->whereNull('org_id'),
+                    fn ($q) => $q->where('org_id', $target->org_id))
+                ->orderBy('id')->lockForUpdate()->get(['id']);
             $user = User::whereKey($target->id)->lockForUpdate()->firstOrFail();
+            $this->guardSingleAdmin($user, $values['role'] ?? null);
             $this->guardLastAdmin($user, $values['role'] ?? null, $values['status'] ?? null);
             $user->fill($values)->save();
 
@@ -166,10 +202,40 @@ class UserController extends Controller
     }
 
     /**
+     * Satu organisasi satu admin.
+     *
+     * Menaikkan user menjadi admin ditolak bila organisasinya sudah
+     * punya admin aktif lain. Admin platform (org_id NULL) dijaga
+     * terpisah dari admin organisasi mana pun.
+     */
+    private function guardSingleAdmin(User $target, ?string $newRole): void
+    {
+        if ($newRole !== User::ROLE_ADMIN || $target->isAdmin()) {
+            return;
+        }
+
+        $existing = User::where('role', User::ROLE_ADMIN)
+            ->where('status', User::STATUS_ACTIVE)
+            ->where('id', '!=', $target->getKey())
+            ->when($target->org_id === null,
+                fn ($q) => $q->whereNull('org_id'),
+                fn ($q) => $q->where('org_id', $target->org_id))
+            ->count();
+
+        if ($existing > 0) {
+            throw ValidationException::withMessages([
+                'role' => ['Organisasi ini sudah memiliki satu admin.'],
+            ]);
+        }
+    }
+
+    /**
      * Cegah admin terakhir mengunci dirinya sendiri keluar.
      *
      * Kalau tidak dijaga, satu klik "suspend" dari satu-satunya admin
      * membuat seluruh aplikasi tanpa admin yang bisa memulihkan.
+     * Penjaga ini dibatasi per organisasi (atau global untuk admin
+     * platform).
      */
     private function guardLastAdmin(User $target, ?string $newRole, ?string $newStatus = null): void
     {
@@ -187,11 +253,18 @@ class UserController extends Controller
         $otherAdmins = User::where('role', User::ROLE_ADMIN)
             ->where('status', User::STATUS_ACTIVE)
             ->where('id', '!=', $target->getKey())
+            ->when($target->org_id === null,
+                fn ($q) => $q->whereNull('org_id'),
+                fn ($q) => $q->where('org_id', $target->org_id))
             ->count();
 
         if ($otherAdmins === 0) {
+            $message = $target->org_id === null
+                ? 'Tidak bisa: ini satu-satunya admin yang masih aktif.'
+                : 'Tidak bisa: ini satu-satunya admin organisasi yang masih aktif.';
+
             throw ValidationException::withMessages([
-                $newStatus !== null ? 'status' : 'role' => ['Tidak bisa: ini satu-satunya admin yang masih aktif.'],
+                $newStatus !== null ? 'status' : 'role' => [$message],
             ]);
         }
     }

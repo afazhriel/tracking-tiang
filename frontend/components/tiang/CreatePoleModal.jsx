@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react'
 import { CircleAlert, MapPin, Plus } from 'lucide-react'
 
 import { api } from '../../lib/api'
+import { useProject } from '../../lib/project-context'
+import { projectUnitLabel } from '../../lib/unit-label'
 import {
   FormField,
   Modal,
@@ -29,11 +31,11 @@ const EMPTY_FORM = {
 
 const STATUS_OPTIONS = [
   { value: '', label: 'Biarkan kosong' },
-  { value: 'rencana', label: 'rencana - Belum mulai' },
-  { value: 'proses', label: 'proses - Sedang dikerjakan' },
-  { value: 'selesai', label: 'selesai - Selesai 100%' },
-  { value: 'delay', label: 'delay - Terlambat' },
-  { value: 'kendala', label: 'kendala - Bermasalah' },
+  { value: 'rencana', label: 'Rencana — Belum mulai' },
+  { value: 'proses', label: 'Proses — Sedang dikerjakan' },
+  { value: 'selesai', label: 'Selesai — Tuntas 100%' },
+  { value: 'delay', label: 'Terlambat' },
+  { value: 'kendala', label: 'Kendala — Bermasalah' },
 ]
 
 function unwrapList(payload) {
@@ -63,6 +65,8 @@ export function CreatePoleModal({
   allowedProvinces = null,
   requireProvince = false,
 }) {
+  const { project } = useProject()
+  const unitName = projectUnitLabel(project)
   const [form, setForm] = useState(EMPTY_FORM)
 
   const [provinces, setProvinces] = useState([])
@@ -351,8 +355,7 @@ export function CreatePoleModal({
     <Modal
       open={open}
       onClose={onClose}
-      title="Tambah Tiang"
-      description="Simpan satu titik tiang ke project aktif."
+      title={`Tambah ${unitName}`}
       size="lg"
       footer={
         <>
@@ -365,7 +368,7 @@ export function CreatePoleModal({
             loadingLabel="Menyimpan..."
             form="create-pole-form"
           >
-            Simpan Tiang
+            Simpan {unitName}
           </SubmitButton>
         </>
       }
@@ -385,7 +388,7 @@ export function CreatePoleModal({
 
             <div>
               <p className="text-sm font-medium text-clay-800">
-                Tiang gagal disimpan
+                {unitName} gagal disimpan
               </p>
 
               <p className="mt-0.5 text-xs leading-5 text-clay-700">
@@ -396,7 +399,7 @@ export function CreatePoleModal({
         )}
 
         <FormField
-          label="Kode Tiang"
+          label={`Kode ${unitName}`}
           htmlFor="pole-code"
           required
           error={fieldErrors?.pole_code?.[0]}
@@ -450,12 +453,11 @@ export function CreatePoleModal({
             </p>
 
             <p className="mt-1 text-xs leading-5 text-neutral-500">
-              Pilih wilayah secara berurutan dari provinsi sampai
-              desa/kelurahan.
+              Pilih berurutan dari provinsi sampai desa.
             </p>
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid gap-4">
             <FormField
               label="Provinsi"
               htmlFor="pole-province"
@@ -596,7 +598,7 @@ export function CreatePoleModal({
           />
         </FormField>
 
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid gap-4">
           <FormField
             label="Latitude"
             htmlFor="pole-latitude"
@@ -644,7 +646,6 @@ export function CreatePoleModal({
           label="Status"
           htmlFor="pole-status"
           error={fieldErrors?.status?.[0]}
-          hint="Status mengikuti nilai yang digunakan aplikasi."
         >
           <SelectInput
             id="pole-status"
@@ -665,9 +666,7 @@ export function CreatePoleModal({
           <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-neutral-500" />
 
           <p className="text-xs leading-5 text-neutral-500">
-            Koordinat yang diisi akan langsung digunakan sebagai lokasi
-            tiang pada peta monitoring. Jika kosong, tiang tetap dapat
-            disimpan.
+            Koordinat dipakai sebagai lokasi tiang pada peta.
           </p>
         </div>
       </form>
@@ -675,18 +674,19 @@ export function CreatePoleModal({
   )
 }
 
-/** Tombol pembuka modal tambah tiang. */
+/** Tombol pembuka modal tambah titik lokasi. */
 export function CreatePoleButton({ onClick, disabled, className }) {
+  const { project } = useProject()
   return (
     <ActionButton
       onClick={onClick}
       icon={Plus}
       variant="primary"
       disabled={disabled}
-      title={disabled ? 'Project belum siap dimuat' : undefined}
+      title={disabled ? 'Proyek belum siap dimuat' : undefined}
       className={className}
     >
-      Tambah Tiang
+      Tambah {projectUnitLabel(project)}
     </ActionButton>
   )
 }

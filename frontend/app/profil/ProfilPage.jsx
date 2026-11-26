@@ -192,7 +192,7 @@ function AvatarControls({ user, project }) {
   return (
     <div className="min-w-0 flex-1">
       <div className="flex flex-wrap items-center gap-2">
-        <h2 className="font-display text-xl font-semibold text-neutral-900">
+        <h2 className="font-display text-lg font-semibold text-neutral-900">
           {user?.name ?? 'Nama belum tersedia'}
         </h2>
 
@@ -203,13 +203,13 @@ function AvatarControls({ user, project }) {
           </Badge>
         ) : (
           <Badge className="bg-neutral-100 text-neutral-500 ring-neutral-500/20">
-            Role belum dikirim backend
+            Pengguna
           </Badge>
         )}
       </div>
 
       <p className="mt-1 break-words text-sm text-neutral-500">
-        {user?.email ?? 'Email belum tersedia pada response login.'}
+        {user?.email ?? 'Email belum tersedia.'}
       </p>
 
       <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -256,10 +256,9 @@ function AvatarControls({ user, project }) {
 
       {project && (
         <p className="mt-3 text-xs text-neutral-400">
-          Sesi ini aktif pada project{' '}
+          Proyek aktif:{' '}
           <strong className="text-neutral-700">{project.name}</strong>
-          {project.code ? ` (${project.code})` : ''}. Ganti project lewat
-          selector di bar atas halaman.
+          {project.code ? ` (${project.code})` : ''}
         </p>
       )}
     </div>
@@ -334,13 +333,11 @@ function ProfileForm({ user }) {
     <Card>
       <CardHeader>
         <CardTitle>Ubah Profil</CardTitle>
-        <CardDescription>
-          Perubahan disimpan ke akun Anda dan langsung tampil di seluruh halaman.
-        </CardDescription>
+        <CardDescription>Perubahan langsung tersimpan.</CardDescription>
       </CardHeader>
 
       <CardContent>
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-3">
           <ErrorNotice
             error={error}
             compact
@@ -351,7 +348,7 @@ function ProfileForm({ user }) {
             Profil berhasil diperbarui.
           </SuccessNotice>
 
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid gap-3">
             <FormField
               label="Nama lengkap"
               htmlFor="profile-name"
@@ -371,7 +368,7 @@ function ProfileForm({ user }) {
             <FormField
               label="Nomor telepon"
               htmlFor="profile-phone"
-              hint="Opsional, contoh 081234567890."
+              hint="Boleh dikosongkan."
               error={firstFieldError(fieldErrors, 'phone')}
             >
               <TextInput
@@ -393,7 +390,7 @@ function ProfileForm({ user }) {
             error={firstFieldError(fieldErrors, 'email')}
             hint={
               emailChanged
-                ? 'Ganti email butuh konfirmasi password di bawah.'
+                ? 'Isi password saat ini untuk mengganti email.'
                 : undefined
             }
           >
@@ -414,7 +411,6 @@ function ProfileForm({ user }) {
               htmlFor="profile-current-password"
               required
               error={firstFieldError(fieldErrors, 'current_password')}
-              hint="Wajib karena aplikasi ini tidak mengirim email verifikasi."
             >
               <TextInput
                 id="profile-current-password"
@@ -490,14 +486,11 @@ function PasswordForm() {
     <Card>
       <CardHeader>
         <CardTitle>Ganti Password</CardTitle>
-        <CardDescription>
-          Password baru berlaku seketika. Perangkat ini tetap masuk; perangkat
-          lain bisa dikeluarkan lewat tombol di kartu Keamanan Sesi.
-        </CardDescription>
+        <CardDescription>Password baru langsung berlaku.</CardDescription>
       </CardHeader>
 
       <CardContent>
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-3">
           <ErrorNotice error={error} compact title="Password tidak diganti" />
 
           <SuccessNotice> Password berhasil diganti. </SuccessNotice>
@@ -519,7 +512,7 @@ function PasswordForm() {
             />
           </FormField>
 
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid gap-3">
             <FormField
               label="Password baru"
               htmlFor="password-new"
@@ -568,6 +561,195 @@ function PasswordForm() {
             )}
           </div>
         </form>
+      </CardContent>
+    </Card>
+  )
+}
+
+/**
+ * Kartu Organisasi — PT klien yang tampil di kop Surat Job.
+ *
+ * Hanya admin organisasi yang boleh mengubah datanya; anggota lain
+ * hanya melihat. Admin platform (tanpa organisasi) tidak punya
+ * kartu ini.
+ */
+function OrganizationCard({ user }) {
+  const org = user?.organization ?? null
+  const canEdit = user?.role === 'admin' && org?.id
+  const [name, setName] = useState(org?.name ?? '')
+  const [address, setAddress] = useState(org?.address ?? '')
+  const [phone, setPhone] = useState(org?.phone ?? '')
+  const [email, setEmail] = useState(org?.email ?? '')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState(null)
+  const [saved, setSaved] = useState(false)
+  const [logoFile, setLogoFile] = useState(null)
+  const [logoPreview, setLogoPreview] = useState(null)
+  const [logoUploading, setLogoUploading] = useState(false)
+  const [logoError, setLogoError] = useState(null)
+  const [logoSaved, setLogoSaved] = useState(false)
+
+  function pickLogo(event) {
+    const file = event.target.files?.[0] ?? null
+    setLogoFile(file)
+    setLogoError(null)
+    setLogoSaved(false)
+    if (logoPreview) URL.revokeObjectURL(logoPreview)
+    setLogoPreview(file ? URL.createObjectURL(file) : null)
+  }
+
+  async function handleLogoUpload() {
+    if (!canEdit || !logoFile || !org?.id) return
+    setLogoUploading(true)
+    setLogoError(null)
+    setLogoSaved(false)
+    try {
+      const res = await api.uploadOrgLogo(org.id, logoFile)
+      const updated = res?.data ?? res
+      const stored = JSON.parse(
+        window.localStorage.getItem(USER_KEY) ?? 'null',
+      )
+      if (stored) {
+        setStoredUser({ ...stored, organization: updated })
+      }
+      setLogoFile(null)
+      if (logoPreview) URL.revokeObjectURL(logoPreview)
+      setLogoPreview(null)
+      setLogoSaved(true)
+    } catch (err) {
+      setLogoError(err?.message || 'Gagal mengunggah logo.')
+    } finally {
+      setLogoUploading(false)
+    }
+  }
+
+  async function handleSubmit(event) {
+    event.preventDefault()
+    if (!canEdit) return
+    setSaving(true)
+    setError(null)
+    setSaved(false)
+    try {
+      const res = await api.updateOrganization(org.id, {
+        name: name.trim(),
+        address: address.trim() || null,
+        phone: phone.trim() || null,
+        email: email.trim() || null,
+      })
+      const updated = res?.data ?? res
+      const stored = JSON.parse(
+        window.localStorage.getItem(USER_KEY) ?? 'null',
+      )
+      if (stored) {
+        setStoredUser({ ...stored, organization: updated })
+      }
+      setSaved(true)
+    } catch (err) {
+      setError(err?.message || 'Gagal menyimpan data organisasi.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (!org) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Organisasi</CardTitle>
+          <CardDescription>PT yang tampil di kop Surat Job.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm leading-6 text-neutral-500">
+            Anda admin platform — tidak terikat satu organisasi.
+          </p>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Organisasi</CardTitle>
+        <CardDescription>
+          PT ini tampil di kop Surat Job. {canEdit ? 'Anda admin organisasi, jadi datanya bisa diubah.' : 'Hanya admin organisasi yang bisa mengubahnya.'}
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        {canEdit ? (
+          <form onSubmit={handleSubmit} className="space-y-3">
+            <div className="grid gap-3">
+              <FormField label="Nama PT / Organisasi">
+                <TextInput value={name} onChange={(e) => setName(e.target.value)} required />
+              </FormField>
+              <FormField label="Telepon">
+                <TextInput value={phone} onChange={(e) => setPhone(e.target.value)} />
+              </FormField>
+              <FormField label="Alamat">
+                <TextInput value={address} onChange={(e) => setAddress(e.target.value)} />
+              </FormField>
+              <FormField label="Email">
+                <TextInput value={email} onChange={(e) => setEmail(e.target.value)} type="email" />
+              </FormField>
+            </div>
+            <ErrorNotice error={error} compact title="Gagal menyimpan" />
+            {saved && <SuccessNotice>Data organisasi tersimpan.</SuccessNotice>}
+            <SubmitButton disabled={saving}>
+              {saving ? 'Menyimpan…' : 'Simpan organisasi'}
+            </SubmitButton>
+          </form>
+        ) : (
+          <div className="grid gap-3">
+            <Field label="Nama PT / Organisasi" value={org.name} />
+            <Field label="Telepon" value={org.phone} hint={org.phone ? undefined : 'Belum diisi.'} />
+            <Field label="Alamat" value={org.address} hint={org.address ? undefined : 'Belum diisi.'} />
+            <Field label="Email" value={org.email} mono hint={org.email ? undefined : 'Belum diisi.'} />
+          </div>
+        )}
+
+        {/* Logo organisasi — tampil di kop Surat Job dan cetakan RAB. */}
+        <div className="mt-4 rounded-xl border border-neutral-200 p-3">
+          <p className="text-sm font-medium text-neutral-700">Logo organisasi</p>
+          {logoPreview ? (
+            <img src={logoPreview} alt="Pratinjau logo baru" className="mt-2 h-16 w-auto object-contain" />
+          ) : org.logoUrl ? (
+            <img src={org.logoUrl} alt={`Logo ${org.name ?? 'organisasi'}`} className="mt-2 h-16 w-auto object-contain" />
+          ) : (
+            <p className="mt-1 text-sm text-neutral-500">Belum ada logo.</p>
+          )}
+          {canEdit && (
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <label className="cursor-pointer rounded-lg border border-neutral-300 px-3 py-2 text-xs font-medium text-neutral-700 hover:bg-neutral-50">
+                Pilih gambar
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  className="hidden"
+                  onChange={pickLogo}
+                />
+              </label>
+              <span className="text-xs text-neutral-500">
+                {logoFile ? logoFile.name : 'JPG/PNG/WebP, maks 2 MB.'}
+              </span>
+              <button
+                type="button"
+                disabled={!logoFile || logoUploading}
+                onClick={handleLogoUpload}
+                className="rounded-lg bg-emerald-700 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {logoUploading ? 'Mengunggah…' : 'Unggah logo'}
+              </button>
+            </div>
+          )}
+          {logoError && (
+            <p role="alert" className="mt-2 text-sm text-red-700">
+              {logoError}
+            </p>
+          )}
+          {logoSaved && (
+            <p className="mt-2 text-sm text-emerald-700">Logo tersimpan.</p>
+          )}
+        </div>
       </CardContent>
     </Card>
   )
@@ -623,11 +805,9 @@ function ProfilContent() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-3">
       <PageHeader
-        eyebrow="Akun"
         title="Profil"
-        subtitle="Data akun yang sedang dipakai pada sesi ini, plus tindakan keamanan yang tersedia."
         actions={
           <ActionButton
             onClick={handleLogout}
@@ -640,7 +820,7 @@ function ProfilContent() {
       />
 
       <Card>
-        <CardContent className="flex flex-col items-start gap-5 sm:flex-row sm:items-center">
+        <CardContent className="flex flex-col items-start gap-3 sm:flex-row sm:items-center">
           <span
             aria-hidden="true"
             className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-br from-plum-500 to-lagoon-600 text-xl font-semibold text-white shadow-card"
@@ -660,54 +840,41 @@ function ProfilContent() {
         </CardContent>
       </Card>
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid gap-3">
         <ProfileForm user={user} />
         <PasswordForm />
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <OrganizationCard user={user} />
+
+      <div className="grid gap-3">
         <Card>
           <CardHeader>
             <CardTitle>Informasi Akun</CardTitle>
-            <CardDescription>
-              Bersumber dari response <code>POST /api/login</code>, disimpan di
-              browser saat login.
-            </CardDescription>
           </CardHeader>
 
-          <CardContent className="grid gap-3 sm:grid-cols-2">
+          <CardContent className="grid gap-3">
             <Field label="ID User" value={user?.id} mono />
             <Field label="Nama" value={displayName} />
             <Field label="Email" value={user?.email} mono />
             <Field
               label="Nomor Telepon"
               value={user?.phone}
-              hint={
-                user?.phone
-                  ? undefined
-                  : 'Belum diisi — bisa ditambahkan lewat form Ubah Profil.'
-              }
+              hint={user?.phone ? undefined : 'Belum diisi.'}
             />
             <Field
               label="Role"
               value={roleLabel}
-              hint={
-                roleLabel
-                  ? undefined
-                  : 'Dikirim backend sebagai `role` atau `role_name`.'
-              }
+              hint={roleLabel ? undefined : 'Belum tersedia.'}
             />
-            <Field label="Project Aktif" value={project?.name} />
+            <Field label="Proyek Aktif" value={project?.name} />
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader>
             <CardTitle>Keamanan Sesi</CardTitle>
-            <CardDescription>
-              Sesi perangkat ini berlaku maksimal 12 jam. Masuk kembali jika
-              sesi berakhir. Foto hanya dapat dibuka sesuai hak akses akun.
-            </CardDescription>
+            <CardDescription>Kelola sesi masuk Anda.</CardDescription>
           </CardHeader>
 
           <CardContent className="space-y-3">
@@ -719,9 +886,8 @@ function ProfilContent() {
                   Sesi perangkat ini
                 </p>
                 <p className="mt-0.5 text-xs leading-5 text-neutral-500">
-                  Tombol <strong>Keluar</strong> menutup sesi perangkat ini
-                  saja; tombol <strong>Keluar semua perangkat</strong> mencabut
-                  seluruh token di seluruh perangkat.
+                  Tombol <strong>Keluar</strong> hanya menutup sesi di
+                  perangkat ini.
                 </p>
               </div>
             </div>
@@ -734,8 +900,7 @@ function ProfilContent() {
                   Perlindungan akun
                 </p>
                 <p className="mt-0.5 text-xs leading-5 text-neutral-500">
-                  Server memeriksa sesi dan izin setiap permintaan. Sesi yang
-                  tidak berlaku akan mengarahkan Anda untuk masuk kembali.
+                  Sesi yang berakhir akan meminta Anda masuk kembali.
                 </p>
               </div>
             </div>
@@ -746,7 +911,7 @@ function ProfilContent() {
                 icon={LogOut}
                 variant="primary"
               >
-                Keluar dari akun ini
+                Keluar
               </ActionButton>
 
               <ActionButton
@@ -754,7 +919,7 @@ function ProfilContent() {
                 icon={ShieldCheck}
                 disabled={signingOutAll}
               >
-                {signingOutAll ? 'Mencabut token…' : 'Keluar semua perangkat'}
+                {signingOutAll ? 'Memproses…' : 'Keluar semua perangkat'}
               </ActionButton>
             </div>
           </CardContent>
@@ -764,8 +929,8 @@ function ProfilContent() {
       {!hasUser && (
         <EmptyState
           icon={Info}
-          title="Data user tidak ditemukan di perangkat ini"
-          description="Session token tersedia tapi data user tidak tersimpan. Keluar lalu login kembali untuk mengisi ulang."
+          title="Data akun tidak ditemukan"
+          description="Keluar lalu masuk lagi untuk memuat ulang data akun."
           tone="ochre"
           action={
             <Link

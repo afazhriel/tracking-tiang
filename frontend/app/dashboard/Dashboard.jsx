@@ -17,6 +17,7 @@ import {
 
 import AppShell from '../../components/layout/AppShell'
 import { useProject } from '../../lib/project-context'
+import { projectUnitLabel, projectUnitLower } from '../../lib/unit-label'
 import {
   BentoCard,
   BentoGrid,
@@ -59,7 +60,7 @@ function MiniMetric({ label, value, tone: toneName }) {
     <div
       style={accentVars(toneName)}
       className={cn(
-        'accent-top accent-top-strong rounded-xl px-4 py-3 ring-1 ring-inset transition-colors',
+        'accent-top accent-top-strong rounded-xl px-3.5 py-2.5 ring-1 ring-inset transition-colors',
         resolved.outline
       )}
     >
@@ -77,7 +78,7 @@ function MiniMetric({ label, value, tone: toneName }) {
         {label}
       </p>
 
-      <p className="mt-1.5 font-display text-base font-semibold tabular-nums text-neutral-900">
+      <p className="mt-1 font-display text-base font-semibold tabular-nums text-neutral-900">
         {value}
       </p>
     </div>
@@ -103,6 +104,12 @@ function DashboardContent() {
 
   const totalTargetPoles = project?.totalTargetPoles ?? null
   const registeredPoles = polesCount ?? null
+  const unitName = projectUnitLabel(project)
+  const unitLower = projectUnitLower(project)
+  const isQuantity = project?.progressSource === 'quantity_entries'
+  const targetValue = isQuantity
+    ? project?.targetQuantity ?? null
+    : project?.targetQuantity ?? totalTargetPoles
 
   const periodIndex =
     summary?.currentPeriod !== null && summary?.currentPeriod !== undefined
@@ -115,39 +122,38 @@ function DashboardContent() {
   const features = [
     {
       Icon: MapPin,
-      name: 'Monitoring Tiang',
-      description:
-        'Pantau lokasi dan kondisi seluruh titik tiang dalam satu tampilan.',
-      href: '/tiang',
-      cta: 'Lihat tiang',
+      name: isQuantity ? `Progres ${unitName}` : `Monitoring ${unitName}`,
+      description: isQuantity
+        ? `Catat progres ${unitName} dan bandingkan dengan target.`
+        : `Pantau lokasi dan kondisi seluruh ${unitName}.`,
+      href: isQuantity ? '/tugas-saya' : '/tiang',
+      cta: isQuantity ? 'Catat progres' : `Lihat ${unitName}`,
       tone: 'lagoon',
       footer: (
-        <Badge size="sm" tone="lagoon" className="pointer-events-auto">
+        <Badge size="sm" tone="lagoon">
           {formatNumber(registeredPoles)} terdaftar
         </Badge>
       ),
-      className: 'lg:col-start-1 lg:col-end-2 lg:row-start-1 lg:row-end-3',
     },
     {
       Icon: ClipboardList,
-      name: 'Progress Pekerjaan',
+      name: 'Progres Pekerjaan',
       description:
-        'Lihat pekerjaan dan perkembangan pelaksanaan proyek secara ringkas.',
+        'Lihat daftar pekerjaan dan progresnya.',
       href: '/pekerjaan',
       cta: 'Lihat pekerjaan',
       tone: 'sage',
       footer: (
-        <Badge size="sm" tone="sage" className="pointer-events-auto">
+        <Badge size="sm" tone="sage">
           {formatNumber(workItems.length)} item
         </Badge>
       ),
-      className: 'lg:col-start-2 lg:col-end-3 lg:row-start-1 lg:row-end-4',
     },
     {
       Icon: BarChart3,
       name: 'Kurva S',
       description:
-        'Bandingkan rencana dan aktual perkembangan proyek.',
+        'Bandingkan rencana dan progres proyek.',
       href: '/kurva-s',
       cta: 'Buka Kurva S',
       tone: 'ochre',
@@ -155,22 +161,19 @@ function DashboardContent() {
         <Badge
           size="sm"
           tone={summary.variance >= 0 ? 'sage' : 'clay'}
-          className="pointer-events-auto"
         >
           Deviasi {formatPercent(summary.variance, 2)}
         </Badge>
       ) : null,
-      className: 'lg:col-start-3 lg:col-end-4 lg:row-start-1 lg:row-end-2',
     },
     {
       Icon: Users,
       name: 'Tim Lapangan',
       description:
-        'Akses informasi tim dan aktivitas pelaksanaan lapangan.',
-      href: '/aktivitas',
-      cta: 'Lihat aktivitas',
+        'Lihat anggota tim dan aktivitas lapangan.',
+      href: '/tim',
+      cta: 'Lihat tim',
       tone: 'plum',
-      className: 'lg:col-start-3 lg:col-end-4 lg:row-start-2 lg:row-end-4',
     },
   ]
 
@@ -187,10 +190,10 @@ function DashboardContent() {
       : null
 
   return (
-    <div className="space-y-6">
-      <section className="flex flex-col justify-between gap-6 xl:flex-row xl:items-end">
+    <div className="space-y-3">
+      <section className="flex flex-col justify-between gap-3 xl:flex-row xl:items-end">
         <div>
-          <p className="mb-3 flex items-center gap-2 text-xs font-medium text-neutral-500">
+          <p className="mb-1.5 flex items-center gap-2 text-xs font-medium text-neutral-500">
             <CalendarDays className="h-4 w-4 text-brand-600" />
             {project?.startDate
               ? `${formatDate(project.startDate)} — ${
@@ -199,27 +202,23 @@ function DashboardContent() {
               : 'Periode proyek belum tersedia'}
           </p>
 
-          <h2 className="font-display text-3xl font-semibold tracking-tight text-neutral-900 sm:text-4xl">
-            {project?.name ?? 'Tracking Proyek'}
+          <h2 className="font-display text-xl font-semibold tracking-tight text-neutral-900 sm:text-2xl">
+            {project?.name ?? 'Proyek'}
           </h2>
 
-          <p className="mt-3 max-w-2xl text-sm leading-6 text-neutral-500">
-            Satu tempat untuk memantau lokasi, pekerjaan, progres, aktivitas, dan
-            perkembangan proyek.
-          </p>
         </div>
 
         <StatCardGrid columns={4} className="sm:max-w-2xl xl:w-[46rem]">
           <StatCard
-            label="Tiang"
-            value={formatNumber(registeredPoles)}
+            label={isQuantity ? `Target ${unitName}` : unitName}
+            value={formatNumber(isQuantity ? targetValue : registeredPoles)}
             Icon={MapPin}
             tone="lagoon"
             valueTone
           />
 
           <StatCard
-            label="Progress"
+            label="Progres"
             value={curveLoading ? '…' : formatPercent(actualProgress)}
             Icon={BarChart3}
             tone="sage"
@@ -236,12 +235,12 @@ function DashboardContent() {
 
           <div
             style={accentVars('plum')}
-            className="accent-top surface-elevate rounded-card border border-neutral-200 px-4 py-4"
+            className="accent-top surface-elevate rounded-card border border-neutral-200 px-3.5 py-3"
           >
             <div className="flex items-start justify-between gap-3">
               <p className="text-xs font-medium text-neutral-500">Status</p>
 
-              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-plum-50 text-plum-700">
+              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-plum-50 text-plum-700">
                 <Activity className="h-4 w-4" />
               </span>
             </div>
@@ -249,7 +248,7 @@ function DashboardContent() {
             <StatusBadge
               size="sm"
               status={projectStatus}
-              className="mt-2"
+              className="mt-1.5"
             />
           </div>
         </StatCardGrid>
@@ -263,7 +262,7 @@ function DashboardContent() {
         />
       )}
 
-      <BentoGrid className="lg:grid-rows-3">
+      <BentoGrid>
         {features.map((feature) => (
           <BentoCard
             key={feature.name}
@@ -272,13 +271,12 @@ function DashboardContent() {
         ))}
       </BentoGrid>
 
-      <section className="grid gap-4 lg:grid-cols-3">
+      <section className="grid gap-3">
         <Card className="lg:col-span-2" tone="brand">
           <CardHeader>
             <CardHeading
               Icon={FileText}
               title="Ringkasan Proyek"
-              description="Informasi utama project tracking"
               tone="brand"
             />
 
@@ -286,22 +284,22 @@ function DashboardContent() {
               href="/kurva-s"
               className="inline-flex items-center gap-2 rounded-xl border border-neutral-200 bg-paper px-3 py-1.5 text-xs font-medium text-neutral-600 transition-colors hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700"
             >
-              Analisa kurva
+              Lihat kurva S
             </Link>
           </CardHeader>
 
           <CardContent>
             {project ? (
               <>
-                <div className="grid gap-4 sm:grid-cols-3">
+                <div className="grid gap-3">
                   <MiniMetric
-                    label="Kode Project"
+                    label="Kode Proyek"
                     value={project.code ?? '—'}
                     tone="ochre"
                   />
                   <MiniMetric
-                    label="Target Tiang"
-                    value={`${formatNumber(totalTargetPoles)} titik`}
+                    label={`Target ${unitName}`}
+                    value={`${formatNumber(targetValue)} ${unitLower}`}
                     tone="lagoon"
                   />
                   <MiniMetric
@@ -311,7 +309,7 @@ function DashboardContent() {
                   />
                 </div>
 
-                <div className="mt-4 grid gap-4 sm:grid-cols-3">
+                <div className="mt-4 grid gap-3">
                   <MiniMetric
                     label="Item Pekerjaan"
                     value={`${formatNumber(workItems.length)} item`}
@@ -331,10 +329,10 @@ function DashboardContent() {
                   />
                 </div>
 
-                <div className="mt-5">
+                <div className="mt-4">
                   <ProgressBar
                     value={actualProgress}
-                    label="Realisasi progress keseluruhan"
+                    label="Progres keseluruhan"
                     showLabel
                     size="md"
                   />
@@ -344,14 +342,14 @@ function DashboardContent() {
               <EmptyState
                 icon={Layers}
                 compact
-                title="Data project belum tersedia"
-                description="Informasi ringkasan akan tampil otomatis setelah endpoint /api/projects dapat diakses."
+                title="Data proyek belum tersedia"
+                description="Pilih proyek untuk melihat ringkasannya."
               />
             )}
           </CardContent>
         </Card>
 
-        <div className="accent-top relative col-span-3 lg:col-span-1 flex flex-col justify-between overflow-hidden rounded-card border border-espresso-800 bg-espresso-900 p-6 text-espresso-50 shadow-[0_18px_40px_-24px_rgba(43,32,24,.8)] [--accent-from:var(--color-lagoon-400)] [--accent-to:var(--color-brand-400)]">
+        <div className="accent-top relative col-span-3 lg:col-span-1 flex flex-col justify-between overflow-hidden rounded-card border border-espresso-800 bg-espresso-900 p-4 text-espresso-50 shadow-[0_18px_40px_-24px_rgba(43,32,24,.8)] [--accent-from:var(--color-lagoon-400)] [--accent-to:var(--color-brand-400)]">
           {/* Kabut lagoon: satu-satunya ungu/kolom dingin di halaman
               ini, dipakai untuk menandai panel "monitoring". */}
           <div
@@ -365,21 +363,17 @@ function DashboardContent() {
           />
 
           <div className="relative">
-            <span className="inline-flex h-11 w-11 items-center justify-center rounded-card bg-lagoon-500/15 text-lagoon-300 ring-1 ring-inset ring-lagoon-400/30">
+            <span className="inline-flex h-10 w-10 items-center justify-center rounded-card bg-lagoon-500/15 text-lagoon-300 ring-1 ring-inset ring-lagoon-400/30">
               <Globe2 className="h-5 w-5" />
             </span>
 
-            <h3 className="mt-8 font-display text-lg font-semibold">
+            <h3 className="mt-5 font-display text-lg font-semibold">
               Monitoring Lapangan
             </h3>
 
-            <p className="mt-2 max-w-md text-sm leading-6 text-espresso-200/80">
-              Data lapangan terhubung ke dashboard sehingga perkembangan proyek
-              lebih mudah dipantau.
-            </p>
           </div>
 
-          <div className="relative mt-auto pt-6">
+          <div className="relative mt-auto pt-4">
             <p className="flex items-center gap-2 text-xs uppercase tracking-[0.18em] text-espresso-300/70">
               <span aria-hidden="true" className="h-1.5 w-6 rounded-full bg-brand-400" />
               Progres terbaru
@@ -388,11 +382,13 @@ function DashboardContent() {
             <ul className="mt-3 space-y-2 text-sm text-espresso-100/90">
               <li>
                 <Link
-                  href="/tiang"
+                  href={isQuantity ? '/tugas-saya' : '/tiang'}
                   className="inline-flex items-center gap-2 transition-colors hover:text-white"
                 >
                   <MapPin className="h-3.5 w-3.5 text-lagoon-300" />
-                  {formatNumber(registeredPoles)} titik tiang terdaftar
+                  {isQuantity
+                    ? `Target ${formatNumber(targetValue)} ${unitLower} — catat progres berkala`
+                    : `${formatNumber(registeredPoles)} lokasi ${unitLower} terdaftar`}
                 </Link>
               </li>
               <li>
@@ -418,13 +414,13 @@ function DashboardContent() {
             <button
               type="button"
               onClick={reloadCurve}
-              className="mt-6 inline-flex h-9 items-center gap-2 rounded-xl bg-paper/10 px-3 text-xs font-medium text-white ring-1 ring-inset ring-paper/20 transition-colors hover:bg-paper/20"
+              className="mt-4 inline-flex h-9 items-center gap-2 rounded-xl bg-paper/10 px-3 text-xs font-medium text-white ring-1 ring-inset ring-paper/20 transition-colors hover:bg-paper/20"
             >
               <RefreshCw className="h-3.5 w-3.5" />
               Muat ulang data
             </button>
 
-            <p className="mt-4 text-xs text-espresso-300/60">
+            <p className="mt-3 text-xs text-espresso-300/60">
               Durasi rencana:{' '}
               {durationMonths ? `${formatNumber(durationMonths)} bulan` : formatDays(null)}
             </p>

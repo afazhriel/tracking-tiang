@@ -4,13 +4,20 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Project;
+use App\Models\ProjectActivity;
+use App\Models\ProjectUser;
 use App\Models\User;
+use App\Services\ActivityLogger;
+use App\Services\NotificationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 
 class ProjectMemberController extends Controller
 {
+    public function __construct(private NotificationService $notifications, private ActivityLogger $activity) {}
+
     public function index(Project $project): JsonResponse
     {
         $this->authorize('update', $project);
@@ -46,9 +53,15 @@ class ProjectMemberController extends Controller
                 'integer',
                 'exists:users,id',
             ],
+            'role' => [
+                'nullable',
+                'string',
+                Rule::in(ProjectUser::roles()),
+            ],
         ]);
 
         $member = User::findOrFail($data['user_id']);
+        $role = $data['role'] ?? ProjectUser::ROLE_PELAKSANA;
 
         abort_unless(
             $member->isActive(),
@@ -56,7 +69,7 @@ class ProjectMemberController extends Controller
             'Hanya pengguna aktif yang dapat ditambahkan.'
         );
 
-        return DB::transaction(function () use ($project, $member) {
+        return DB::transaction(function () use ($project, $member, $role, $request) {
             $lockedProject = Project::query()
                 ->whereKey($project->id)
                 ->lockForUpdate()
@@ -74,10 +87,41 @@ class ProjectMemberController extends Controller
                 DB::table('project_user')->insertOrIgnore([
                     'project_id' => $lockedProject->id,
                     'user_id' => $member->id,
-                    'role' => null,
+                    'role' => $role,
                     'created_at' => now(),
                     'updated_at' => now(),
                 ]);
+
+                $this->notifications->send(
+                    $member->id,
+                    $lockedProject->id,
+                    'sistem',
+                    "Anda ditambahkan ke proyek {$lockedProject->name}",
+                    'Anda kini menjadi anggota proyek ini sebagai '.ProjectUser::roleLabel($role).'.',
+                    '/proyek',
+                    ['project_id' => $lockedProject->id]
+                );
+                $this->notifications->sendToProjectMembers(
+                    $lockedProject,
+                    'sistem',
+                    "Anggota baru di {$lockedProject->name}",
+                    "{$member->name} ditambahkan sebagai ".ProjectUser::roleLabel($role).'.',
+                    '/tim',
+                    ['project_id' => $lockedProject->id, 'user_id' => $member->id],
+                    $request->user()?->id,
+                    null,
+                    [(int) $member->id]
+                );
+                $this->activity->log(
+                    $lockedProject,
+                    $request->user(),
+                    ProjectActivity::ACTION_ANGGOTA_TAMBAH,
+                    "Anggota baru: {$member->name}",
+                    "{$member->name} ditambahkan sebagai ".ProjectUser::roleLabel($role).'.',
+                    'user',
+                    $member->id,
+                    ['user_id' => $member->id, 'role' => $role]
+                );
             }
 
             return response()->json([
@@ -87,9 +131,57 @@ class ProjectMemberController extends Controller
                 'data' => [
                     'project_id' => $lockedProject->id,
                     'user_id' => $member->id,
+                    'role' => $role,
                 ],
             ], $exists ? 200 : 201);
         }, 3);
+    }
+
+    /**
+     * Ubah peran proyek seorang anggota (pengelola/pelaksana/pelihat).
+     */
+    public function update(
+        Request $request,
+        Project $project,
+        User $user
+    ): JsonResponse {
+        $this->authorize('update', $project);
+
+        $data = $request->validate([
+            'role' => ['required', 'string', Rule::in(ProjectUser::roles())],
+        ]);
+
+        $membership = DB::table('project_user')
+            ->where('project_id', $project->id)
+            ->where('user_id', $user->id)
+            ->first();
+
+        abort_unless($membership, 404, 'Anggota proyek tidak ditemukan.');
+
+        DB::table('project_user')
+            ->where('project_id', $project->id)
+            ->where('user_id', $user->id)
+            ->update(['role' => $data['role'], 'updated_at' => now()]);
+
+        $this->activity->log(
+            $project,
+            $request->user(),
+            ProjectActivity::ACTION_ANGGOTA_PERAN,
+            "Peran {$user->name} diubah",
+            "Peran {$user->name} di proyek ini menjadi ".ProjectUser::roleLabel($data['role']).'.',
+            'user',
+            $user->id,
+            ['user_id' => $user->id, 'role' => $data['role']]
+        );
+
+        return response()->json([
+            'message' => 'Peran anggota proyek diperbarui.',
+            'data' => [
+                'project_id' => $project->id,
+                'user_id' => $user->id,
+                'role' => $data['role'],
+            ],
+        ]);
     }
 
     public function destroy(Project $project, User $user): JsonResponse
@@ -139,6 +231,35 @@ class ProjectMemberController extends Controller
             );
 
             $memberQuery->delete();
+
+            $this->notifications->send(
+                $user->id,
+                $lockedProject->id,
+                'sistem',
+                "Akses Anda ke proyek {$lockedProject->name} dicabut",
+                'Anda tidak lagi menjadi anggota proyek ini.',
+                '/proyek',
+                ['project_id' => $lockedProject->id]
+            );
+            $this->notifications->sendToProjectMembers(
+                $lockedProject,
+                'sistem',
+                "Anggota keluar dari {$lockedProject->name}",
+                "Akses {$user->name} ke proyek ini dicabut.",
+                '/tim',
+                ['project_id' => $lockedProject->id, 'user_id' => $user->id],
+                request()->user()?->id
+            );
+            $this->activity->log(
+                $lockedProject,
+                request()->user(),
+                ProjectActivity::ACTION_ANGGOTA_HAPUS,
+                "Anggota keluar: {$user->name}",
+                "Akses {$user->name} ke proyek ini dicabut.",
+                'user',
+                $user->id,
+                ['user_id' => $user->id]
+            );
 
             return response()->json([
                 'message' => 'Akses langsung dicabut. Akses melalui tim aktif tetap berlaku.',

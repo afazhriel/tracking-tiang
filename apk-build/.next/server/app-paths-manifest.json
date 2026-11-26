@@ -1,0 +1,19 @@
+{
+  "/_global-error/page": "app/_global-error/page.js",
+  "/_not-found/page": "app/_not-found/page.js",
+  "/aktivitas/page": "app/aktivitas/page.js",
+  "/dashboard/page": "app/dashboard/page.js",
+  "/kurva-s/page": "app/kurva-s/page.js",
+  "/login/page": "app/login/page.js",
+  "/notifikasi/page": "app/notifikasi/page.js",
+  "/page": "app/page.js",
+  "/pekerjaan/detail/page": "app/pekerjaan/detail/page.js",
+  "/pekerjaan/page": "app/pekerjaan/page.js",
+  "/pekerjaan/pengaturan/page": "app/pekerjaan/pengaturan/page.js",
+  "/profil/page": "app/profil/page.js",
+  "/register/page": "app/register/page.js",
+  "/tiang/detail/page": "app/tiang/detail/page.js",
+  "/tiang/page": "app/tiang/page.js",
+  "/tiang/pekerjaan/page": "app/tiang/pekerjaan/page.js",
+  "/tim/page": "app/tim/page.js"
+}

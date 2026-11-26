@@ -4,14 +4,20 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Project;
+use App\Models\ProjectActivity;
 use App\Models\ProjectBaseline;
+use App\Services\ActivityLogger;
+use App\Services\NotificationService;
 use App\Services\ProjectBaselineApproval;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class ProjectBaselineController extends Controller
 {
+    public function __construct(private NotificationService $notifications, private ActivityLogger $activity) {}
+
     public function index(Project $project): JsonResponse
     {
         $this->authorize('view', $project);
@@ -60,7 +66,7 @@ class ProjectBaselineController extends Controller
                 $lockedProject->end_date &&
                 (float) $lockedProject->target_quantity > 0,
                 422,
-                'Tanggal dan target kuantitas proyek wajib diisi.'
+                'Tanggal dan target jumlah proyek wajib diisi.'
             );
 
             $version = (int) ProjectBaseline::query()
@@ -135,7 +141,7 @@ class ProjectBaselineController extends Controller
             abort_unless(
                 $draft->status === 'draft',
                 422,
-                'Baseline yang sudah disahkan tidak boleh diedit.'
+                'Rencana yang sudah disahkan tidak boleh diedit.'
             );
 
             $draft->update(['notes' => $data['notes'] ?? null]);
@@ -165,7 +171,41 @@ class ProjectBaselineController extends Controller
         abort_unless((int) $baseline->project_id === (int) $project->id, 404);
         $this->authorize('update', $project);
 
-        $approved = $approval->approve($baseline->id, request()->user());
+        try {
+            $approved = $approval->approve($baseline->id, request()->user());
+        } catch (QueryException $e) {
+            // Trigger penjaga baseline di database menolak dengan pesan
+            // Bahasa Indonesia yang memang ditulis untuk pengguna; teruskan
+            // sebagai 422, bukan 500 "Server Error".
+            $message = 'Rencana belum memenuhi syarat pengesahan.';
+            if (preg_match('/ERROR:\s*(.+?)(?:\s*\(Connection|\s*\(SQLSTATE|$)/s', $e->getMessage(), $m)) {
+                $message = trim($m[1]);
+            }
+
+            return response()->json(['message' => $message], 422);
+        }
+
+        // Kabari anggota proyek + catat ke riwayat aktivitas.
+        $actor = request()->user();
+        $this->notifications->sendToProjectMembers(
+            $project,
+            'aktivitas',
+            "Baseline {$project->name} disahkan",
+            "Baseline v{$approved->version} disahkan oleh {$actor->name}. Kurva S kini memakai target ini.",
+            '/kurva-s',
+            ['project_id' => $project->id, 'baseline_id' => $approved->id],
+            $actor->id
+        );
+        $this->activity->log(
+            $project,
+            $actor,
+            ProjectActivity::ACTION_BASELINE_SAHKAN,
+            "Baseline v{$approved->version} disahkan",
+            "Baseline v{$approved->version} disahkan oleh {$actor->name}.",
+            'baseline',
+            $approved->id,
+            ['project_id' => $project->id, 'baseline_id' => $approved->id]
+        );
 
         return response()->json([
             'message' => 'Baseline berhasil disahkan.',

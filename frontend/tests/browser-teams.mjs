@@ -44,7 +44,9 @@ async function addMember(page, userId, email) {
   await page.getByRole('button', { name: 'Cari anggota' }).click()
   await page.getByLabel('Kandidat anggota').selectOption(String(userId))
   await page.getByRole('button', { name: 'Tambah anggota' }).click()
-  await page.getByText(email, { exact: false }).waitFor()
+  // Anggota tampil sebagai span berisi email persis; kandidat di select
+  // juga memuat email (Nama - email) jadi pencocokan harus eksak.
+  await page.getByText(email, { exact: true }).waitFor()
 }
 
 async function getTeam(context, id) {
@@ -81,11 +83,11 @@ try {
   assert.equal((await member.context.request.get(`/api/projects/${fixture.project_id}`)).status(), 200)
   assert.equal((await member.context.request.get(`/api/projects/${fixture.foreign_project_id}`)).status(), 403)
 
-  await owner.page.getByLabel('Cari kode tiang proyek').fill('BROWSER-1')
-  await owner.page.getByRole('button', { name: 'Cari tiang' }).click()
-  await owner.page.getByLabel('Tiang untuk ditugaskan').selectOption(String(fixture.pole_id))
+  await owner.page.getByLabel('Cari kode unit proyek').fill('BROWSER-1')
+  await owner.page.getByRole('button', { name: 'Cari unit' }).click()
+  await owner.page.getByLabel('Unit untuk ditugaskan').selectOption(String(fixture.pole_id))
   await owner.page.getByRole('button', { name: 'Tugaskan tim' }).click()
-  await owner.page.getByRole('link', { name: 'Buka tiang' }).waitFor()
+  await owner.page.getByRole('link', { name: 'Buka unit' }).waitFor()
   assert.equal((await member.context.request.get(`/api/projects/${fixture.project_id}/poles/${fixture.pole_id}`)).status(), 200)
   console.log('PASS owner UI creates team, adds PIC by exact email and assigns scoped pole')
 

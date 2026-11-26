@@ -33,6 +33,16 @@ class ProjectPolicy
             );
     }
 
+    /**
+     * Boleh mencatat progres kuantitas proyek?
+     * Admin/Supervisor/pemilik selalu; anggota proyek kalau
+     * perannya pengelola/pelaksana (pelihat hanya melihat).
+     */
+    public function recordProgress(User $user, Project $project): bool
+    {
+        return $user->canRecordProjectProgress($project);
+    }
+
     // Penghapusan hanya untuk pengelola aktif; controller tetap menjaga riwayat.
     public function delete(User $user, Project $project): bool
     {

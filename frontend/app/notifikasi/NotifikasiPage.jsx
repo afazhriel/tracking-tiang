@@ -79,7 +79,7 @@ function NotificationCard({ notification, onMarkRead, marking }) {
   return (
     <div
       className={cn(
-        'flex gap-4 rounded-card border p-4 transition-colors',
+        'flex gap-3 rounded-card border p-3 transition-colors',
         notification.isRead
           ? 'border-neutral-200 bg-paper'
           : 'border-neutral-300 bg-canvas'
@@ -175,8 +175,11 @@ function NotifikasiContent() {
   const [markingAll, setMarkingAll] = useState(false)
   const [actionError, setActionError] = useState(null)
 
+  /* Tanpa proyek terpilih, tampilkan notifikasi global semua proyek
+     (`GET /api/notifications`); bila ada proyek aktif, hanya notifikasi
+     proyek itu (`GET /api/projects/{id}/notifications`). */
   const notificationsLoader = useCallback(
-    async () => (projectId ? await api.listNotifications(projectId, { query: { page, limit: 50 } }) : null),
+    async () => await api.listNotifications(projectId, { query: { page, limit: 50 } }),
     [projectId, page]
   )
 
@@ -185,7 +188,7 @@ function NotifikasiContent() {
     error,
     loading,
     reload,
-  } = useResource(notificationsLoader, [projectId, page], { enabled: Boolean(projectId) })
+  } = useResource(notificationsLoader, [projectId, page])
 
   const notifications = useMemo(
     () => unwrapList(data).map(normalizeNotification),
@@ -219,7 +222,7 @@ function NotifikasiContent() {
     setActionError(null)
 
     try {
-      await api.markAllNotificationsRead({ body: { project_id: projectId } })
+      await api.markAllNotificationsRead({ body: projectId ? { project_id: projectId } : {} })
       setMarkingAll(false)
       reload()
       if (typeof window !== 'undefined') {
@@ -277,11 +280,9 @@ function NotifikasiContent() {
   }, [category, notifications])
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-3">
       <PageHeader
-        eyebrow="Sistem"
         title="Notifikasi"
-        subtitle="Pemberitahuan progress, aktivitas lapangan, dan informasi sistem."
         actions={
           <>
             <ActionButton
@@ -302,14 +303,14 @@ function NotifikasiContent() {
       <StatCardGrid>
         <StatCard
           label="Total Notifikasi"
-          value={loading ? '…' : data?.meta?.total ?? notifications.length}
-          hint="Pemberitahuan untuk proyek ini"
+          value={loading ? '…' : data ? (data?.meta?.total ?? notifications.length) : '—'}
+          hint={projectId ? 'Pemberitahuan untuk proyek ini' : 'Semua proyek yang bisa Anda akses'}
           Icon={Bell}
         />
 
         <StatCard
           label="Belum Dibaca"
-          value={loading ? '…' : data?.meta?.unread ?? unreadCount}
+          value={loading ? '…' : data ? (data?.meta?.unread ?? unreadCount) : '—'}
           hint="Perlu ditinjau"
           Icon={Info}
           tone="blue"
@@ -359,6 +360,7 @@ function NotifikasiContent() {
             items={tabs}
             value={category}
             onChange={setCategory}
+            className="min-w-0"
           />
         </CardHeader>
 
@@ -376,6 +378,17 @@ function NotifikasiContent() {
                 />
               ))}
             </div>
+          ) : error || projectError ? (
+            <EmptyState
+              icon={BellOff}
+              title="Notifikasi belum dapat dimuat"
+              description="Datanya gagal dimuat — bukan berarti tidak ada notifikasi. Coba muat ulang."
+              action={
+                <ActionButton onClick={reload} icon={RefreshCw}>
+                  Muat ulang
+                </ActionButton>
+              }
+            />
           ) : (
             <EmptyState
               icon={BellOff}

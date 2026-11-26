@@ -1,9 +1,10 @@
 import {
   BarChart3,
   Bell,
-  ClipboardList,
   FolderKanban,
   LayoutDashboard,
+  ListChecks,
+  Sparkles,
   User,
   Users,
 } from 'lucide-react'
@@ -12,9 +13,10 @@ import {
 export const NAV_ITEMS = [
   { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { label: 'Proyek', href: '/proyek', icon: FolderKanban },
-  { label: 'Input Progres', href: '/input-progres', icon: ClipboardList },
+  { label: 'Tugas saya', href: '/tugas-saya', icon: ListChecks },
   { label: 'Laporan', href: '/laporan', icon: BarChart3 },
   { label: 'Tim', href: '/tim', icon: Users },
+  { label: 'Asisten AI', href: '/asisten-ai', icon: Sparkles },
 ]
 
 export const NAV_SECONDARY = [
@@ -29,7 +31,7 @@ function matches(pathname, href) {
 export function isActivePath(pathname, href) {
   if (!pathname) return false
   if (matches(pathname, href)) return true
-  if (href === '/input-progres') return matches(pathname, '/tiang')
+  if (href === '/tugas-saya') return matches(pathname, '/tiang')
   if (href === '/laporan') {
     return ['/kurva-s', '/pekerjaan', '/aktivitas'].some((legacy) => matches(pathname, legacy))
   }

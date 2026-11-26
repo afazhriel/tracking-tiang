@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Project extends Model
@@ -20,6 +21,7 @@ class Project extends Model
         'unit_code',
         'progress_source',
         'status',
+        'org_id',
     ];
 
     protected $casts = [
@@ -27,6 +29,25 @@ class Project extends Model
         'end_date' => 'date',
         'target_quantity' => 'decimal:4',
     ];
+
+    /* Hak user yang sedang login atas proyek ini — supaya frontend
+       menampilkan tombol catat hanya bila server mengizinkan.
+       Tanpa user login (mis. showcase publik) nilainya null/false. */
+    protected $appends = ['my_project_role', 'can_record_progress'];
+
+    public function getMyProjectRoleAttribute(): ?string
+    {
+        $user = auth()->user();
+
+        return $user instanceof User ? $user->projectRole((int) $this->getKey()) : null;
+    }
+
+    public function getCanRecordProgressAttribute(): bool
+    {
+        $user = auth()->user();
+
+        return $user instanceof User && $user->canRecordProjectProgress($this);
+    }
 
     protected static function booted(): void
     {
@@ -41,6 +62,22 @@ class Project extends Model
                     : 'pole_weighted';
             }
         });
+
+        static::saving(function (Project $project): void {
+            // Kolom lama `total_target_poles` masih dipakai penyebut progres
+            // dan trigger penjaga baseline di database. Samakan selalu
+            // dengan `target_quantity` supaya proyek yang dibuat dari API
+            // tidak kehilangan targetnya (baseline gagal disahkan dan
+            // progres salah penyebut bila kolom ini tertinggal 0).
+            if ($project->target_quantity !== null) {
+                $project->total_target_poles = (int) round((float) $project->target_quantity);
+            }
+        });
+    }
+
+    public function organization(): BelongsTo
+    {
+        return $this->belongsTo(Organization::class, 'org_id');
     }
 
     public function regions(): HasMany

@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\Organization;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -12,11 +13,15 @@ class AuthRoleRegistrationTest extends TestCase
 
     public function test_self_registration_creates_pending_user_with_default_role(): void
     {
+        /* Daftar ke organisasi yang sudah ada -> PIC pending (bukan admin). */
+        $organization = Organization::create(['name' => 'PT Contoh']);
+
         $response = $this->postJson('/api/register', [
             'name' => 'Budi Lapangan',
             'email' => 'Budi@Example.com',
             'password' => 'rahasia123',
             'password_confirmation' => 'rahasia123',
+            'organization_name' => $organization->name,
         ]);
 
         $response->assertCreated()
@@ -43,6 +48,7 @@ class AuthRoleRegistrationTest extends TestCase
             'email' => 'Budi@example.com',
             'password' => 'rahasia123',
             'password_confirmation' => 'rahasia123',
+            'organization_name' => 'PT Contoh',
         ])->assertStatus(422)->assertJsonValidationErrors('email');
     }
 
@@ -53,6 +59,7 @@ class AuthRoleRegistrationTest extends TestCase
             'email' => 'budi@example.com',
             'password' => 'rahasia123',
             'password_confirmation' => 'beda12345',
+            'organization_name' => 'PT Contoh',
         ])->assertStatus(422)->assertJsonValidationErrors('password');
     }
 

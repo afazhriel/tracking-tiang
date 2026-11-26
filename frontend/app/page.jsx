@@ -29,6 +29,7 @@ import {
 } from '../lib/api'
 import { formatNumber } from '../lib/format'
 import { resolveStatus } from '../lib/status'
+import { projectUnitLabel, projectUnitLower } from '../lib/unit-label'
 import './landing.css'
 
 /* Leaflet hanya jalan di browser. Di-import lewat `dynamic`
@@ -43,23 +44,23 @@ const LandingPoleMap = dynamic(() => import('../components/landing/LandingPoleMa
   ),
 })
 
-/* Backend hanya mengekspos endpoint ini di belakang auth.sanctum, jadi
-   landing tidak boleh mengarang project id. Tryout: ambil daftar
-   project, pakai yang pertama, lalu baca tiang-nya.
-
-   Landing tetap public: tanpa token kita berhenti sebelum request apa
-   pun dan hanya bagian data yang jadi empty state. Kalau token ada, ia
-   harus ikut dikirim sebagai Bearer — kalau tidak, Sanctum membalas 401
-   dan peta kosong padahal user sudah login. */
+/* Dua jalur data untuk landing:
+   - Tanpa token: endpoint etalase publik (`/api/public/showcase`)
+     yang memang disediakan backend untuk pengunjung — proyek aktif
+     dan titik tiang berkoordinat saja.
+   - Dengan token: daftar project + tiang lewat API biasa, token ikut
+     dikirim sebagai Bearer — kalau tidak, Sanctum membalas 401 dan
+     peta kosong padahal user sudah login. */
 const PROJECTS_URL = '/api/projects'
 const POLES_URL = '/api/projects/{project}/poles'
+const SHOWCASE_URL = '/api/public/showcase'
 
 const features = [
   {
     icon: MapPin,
     title: 'Peta Lokasi Tiang',
     description:
-      'Setiap titik tiang tampil di peta dengan status masing-masing. Klik penanda untuk melihat kode, alamat, dan koordinat tanpa meninggalkan halaman.',
+      'Setiap lokasi tiang tampil di peta dengan status masing-masing. Klik penanda untuk melihat kode, alamat, dan koordinat tanpa meninggalkan halaman.',
   },
   {
     icon: ClipboardCheck,
@@ -71,7 +72,7 @@ const features = [
     icon: TrendingUp,
     title: 'Kurva S',
     description:
-      'Bandingkan kurva rencana dan realisasi dalam satu grafik. Selisih di antara keduanya menunjukkan proyek tertinggal atau melampaui target.',
+      'Bandingkan kurva rencana dan progres dalam satu grafik. Selisih di antara keduanya menunjukkan proyek tertinggal atau melampaui target.',
   },
   {
     icon: Radio,
@@ -88,6 +89,7 @@ export default function HomePage() {
   const [polesLoading, setPolesLoading] = useState(true)
   const [mapFailed, setMapFailed] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
+  const [reloadKey, setReloadKey] = useState(0)
 
   /* Satu effect untuk project + tiang.
      Alasannya: `poles` butuh `project.id`. Dua effect terpisah akan
@@ -97,15 +99,30 @@ export default function HomePage() {
     const controller = new AbortController()
 
     async function load() {
-      /* Tanpa token, backend membalas 401 pada semua route di
-         `routes/api.php`. Landing tetap harus tampil utuh — hanya
-         bagian data yang diisi empty state. */
+      setLoading(true)
+      setPolesLoading(true)
+      setMapFailed(false)
+
       const token = getToken()
 
       if (!token) {
-        setProject(null)
-        setPoles([])
-        setMapFailed(true)
+        /* Pengunjung tanpa sesi: ambil etalase publik. Endpoint ini
+           memang disediakan backend untuk landing, terpisah dari
+           data internal yang terkunci login. */
+        const showcase = await apiRequest(SHOWCASE_URL, {
+          signal: controller.signal,
+          auth: false,
+        })
+
+        if (showcase?.data?.project) {
+          setProject(normalizeProject(showcase.data.project))
+          setPoles((showcase.data.poles ?? []).map(normalizePole))
+        } else {
+          setProject(null)
+          setPoles([])
+        }
+
+        setMapFailed(false)
         setPolesLoading(false)
         setLoading(false)
 
@@ -124,8 +141,11 @@ export default function HomePage() {
         return
       }
 
-      /* Project pertama yang tersedia — bukan id yang ditebak. */
-      const active = projects[0]
+      /* Utamakan proyek berstatus aktif — daftar dari backend tidak
+         terurut berdasarkan status, jadi proyek pertama belum tentu
+         yang sedang berjalan. */
+      const active =
+        projects.find((item) => String(item?.status ?? '').toLowerCase() === 'active') ?? projects[0]
 
       setProject(normalizeProject(active))
 
@@ -150,14 +170,16 @@ export default function HomePage() {
       })
 
     return () => controller.abort()
-  }, [])
+  }, [reloadKey])
 
   const locatedCount = useMemo(
     () => poles.filter((pole) => pole.hasCoordinate).length,
     [poles]
   )
 
-  const targetPoles = project?.totalTargetPoles ?? null
+  const targetPoles = project?.targetQuantity ?? project?.totalTargetPoles ?? null
+  const unitName = projectUnitLabel(project)
+  const unitLower = projectUnitLower(project)
   const projectName = project?.name ?? 'Proyek Monitoring Tiang'
   const projectCode = project?.code ?? null
   const projectStatus = resolveStatus(project?.status)
@@ -219,13 +241,13 @@ export default function HomePage() {
             </div>
 
             <h1>
-              Setiap titik tiang,
+              Setiap lokasi tiang,
               <span> selalu dalam pantauan.</span>
             </h1>
 
             <p className="hero-description">
               Satu dashboard untuk memetakan lokasi tiang, mencatat progres
-              pekerjaan, dan membandingkan realisasi terhadap rencana. Tim
+              pekerjaan, dan membandingkan progres terhadap rencana. Tim
               proyek bekerja dari angka yang sama, dari tampilan yang sama.
             </p>
 
@@ -276,7 +298,7 @@ export default function HomePage() {
                     <div className="map-overlay-top">
                       <Layers size={13} />
                       <span>
-                        {formatNumber(locatedCount)} titik terpetakan
+                        {formatNumber(locatedCount)} lokasi terpetakan
                       </span>
                     </div>
                     <div className="map-overlay-hint">Klik penanda untuk detail</div>
@@ -285,20 +307,29 @@ export default function HomePage() {
                   <div className="map-empty">
                     <MapPin size={20} />
                     <p className="map-empty-title">
-                      {mapFailed ? 'Peta belum dapat dimuat' : 'Belum ada koordinat tiang'}
+                      {mapFailed ? 'Peta belum dapat dimuat' : `Belum ada koordinat ${unitLower}`}
                     </p>
                     <p className="map-empty-body">
                       {mapFailed
-                        ? 'Data lokasi tidak dapat diambil saat ini. Numeric lain tetap dapat Anda pantau.'
-                        : 'Tiang pada proyek ini belum memiliki latitude dan longitude, jadi belum tampil di peta.'}
+                        ? 'Data lokasi tidak dapat diambil saat ini. Angka ringkasan lain tetap dapat Anda pantau.'
+                        : `${unitName} pada proyek ini belum memiliki latitude dan longitude, jadi belum tampil di peta.`}
                     </p>
+                    {mapFailed && (
+                      <button
+                        type="button"
+                        className="map-retry"
+                        onClick={() => setReloadKey((value) => value + 1)}
+                      >
+                        Coba lagi
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
 
               <div className="project-stats">
                 <div className="project-stat">
-                  <span>Target Tiang</span>
+                  <span>Target {unitName}</span>
                   <strong>
                     {loading ? '—' : formatNumber(targetPoles)}
                   </strong>
@@ -306,7 +337,7 @@ export default function HomePage() {
                 </div>
 
                 <div className="project-stat">
-                  <span>Titik Terpetakan</span>
+                  <span>Lokasi Terpetakan</span>
                   <strong>
                     {polesLoading ? '—' : formatNumber(locatedCount)}
                   </strong>
@@ -333,7 +364,7 @@ export default function HomePage() {
           </div>
           <div>
             <strong>{loading ? '—' : formatNumber(targetPoles)}</strong>
-            <span>Target Tiang</span>
+            <span>Target {unitName}</span>
           </div>
         </div>
 
@@ -375,7 +406,7 @@ export default function HomePage() {
           <div>
             <span className="section-kicker">Peta Lokasi</span>
             <h2>
-              Lihat Titik Tiang
+              Lihat Lokasi Tiang
               <br />
               <span>secara geografis.</span>
             </h2>
@@ -383,7 +414,7 @@ export default function HomePage() {
 
           <p>
             Peta menampilkan koordinat tiang yang sudah tercatat. Warna penanda
-            mengikuti status masing-masing, sehingga titik yang butuh perhatian
+            mengikuti status masing-masing, sehingga lokasi yang butuh perhatian
             langsung terlihat tanpa membuka daftar.
           </p>
         </div>
@@ -399,7 +430,7 @@ export default function HomePage() {
               <LandingPoleMap poles={poles} />
               <div className="map-overlay-top">
                 <Layers size={13} />
-                <span>{formatNumber(locatedCount)} titik terpetakan</span>
+                <span>{formatNumber(locatedCount)} lokasi terpetakan</span>
               </div>
               <div className="map-overlay-hint">Klik penanda untuk detail</div>
             </>
@@ -407,17 +438,27 @@ export default function HomePage() {
             <div className="map-empty">
               <MapPin size={20} />
               <p className="map-empty-title">
-                {mapFailed ? 'Peta belum dapat dimuat' : 'Belum ada koordinat tiang'}
+                {mapFailed ? 'Peta belum dapat dimuat' : `Belum ada koordinat ${unitLower}`}
               </p>
               <p className="map-empty-body">
                 {mapFailed
                   ? 'Data lokasi tidak dapat diambil saat ini.'
-                  : 'Tiang pada proyek ini belum memiliki latitude dan longitude.'}
+                  : `${unitName} pada proyek ini belum memiliki latitude dan longitude.`}
               </p>
+              {mapFailed && (
+                <button
+                  type="button"
+                  className="map-retry"
+                  onClick={() => setReloadKey((value) => value + 1)}
+                >
+                  Coba lagi
+                </button>
+              )}
             </div>
           )}
         </div>
 
+        {locatedCount > 0 && (
         <ul className="map-legend">
           {[
             ['Selesai', '#5f8a50'],
@@ -431,6 +472,7 @@ export default function HomePage() {
             </li>
           ))}
         </ul>
+        )}
       </section>
 
       <section id="kapabilitas" className="features-section">
@@ -481,7 +523,7 @@ export default function HomePage() {
             <span className="section-kicker">Langkah Selanjutnya</span>
             <h2>Mulai pantau progres proyek Anda.</h2>
             <p>
-              Buka dashboard untuk melihat seluruh titik tiang, progres pekerjaan,
+              Buka dashboard untuk melihat seluruh lokasi tiang, progres pekerjaan,
               dan kurva S dalam satu tampilan.
             </p>
           </div>
@@ -504,7 +546,14 @@ export default function HomePage() {
           </span>
         </div>
 
-        <p>Sistem Monitoring Proyek Tegangan</p>
+        <p>Sistem Monitoring Proyek Tiang</p>
+
+        <nav className="footer-links" aria-label="Navigasi bawah">
+          <a href="#peta">Peta</a>
+          <a href="#kapabilitas">Kapabilitas</a>
+          <a href="#ringkasan">Ringkasan</a>
+          <a href="/login">Masuk</a>
+        </nav>
 
         <span className="footer-status">
           <span />

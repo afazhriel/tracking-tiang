@@ -7,14 +7,19 @@ import {
   Camera,
   CircleAlert,
   ClipboardList,
+  Flag,
+  Hash,
   MapPin,
   RefreshCw,
   User,
+  UserPlus,
+  Users,
 } from 'lucide-react'
 
 import AppShell from '../../components/layout/AppShell'
 import { ActionButton, PageHeader } from '../../components/layout/PageHeader'
 import { useProject } from '../../lib/project-context'
+import { projectUnitLabel, projectUnitLower } from '../../lib/unit-label'
 import { Badge } from '../../components/ui/badge'
 import {
   Card,
@@ -31,7 +36,6 @@ import { ErrorNotice, SkeletonRows } from '../../components/ui/states'
 import { api, unwrapList } from '../../lib/api'
 import { useResource } from '../../lib/use-api'
 import {
-  formatDate,
   formatDateTime,
   formatRelativeTime,
 } from '../../lib/format'
@@ -39,9 +43,9 @@ import {
 /**
  * Normalisasi aktivitas.
  *
- * BACKEND BELUM memiliki endpoint aktivitas. Loader tetap memanggil
- * endpointkonvensionaal sehingga halaman langsung hidup ketika
- * endpoint ditambahkan - tanpa mengubah backend.
+ * Endpoint aktivitas sudah tersedia di backend
+ * (`GET /api/projects/{id}/activities`) dan mengembalikan daftar
+ * kosong bila proyek belum punya aktivitas.
  */
 function normalizeActivity(item, index) {
   return {
@@ -58,6 +62,10 @@ function normalizeActivity(item, index) {
     poleCode: item?.pole?.pole_code ?? item?.pole_code ?? null,
     workItem: item?.work_item?.name ?? item?.work_item_name ?? null,
     title: item?.title ?? item?.action ?? item?.type ?? null,
+    /* Jenis peristiwa dari backend (`type` = `action` di
+       `project_activities`: penugasan, anggota, baseline, kuantitas;
+       histori progres tiang memakai `progress`). */
+    type: item?.type ?? item?.action ?? null,
     note: item?.notes ?? item?.note ?? item?.description ?? null,
     progress:
       item?.progress_percent === undefined || item?.progress_percent === null
@@ -72,13 +80,32 @@ function normalizeActivity(item, index) {
 }
 
 const ACTIVITY_TYPE_OPTIONS = [
-  { value: 'progress', label: 'Progress' },
+  { value: 'progress', label: 'Progres' },
+  { value: 'penugasan', label: 'Penugasan' },
+  { value: 'anggota', label: 'Anggota' },
+  { value: 'baseline', label: 'Rencana' },
+  { value: 'kuantitas', label: 'Jumlah' },
   { value: 'note', label: 'Catatan' },
   { value: 'photo', label: 'Foto' },
   { value: 'other', label: 'Lainnya' },
 ]
 
+/* Aksi dari `project_activities` dipetakan ke satu label tampilan. */
+const ACTION_TYPE_MAP = {
+  penugasan: 'penugasan',
+  cabut_penugasan: 'penugasan',
+  anggota_tambah: 'anggota',
+  anggota_hapus: 'anggota',
+  anggota_peran: 'anggota',
+  baseline_sahkan: 'baseline',
+  progress_kuantitas: 'kuantitas',
+}
+
 function detectType(activity) {
+  if (activity.type && ACTION_TYPE_MAP[activity.type]) {
+    return ACTION_TYPE_MAP[activity.type]
+  }
+
   if (activity.photos.length) return 'photo'
   if (activity.progress !== null) return 'progress'
   if (activity.note) return 'note'
@@ -87,31 +114,38 @@ function detectType(activity) {
 }
 
 const TYPE_META = {
-  progress: { label: 'Progress', Icon: ClipboardList, className: 'bg-blue-50 text-blue-600' },
+  progress: { label: 'Progres', Icon: ClipboardList, className: 'bg-blue-50 text-blue-600' },
+  penugasan: { label: 'Penugasan', Icon: UserPlus, className: 'bg-amber-50 text-amber-600' },
+  anggota: { label: 'Anggota', Icon: Users, className: 'bg-violet-50 text-violet-600' },
+  baseline: { label: 'Rencana', Icon: Flag, className: 'bg-emerald-50 text-emerald-600' },
+  kuantitas: { label: 'Jumlah', Icon: Hash, className: 'bg-sky-50 text-sky-600' },
   note: { label: 'Catatan', Icon: Activity, className: 'bg-neutral-100 text-neutral-600' },
   photo: { label: 'Dokumentasi', Icon: Camera, className: 'bg-emerald-50 text-emerald-600' },
   other: { label: 'Lainnya', Icon: CircleAlert, className: 'bg-amber-50 text-amber-600' },
 }
 
 function ActivityRow({ activity }) {
+  const { project } = useProject()
+  const unitName = projectUnitLabel(project)
+  const unitLower = projectUnitLower(project)
   const type = detectType(activity)
   const meta = TYPE_META[type]
   const Icon = meta.Icon
 
   return (
-    <li className="relative flex gap-4 pb-6 last:pb-0">
+    <li className="relative flex gap-3 pb-3 last:pb-0">
       <span
         aria-hidden="true"
-        className="absolute left-[1.15rem] top-9 h-[calc(100%-2.25rem)] w-px bg-neutral-200 last:hidden"
+        className="absolute left-[1rem] top-8 h-[calc(100%-2rem)] w-px bg-neutral-200 last:hidden"
       />
 
       <span
-        className={`relative z-10 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${meta.className}`}
+        className={`relative z-10 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl ${meta.className}`}
       >
         <Icon className="h-4 w-4" />
       </span>
 
-      <div className="min-w-0 flex-1 rounded-card border border-neutral-200 bg-paper p-4">
+      <div className="min-w-0 flex-1 rounded-card border border-neutral-200 bg-paper p-3.5">
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div className="min-w-0">
             <p className="text-sm font-medium text-neutral-900">
@@ -132,7 +166,7 @@ function ActivityRow({ activity }) {
           </Badge>
         </div>
 
-        <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-neutral-500">
+        <div className="mt-2.5 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-neutral-500">
           <span className="inline-flex items-center gap-1.5">
             <User className="h-3.5 w-3.5" />
             {activity.user ?? 'Tidak diketahui'}
@@ -144,12 +178,12 @@ function ActivityRow({ activity }) {
               className="inline-flex items-center gap-1.5 transition-colors hover:text-neutral-800"
             >
               <MapPin className="h-3.5 w-3.5" />
-              {activity.poleCode ?? `Tiang #${activity.poleId}`}
+              {activity.poleCode ?? `${unitName} #${activity.poleId}`}
             </Link>
           ) : (
             <span className="inline-flex items-center gap-1.5 text-neutral-400">
               <MapPin className="h-3.5 w-3.5" />
-              Tanpa tiang
+              Tanpa {unitLower}
             </span>
           )}
 
@@ -161,23 +195,23 @@ function ActivityRow({ activity }) {
         </div>
 
         {activity.note && (
-          <p className="mt-3 rounded-xl bg-canvas px-3 py-2 text-xs leading-5 text-neutral-600">
+          <p className="mt-2.5 rounded-xl bg-canvas px-3 py-2 text-xs leading-5 text-neutral-600">
             {activity.note}
           </p>
         )}
 
         {activity.progress !== null && (
-          <div className="mt-3">
+          <div className="mt-2.5">
             <ProgressBar
               value={activity.progress}
               size="xs"
-              label="Progress"
+              label="Progres"
             />
           </div>
         )}
 
         {activity.photos.length > 0 && (
-          <div className="mt-3 flex flex-wrap gap-2">
+          <div className="mt-2.5 flex flex-wrap gap-2">
             {activity.photos.map((photo, index) => {
               const src = typeof photo === 'string' ? photo : photo?.url ?? photo?.path
 
@@ -198,7 +232,8 @@ function ActivityRow({ activity }) {
 }
 
 function AktivitasContent() {
-  const { projectId, error: projectError } = useProject()
+  const { projectId, project, error: projectError } = useProject()
+  const unitName = projectUnitLabel(project)
 
   const [userFilter, setUserFilter] = useState('all')
   const [poleFilter, setPoleFilter] = useState('all')
@@ -291,14 +326,10 @@ function AktivitasContent() {
     [filtered]
   )
 
-  const endpointMissing = !error && !loading && activities.length === 0
-
   return (
-    <div className="space-y-6">
+    <div className="space-y-3">
       <PageHeader
-        eyebrow="Monitoring"
         title="Aktivitas"
-        subtitle="Riwayat aktivitas dan pembaruan pekerjaan lapangan."
         actions={
           <ActionButton
             onClick={reload}
@@ -313,14 +344,14 @@ function AktivitasContent() {
         <StatCard
           label="Total Aktivitas"
           value={loading ? '…' : activities.length}
-          hint="Data dari endpoint aktivitas"
+          hint="Semua aktivitas proyek"
           Icon={Activity}
         />
 
         <StatCard
           label="Tergambar"
           value={loading ? '…' : filtered.length}
-          hint="Setelah filter diterapkan"
+          hint="Sesuai filter yang dipilih"
           Icon={ClipboardList}
           tone="blue"
         />
@@ -328,15 +359,15 @@ function AktivitasContent() {
         <StatCard
           label="PIC / User"
           value={loading ? '…' : users.length}
-          hint="User pelapor"
+          hint="Pelapor aktivitas"
           Icon={User}
           tone="amber"
         />
 
         <StatCard
-          label="Tiang Terlibat"
+          label={`${unitName} Terlibat`}
           value={loading ? '…' : poles.length}
-          hint="Tiang yang memiliki aktivitas"
+          hint={`${unitName} dengan aktivitas`}
           Icon={MapPin}
           tone="emerald"
         />
@@ -373,7 +404,7 @@ function AktivitasContent() {
 
         <SelectField
           id="activity-pole"
-          label="Tiang"
+          label={unitName}
           value={poleFilter}
           onChange={setPoleFilter}
           options={poles}
@@ -391,7 +422,7 @@ function AktivitasContent() {
       <Card>
         <CardHeader>
           <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-neutral-100">
+            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-neutral-100">
               <Activity className="h-4 w-4" />
             </div>
 
@@ -423,20 +454,11 @@ function AktivitasContent() {
           ) : (
             <EmptyState
               icon={Activity}
-              title={
-                endpointMissing
-                  ? 'Endpoint aktivitas belum tersedia'
-                  : 'Tidak ada aktivitas'
-              }
+              title="Belum ada aktivitas"
               description={
-                endpointMissing
-                  ? 'Backend Laravel belum menyediakan endpoint aktivitas lapangan. Struktur filter dan timeline di halaman ini siap digunakan begitu endpoint tersedia — tidak ada data aktivitas yang dibuat di sisi frontend.'
-                  : activities.length
-                    ? 'Tidak ada aktivitas yang cocok dengan filter yang dipilih.'
-                    : 'Belum ada aktivitas lapangan yang tercatat pada project ini.'
-              }
-              hint={
-                endpointMissing ? 'Ready for API integration' : undefined
+                activities.length
+                  ? 'Tidak ada aktivitas yang cocok dengan filter yang dipilih.'
+                  : 'Belum ada aktivitas yang tercatat untuk proyek ini.'
               }
               action={
                 <ActionButton onClick={reload} icon={RefreshCw}>
@@ -445,44 +467,6 @@ function AktivitasContent() {
               }
             />
           )}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Catatan Integrasi</CardTitle>
-        </CardHeader>
-
-        <CardContent className="space-y-2 text-xs leading-6 text-neutral-500">
-          <p>
-            Halaman ini memanggil endpoint secara berurutan:{' '}
-            <code className="rounded bg-neutral-100 px-1.5 py-0.5 text-[11px] text-neutral-600">
-              /api/projects/{'{id}'}/activities
-            </code>
-            ,{' '}
-            <code className="rounded bg-neutral-100 px-1.5 py-0.5 text-[11px] text-neutral-600">
-              /api/projects/{'{id}'}/activity-logs
-            </code>
-            , lalu{' '}
-            <code className="rounded bg-neutral-100 px-1.5 py-0.5 text-[11px] text-neutral-600">
-              /api/activities
-            </code>
-            . Jika semuanya 404, halaman menampilkan empty state.
-          </p>
-          <p>
-            Field yang akan dipakai otomatis:{' '}
-            <code className="text-[11px] text-neutral-600">
-              created_at/recorded_at, user.name, pole.pole_code,
-              work_item.name, title/action, notes, progress_percent, photos
-            </code>
-            .
-          </p>
-          <p>
-            Total aktivitas tercatat:{' '}
-            <strong>{activities.length}</strong>
-            {activities.length > 0 && ` · terakhir ${formatDate(sorted[0]?.createdAt)}`}
-            .
-          </p>
         </CardContent>
       </Card>
     </div>

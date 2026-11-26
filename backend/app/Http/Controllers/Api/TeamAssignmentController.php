@@ -5,7 +5,11 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Pole;
 use App\Models\PoleAssignment;
+use App\Models\Project;
+use App\Models\ProjectActivity;
 use App\Models\Team;
+use App\Services\ActivityLogger;
+use App\Services\NotificationService;
 use App\Services\PoleVisibility;
 use App\Services\PoleWorkItems;
 use Illuminate\Http\JsonResponse;
@@ -14,6 +18,8 @@ use Illuminate\Support\Facades\DB;
 
 class TeamAssignmentController extends Controller
 {
+    public function __construct(private NotificationService $notifications, private ActivityLogger $activity) {}
+
     public function index(Request $request, Team $team): JsonResponse
     {
         $this->authorize('view', $team);
@@ -60,6 +66,24 @@ class TeamAssignmentController extends Controller
                 ['assigned_by' => $request->user()->id, 'assigned_at' => now(), 'status' => 'active']
             );
 
+            $project = Project::findOrFail($pole->project_id);
+            foreach ($team->users as $member) {
+                if (! $member->isActive() || (int) $member->id === (int) $request->user()->id) {
+                    continue;
+                }
+                $this->notifications->send($member->id, $pole->project_id, 'sistem', "Tim {$team->name} ditugaskan ke {$pole->pole_code}", "Tim Anda kini mengerjakan {$pole->pole_code}.", "/tiang/{$pole->id}", ['pole_id' => $pole->id]);
+            }
+            $this->activity->log(
+                $project,
+                $request->user(),
+                ProjectActivity::ACTION_PENUGASAN,
+                "Penugasan {$pole->pole_code}",
+                "Tim {$team->name} ditugaskan ke {$pole->pole_code}.",
+                'pole',
+                $pole->id,
+                ['pole_id' => $pole->id, 'team_id' => $team->id]
+            );
+
             return response()->json($assignment, 201);
         }, 3);
     }
@@ -76,6 +100,25 @@ class TeamAssignmentController extends Controller
             $assignment = $team->poleAssignments()->whereKey($assignment->id)->lockForUpdate()->firstOrFail();
             abort_if($assignment->user_id !== null, 409, 'Penugasan lama memiliki target pengguna. Kelola melalui Admin agar akses langsung tetap terjaga.');
             $assignment->update(['status' => 'revoked']);
+
+            $pole = Pole::findOrFail($assignment->pole_id);
+            $project = Project::findOrFail($pole->project_id);
+            foreach ($team->users as $member) {
+                if (! $member->isActive()) {
+                    continue;
+                }
+                $this->notifications->send($member->id, $pole->project_id, 'sistem', "Penugasan tim di {$pole->pole_code} dicabut", "Tim {$team->name} tidak lagi mengerjakan {$pole->pole_code}.", "/tiang/{$pole->id}", ['pole_id' => $pole->id]);
+            }
+            $this->activity->log(
+                $project,
+                request()->user(),
+                ProjectActivity::ACTION_CABUT_PENUGASAN,
+                "Penugasan {$pole->pole_code} dicabut",
+                "Penugasan tim {$team->name} di {$pole->pole_code} dicabut.",
+                'pole',
+                $pole->id,
+                ['pole_id' => $pole->id, 'team_id' => $team->id]
+            );
 
             return response()->json(['message' => 'Penugasan dicabut; histori tetap tersimpan.']);
         }, 3);

@@ -18,6 +18,7 @@ import {
 } from 'lucide-react'
 
 import ProjectTeams from './ProjectTeams'
+import KpiSection from './KpiSection'
 import { useProject } from '../../lib/project-context'
 import AppShell from '../../components/layout/AppShell'
 import { PageHeader } from '../../components/layout/PageHeader'
@@ -89,8 +90,8 @@ function Notice({ notice, onDismiss }) {
       role="alert"
       className={
         isError
-          ? 'flex items-start justify-between gap-3 rounded-card border border-clay-300 bg-clay-50 px-4 py-3 text-sm text-clay-800'
-          : 'flex items-start justify-between gap-3 rounded-card border border-emerald-300 bg-emerald-50 px-4 py-3 text-sm text-emerald-800'
+          ? 'flex items-start justify-between gap-3 rounded-card border border-clay-300 bg-clay-50 px-3 py-2.5 text-sm text-clay-800'
+          : 'flex items-start justify-between gap-3 rounded-card border border-emerald-300 bg-emerald-50 px-3 py-2.5 text-sm text-emerald-800'
       }
     >
       <span className="flex items-start gap-2.5">
@@ -220,10 +221,10 @@ function ProvinceAssignModal({ user, provinces, busy, onClose, onSave }) {
       open
       onClose={onClose}
       title={`Wilayah untuk ${user.name || 'pengguna'}`}
-      description="Pilih provinsi yang boleh dikelola. Admin selalu punya akses ke semua provinsi."
+      description="Admin selalu punya akses ke semua provinsi."
       footer={null}
     >
-      <div className="space-y-4">
+      <div className="space-y-3">
         <TextInput
           value={search}
           onChange={(event) => setSearch(event.target.value)}
@@ -233,7 +234,7 @@ function ProvinceAssignModal({ user, provinces, busy, onClose, onSave }) {
 
         <div className="max-h-72 divide-y divide-neutral-100 overflow-y-auto rounded-xl border border-neutral-200">
           {filtered.length === 0 ? (
-            <p className="px-3 py-4 text-xs text-neutral-400">
+            <p className="px-3 py-3 text-xs text-neutral-400">
               Tidak ada provinsi yang cocok.
             </p>
           ) : (
@@ -324,7 +325,7 @@ function ProvinceCell({ user, disabled, onManage }) {
   )
 }
 
-function AdminTimContent({ currentUser }) {
+function AdminTimContent() {
   const [search, setSearch] = useState('')
   const [roleFilter, setRoleFilter] = useState('all')
   const [statusFilter, setStatusFilter] = useState('all')
@@ -506,11 +507,9 @@ function AdminTimContent({ currentUser }) {
 
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-3">
       <PageHeader
-        eyebrow="Akses"
         title="Akun & Undangan"
-        subtitle={`Kelola user, role, status akun, dan undangan. Masuk sebagai ${currentUser.roleLabel || 'Pengguna'}.`}
       />
 
       <Notice notice={notice} onDismiss={() => setNotice(null)} />
@@ -559,8 +558,8 @@ function AdminTimContent({ currentUser }) {
           </Button>
         </CardHeader>
 
-        <CardContent className="space-y-4">
-          <div className="grid gap-3 sm:grid-cols-3">
+        <CardContent className="space-y-3">
+          <div className="grid gap-3">
             <SearchInput
               value={search}
               onChange={setSearch}
@@ -608,13 +607,14 @@ function AdminTimContent({ currentUser }) {
             />
           ) : (
             <TableWrap>
-              <Table>
+              <Table className="min-w-[560px] md:min-w-[640px] [&_td]:px-2.5 [&_th]:px-2.5 md:[&_td]:px-4 md:[&_th]:px-4">
                 <thead>
                   <tr>
                     <Th>Pengguna</Th>
                     <Th>Role</Th>
                     <Th>Status</Th>
-                    <Th>Tim</Th>
+                    <Th className="hidden lg:table-cell">Organisasi</Th>
+                    <Th className="hidden lg:table-cell">Tim</Th>
                     <Th>Provinsi</Th>
                     <Th align="right">Aksi</Th>
                   </tr>
@@ -625,7 +625,7 @@ function AdminTimContent({ currentUser }) {
                     <Tr key={user.id}>
                       <Td>
                         <div className="flex items-center gap-3">
-                          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-plum-500 to-lagoon-600 text-xs font-medium text-white">
+                          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-plum-500 to-lagoon-600 text-xs font-medium text-white">
                             {initialsOf(user.name)}
                           </span>
 
@@ -654,7 +654,13 @@ function AdminTimContent({ currentUser }) {
                         </Badge>
                       </Td>
 
-                      <Td>
+                      <Td className="hidden lg:table-cell">
+                        <span className="text-xs text-neutral-600">
+                          {user.organization?.name ?? 'Platform'}
+                        </span>
+                      </Td>
+
+                      <Td className="hidden lg:table-cell">
                         {user.teams.length ? (
                           <div className="flex flex-wrap gap-1.5">
                             {user.teams.map((team) => (
@@ -703,8 +709,8 @@ function AdminTimContent({ currentUser }) {
           <Badge tone="plum">{formatNumber(invitations.length)} undangan</Badge>
         </CardHeader>
 
-        <CardContent className="space-y-4">
-          <div className="grid gap-3 sm:grid-cols-[1.4fr_1.2fr_1fr_auto] sm:items-end">
+        <CardContent className="space-y-3">
+          <div className="grid gap-3 sm:items-end">
             <Field label="Email" htmlFor="invite-email">
               <input
                 id="invite-email"
@@ -786,11 +792,11 @@ function AdminTimContent({ currentUser }) {
               compact
               icon={Mail}
               title="Belum ada undangan"
-              description="Undangan adalah jalur membuat akun dengan role langsung. Pendaftar mandiri muncul di daftar user sebagai 'Menunggu'."
+              description="Buat undangan untuk akun baru dengan role langsung."
             />
           ) : (
             <TableWrap>
-              <Table className="min-w-[560px]">
+              <Table className="min-w-[560px] [&_td]:px-2.5 [&_th]:px-2.5 md:[&_td]:px-4 md:[&_th]:px-4">
                 <thead>
                   <tr>
                     <Th>Email</Th>
@@ -880,12 +886,13 @@ function TimContent() {
   const { project, projectId, loading, error } = useProject()
   if (loading) return <p role="status">Memuat proyek…</p>
   if (error) return <EmptyState title="Gagal memuat proyek" description={error.message} />
-  return <div className="space-y-6">
+  return <div className="space-y-3">
+    <KpiSection />
     {projectId ? <ProjectTeams key={projectId} project={project} currentUser={currentUser} />
       : <EmptyState title="Belum ada proyek yang dapat diakses" description="Buat atau pilih proyek di menu Proyek terlebih dahulu." />}
-    {['admin', 'supervisor'].includes(currentUser.role) && <details className="rounded-card border border-neutral-200 p-4">
-      <summary className="cursor-pointer font-semibold">Administrasi akun & undangan (Admin)</summary>
-      <div className="mt-6"><AdminTimContent currentUser={currentUser} /></div>
+    {['admin', 'supervisor'].includes(currentUser.role) && <details className="rounded-card border border-neutral-200 p-3">
+      <summary className="cursor-pointer font-semibold">Akun &amp; undangan</summary>
+      <div className="mt-4"><AdminTimContent currentUser={currentUser} /></div>
     </details>}
   </div>
 }

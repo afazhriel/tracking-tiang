@@ -3,7 +3,9 @@
 namespace App\Policies;
 
 use App\Models\Pole;
+use App\Models\ProjectUser;
 use App\Models\User;
+use Illuminate\Auth\Access\Response;
 
 /**
  * Otorisasi tingkat tiang.
@@ -72,21 +74,36 @@ class PolePolicy
     /**
      * Boleh menulis progress?
      *
-     * Admin: selalu.
-     * Selain admin: harus punya akses project DAN tiang berada di
-     * provinsi yang ditugaskan (atau ditugaskan langsung/lewat tim).
+     * Admin/Supervisor/pemilik proyek: selalu.
+     * PIC: hanya di lokasi yang ditugaskan ke dia (langsung atau
+     * lewat timnya). Akses wilayah saja tidak cukup untuk mencatat
+     * — wilayah hanya mengatur apa yang bisa dilihat/dibuat.
+     * Anggota dengan peran Pelihat tidak bisa mencatat, sekalipun
+     * lokasi itu ditugaskan ke dia.
      */
-    public function updateProgress(User $user, Pole $pole): bool
+    public function updateProgress(User $user, Pole $pole): bool|Response
     {
         if ($user->canAdminister()) {
             return true;
         }
 
-        if (! $user->canAccessProject((int) $pole->project_id)) {
-            return false;
+        if ((int) $pole->project->owner_user_id === (int) $user->id
+            && $pole->project->owner_user_id !== null) {
+            return true;
         }
 
-        return $user->canManageProvince($pole->province_id)
-            || $user->isPoleAssignedTo((int) $pole->id);
+        if (! $user->canAccessProject((int) $pole->project_id)) {
+            return Response::deny('Anda bukan anggota proyek ini.');
+        }
+
+        if ($user->projectRole((int) $pole->project_id) === ProjectUser::ROLE_PELIHAT) {
+            return Response::deny('Peran Anda di proyek ini hanya melihat, tidak bisa mencatat progres.');
+        }
+
+        if (! $user->isPoleAssignedTo((int) $pole->id)) {
+            return Response::deny('Lokasi ini belum ditugaskan ke Anda. Minta supervisor menugaskan lokasi ini ke Anda.');
+        }
+
+        return true;
     }
 }

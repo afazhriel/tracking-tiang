@@ -1,19 +1,25 @@
 <?php
 
 use App\Http\Controllers\Api\ActivityController;
+use App\Http\Controllers\Api\AiChatController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\CurveController;
+use App\Http\Controllers\Api\HafiWebhookController;
 use App\Http\Controllers\Api\InvitationController;
+use App\Http\Controllers\Api\KpiController;
 use App\Http\Controllers\Api\NotificationController;
+use App\Http\Controllers\Api\OrganizationController;
 use App\Http\Controllers\Api\PhotoController;
 use App\Http\Controllers\Api\PoleAssignmentController;
 use App\Http\Controllers\Api\PoleController;
 use App\Http\Controllers\Api\PoleWorkItemController;
 use App\Http\Controllers\Api\ProgressController;
 use App\Http\Controllers\Api\ProjectBaselineController;
+use App\Http\Controllers\Api\ProjectBudgetController;
 use App\Http\Controllers\Api\ProjectController;
 use App\Http\Controllers\Api\ProjectMemberController;
 use App\Http\Controllers\Api\ProjectQuantityEntryController;
+use App\Http\Controllers\Api\PublicShowcaseController;
 use App\Http\Controllers\Api\RegionController;
 use App\Http\Controllers\Api\TeamAssignmentController;
 use App\Http\Controllers\Api\TeamController;
@@ -66,6 +72,20 @@ Route::get('/regions/regencies/{regency}/districts', [RegionController::class, '
 Route::get('/regions/districts/{district}/villages', [RegionController::class, 'villages']);
 
 /*
+ * Etalase publik landing page: proyek aktif + titik tiang berkoordinat.
+ * Sengaja dibatasi pada data tampilan publik saja (lihat controller).
+ */
+Route::get('/public/showcase', [PublicShowcaseController::class, 'show']);
+
+/*
+ * Webhook HAFI Pay: pemberitahuan pembayaran terverifikasi (payment.paid).
+ * Tanpa login; keasliannya diperiksa lewat tanda tangan HMAC di controller.
+ * Tracking Pekerjaan belum punya model pembayaran, jadi event hanya dicatat
+ * untuk audit — belum ada aksi bisnis yang dipicu.
+ */
+Route::post('/hooks/hafi', [HafiWebhookController::class, 'handle']);
+
+/*
 |--------------------------------------------------------------------------
 | Protected routes
 |--------------------------------------------------------------------------
@@ -86,6 +106,16 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
     /* Auth */
     Route::get('/me', [AuthController::class, 'me']);
 
+    /* Organisasi (PT klien) — kop Surat Job berasal dari sini. */
+    Route::get('/organizations/{organization}', [OrganizationController::class, 'show']);
+    Route::patch('/organizations/{organization}', [OrganizationController::class, 'update']);
+    Route::post('/organizations/{organization}/logo', [OrganizationController::class, 'uploadLogo']);
+    Route::get('/organizations/{organization}/logo', [OrganizationController::class, 'showLogo']);
+
+    /* Asisten AI — sama mesinnya dengan AI Si Tani (OpenAI-compatible,
+       kunci dari env AI_API_KEY). */
+    Route::post('/ai/chat', [AiChatController::class, 'chat']);
+
     /* Profil sendiri — selalu menempel pada user yang login. */
     Route::get('/user/profile', [UserProfileController::class, 'show']);
     Route::put('/user/profile', [UserProfileController::class, 'update']);
@@ -97,8 +127,11 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
     Route::get('/projects', [ProjectController::class, 'index']);
     Route::post('/projects', [ProjectController::class, 'store']);
     Route::get('/projects/{project}', [ProjectController::class, 'show']);
+    Route::patch('/projects/{project}', [ProjectController::class, 'update']);
+    Route::put('/projects/{project}', [ProjectController::class, 'update']);
     Route::get('/projects/{project}/members', [ProjectMemberController::class, 'index']);
     Route::post('/projects/{project}/members', [ProjectMemberController::class, 'store']);
+    Route::patch('/projects/{project}/members/{user}', [ProjectMemberController::class, 'update']);
     Route::delete('/projects/{project}/members/{user}', [ProjectMemberController::class, 'destroy']);
 
     Route::get(
@@ -111,11 +144,27 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
         [ProjectQuantityEntryController::class, 'store']
     );
 
+    /* RAB pengajuan per proyek: draf -> diajukan -> disetujui/ditolak. */
+    Route::get('/projects/{project}/budgets', [ProjectBudgetController::class, 'index']);
+    Route::post('/projects/{project}/budgets', [ProjectBudgetController::class, 'store']);
+    Route::get('/projects/{project}/budgets/{budget}', [ProjectBudgetController::class, 'show']);
+    Route::put('/projects/{project}/budgets/{budget}', [ProjectBudgetController::class, 'update']);
+    Route::patch('/projects/{project}/budgets/{budget}', [ProjectBudgetController::class, 'update']);
+    Route::delete('/projects/{project}/budgets/{budget}', [ProjectBudgetController::class, 'destroy']);
+    Route::post('/projects/{project}/budgets/{budget}/submit', [ProjectBudgetController::class, 'submit']);
+    Route::post('/projects/{project}/budgets/{budget}/decide', [ProjectBudgetController::class, 'decide']);
+    Route::post('/projects/{project}/budgets/{budget}/duplicate', [ProjectBudgetController::class, 'duplicate']);
+
+    /* KPI per user (Tim): daftar yang boleh dilihat + satu user. */
+    Route::get('/kpi', [KpiController::class, 'index']);
+    Route::get('/users/{user}/kpi', [KpiController::class, 'show']);
+
     /* Tiang / Pole */
     Route::get('/projects/{project}/poles', [PoleController::class, 'index']);
     Route::get('/projects/{project}/poles/summary', [PoleController::class, 'summary']);
     Route::post('/projects/{project}/poles', [PoleController::class, 'store']);
     Route::get('/projects/{project}/poles/{pole}', [PoleController::class, 'show']);
+    Route::patch('/projects/{project}/poles/{pole}', [PoleController::class, 'update']);
 
     /* Work Item */
     Route::get('/projects/{project}/work-items', [WorkItemController::class, 'index']);
@@ -177,7 +226,9 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
 
     /*
      * Pole assignment.
+     * "Tugas saya": titik-titik yang ditugaskan ke user yang login.
      */
+    Route::get('/me/assigned-poles', [PoleAssignmentController::class, 'myAssignments']);
     Route::get('/users/{user}/poles', [PoleAssignmentController::class, 'index']);
     Route::post('/users/{user}/poles', [PoleAssignmentController::class, 'store']);
     Route::delete('/users/{user}/poles/{pole}', [PoleAssignmentController::class, 'destroy']);

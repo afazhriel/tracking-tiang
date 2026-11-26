@@ -100,7 +100,7 @@ export function Component() {
             </h1>
 
             <p className="mt-2 text-sm text-neutral-500">
-              Masuk untuk melanjutkan ke Tracking Tiang.
+              Masuk untuk melanjutkan ke Tracking Pekerjaan.
             </p>
           </div>
 
@@ -167,6 +167,11 @@ export function Component() {
               </div>
             </div>
 
+            <p className="mt-2 text-right text-xs text-neutral-500">
+              Lupa password? Hubungi admin proyek untuk mengatur ulang kata
+              sandi Anda.
+            </p>
+
             {error && (
               <div
                 role="alert"
@@ -208,7 +213,7 @@ export function Component() {
         </div>
 
         <p className="mt-5 text-center text-xs text-espresso-300/70">
-          Tracking Tiang · Project Control System
+          Tracking Pekerjaan · Sistem Monitoring Pekerjaan
         </p>
       </div>
     </main>

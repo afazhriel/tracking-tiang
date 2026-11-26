@@ -28,11 +28,11 @@ const jetbrains = localFont({
 
 export const metadata = {
   title: {
-    default: 'Tracking Proyek',
-    template: '%s · Tracking Proyek',
+    default: 'Tracking Pekerjaan',
+    template: '%s · Tracking Pekerjaan',
   },
   description:
-    'Project tracking tiang tegangan — monitoring titik, progres pekerjaan, dan kurva S.',
+    'Sistem monitoring proyek tiang — pemetaan lokasi, progres pekerjaan, dan kurva S.',
   manifest: '/manifest.json',
   icons: {
     /* SVG lebih tajam di tab browser; PNG dipakai perangkat yang
@@ -48,7 +48,7 @@ export const metadata = {
   appleWebApp: {
     capable: true,
     statusBarStyle: 'black-translucent',
-    title: 'Tracking Proyek',
+    title: 'Tracking Pekerjaan',
   },
   formatDetection: {
     telephone: false,

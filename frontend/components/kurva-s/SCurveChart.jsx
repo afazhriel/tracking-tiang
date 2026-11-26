@@ -19,7 +19,7 @@ import { toneHex } from '../../lib/theme'
  * supaya garis kurva S ikut berubah kalau palet aplikasi berubah.
  *
  * Rencana  = espresso  (netral, "rencana")
- * Realisasi   = lagoon    (warna aksi / data lapangan)
+ * Progres     = lagoon    (warna aksi / data lapangan)
  */
 const PLANNED_HEX = toneHex('espresso')
 const ACTUAL_HEX = toneHex('lagoon')
@@ -42,7 +42,7 @@ function CurveTooltip({ active, payload, label }) {
       <p className="text-xs font-semibold text-neutral-800">{label}</p>
 
       <ul className="mt-2 space-y-1.5">
-        <li className="flex items-center justify-between gap-6 text-xs">
+        <li className="flex items-center justify-between gap-4 text-xs">
           <span className="flex items-center gap-1.5 text-neutral-500">
             <span
               className="h-2 w-2 rounded-full"
@@ -55,20 +55,20 @@ function CurveTooltip({ active, payload, label }) {
           </span>
         </li>
 
-        <li className="flex items-center justify-between gap-6 text-xs">
+        <li className="flex items-center justify-between gap-4 text-xs">
           <span className="flex items-center gap-1.5 text-neutral-500">
             <span
               className="h-2 w-2 rounded-full"
               style={{ backgroundColor: ACTUAL_HEX }}
             />
-            Realisasi
+            Progres
           </span>
           <span className="font-medium tabular-nums text-neutral-800">
             {formatPercent(point.actual)}
           </span>
         </li>
 
-        <li className="flex items-center justify-between gap-6 border-t border-neutral-100 pt-1.5 text-xs">
+        <li className="flex items-center justify-between gap-4 border-t border-neutral-100 pt-1.5 text-xs">
           <span className="text-neutral-500">Selisih</span>
           <span
             className={`font-medium tabular-nums ${
@@ -111,7 +111,6 @@ export default function SCurveChart({ series = [], height = 380 }) {
 
   return (
     <div className="w-full">
-      <p className="mb-2 text-xs text-neutral-500">Skala 0–{axisMax}% agar perubahan progres mudah terlihat. Target penuh tetap 100%.</p>
       <div style={{ height }}>
       <ResponsiveContainer width="100%" height="100%">
         <LineChart
@@ -170,7 +169,7 @@ export default function SCurveChart({ series = [], height = 380 }) {
           <Line
             type="monotone"
             dataKey="actual"
-            name="Realisasi"
+            name="Progres"
             stroke={ACTUAL_HEX}
             strokeWidth={2.5}
             dot={false}

@@ -5,9 +5,12 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Pole;
 use App\Models\PoleAssignment;
+use App\Models\Project;
+use App\Models\ProjectActivity;
 use App\Models\ProjectUser;
 use App\Models\Team;
 use App\Models\User;
+use App\Services\ActivityLogger;
 use App\Services\NotificationService;
 use App\Services\PoleWorkItems;
 use Illuminate\Http\JsonResponse;
@@ -17,7 +20,43 @@ use Illuminate\Support\Facades\DB;
 
 class PoleAssignmentController extends Controller
 {
-    public function __construct(private PoleWorkItems $items, private NotificationService $notifications) {}
+    public function __construct(private PoleWorkItems $items, private NotificationService $notifications, private ActivityLogger $activity) {}
+
+    /**
+     * Titik-titik yang ditugaskan ke user yang login ("Tugas saya"):
+     * langsung maupun lewat tim. Diurutkan tenggat terdekat dulu
+     * (tanpa tenggat di belakang).
+     */
+    public function myAssignments(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $poleIds = $user->assignedPoleIds();
+
+        $poles = Pole::query()
+            ->whereIn('id', $poleIds)
+            ->with([
+                'project:id,name,code',
+                'activeAssignments.user:id,name',
+                'activeAssignments.team:id,name',
+                'workProgress.workItem',
+            ])
+            ->orderByRaw('due_date IS NULL, due_date ASC')
+            ->orderBy('pole_code')
+            ->get()
+            ->filter(fn (Pole $pole) => $user->canAccessProject((int) $pole->project_id))
+            ->map(fn (Pole $pole) => array_merge(
+                $pole->toArray(),
+                $pole->cardPayload(),
+                ['project' => $pole->project ? [
+                    'id' => $pole->project->id,
+                    'name' => $pole->project->name,
+                    'code' => $pole->project->code,
+                ] : null]
+            ))
+            ->values();
+
+        return response()->json(['data' => $poles]);
+    }
 
     public function index(User $user): JsonResponse
     {
@@ -64,11 +103,35 @@ class PoleAssignmentController extends Controller
             );
             $recipients = collect([$user]);
             foreach ($recipients as $member) {
-                ProjectUser::firstOrCreate(['project_id' => $pole->project_id, 'user_id' => $member->id], ['role' => $member->role]);
+                ProjectUser::firstOrCreate(['project_id' => $pole->project_id, 'user_id' => $member->id], ['role' => ProjectUser::ROLE_PELAKSANA]);
             }
+            $project = Project::findOrFail($pole->project_id);
             if ($user->isActive()) {
-                $this->notifications->send($user->id, $pole->project_id, 'sistem', "Anda ditugaskan ke {$pole->pole_code}", 'Tiang ini kini menjadi bagian dari tugas lapangan Anda.', "/tiang/{$pole->id}", ['pole_id' => $pole->id]);
+                $this->notifications->send($user->id, $pole->project_id, 'sistem', "Anda ditugaskan ke {$pole->pole_code}", 'Lokasi ini kini menjadi bagian dari tugas lapangan Anda.', "/tiang/{$pole->id}", ['pole_id' => $pole->id]);
             }
+            // Kabari anggota proyek lain (sekali per orang, tanpa pelaku
+            // dan tanpa PIC yang ditugaskan — dia sudah dapat notif langsung).
+            $this->notifications->sendToProjectMembers(
+                $project,
+                'sistem',
+                "PIC baru di {$pole->pole_code}",
+                "{$user->name} ditugaskan ke {$pole->pole_code}.",
+                "/tiang/{$pole->id}",
+                ['pole_id' => $pole->id],
+                $request->user()?->id,
+                $pole,
+                [(int) $user->id]
+            );
+            $this->activity->log(
+                $project,
+                $request->user(),
+                ProjectActivity::ACTION_PENUGASAN,
+                "Penugasan {$pole->pole_code}",
+                "{$user->name} ditugaskan ke {$pole->pole_code}.",
+                'pole',
+                $pole->id,
+                ['pole_id' => $pole->id, 'user_id' => $user->id]
+            );
             $assignment->load(['pole:id,project_id,pole_code,address', 'user:id,name,email,role,status', 'team:id,name,code', 'assigner:id,name,email']);
 
             return response()->json($assignment, $existing ? 200 : 201);
@@ -97,6 +160,21 @@ class PoleAssignmentController extends Controller
         $assignment->update([
             'status' => PoleAssignment::STATUS_REVOKED,
         ]);
+
+        $project = Project::findOrFail($pole->project_id);
+        if ($user->isActive()) {
+            $this->notifications->send($user->id, $pole->project_id, 'sistem', "Penugasan Anda di {$pole->pole_code} dicabut", 'Lokasi ini tidak lagi menjadi bagian dari tugas lapangan Anda.', "/tiang/{$pole->id}", ['pole_id' => $pole->id]);
+        }
+        $this->activity->log(
+            $project,
+            $request->user(),
+            ProjectActivity::ACTION_CABUT_PENUGASAN,
+            "Penugasan {$pole->pole_code} dicabut",
+            "Penugasan {$user->name} di {$pole->pole_code} dicabut.",
+            'pole',
+            $pole->id,
+            ['pole_id' => $pole->id, 'user_id' => $user->id]
+        );
 
         return response()->json([
             'message' => 'Assignment berhasil dicabut.',

@@ -4,8 +4,11 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { Plus, RefreshCw, UsersRound } from 'lucide-react'
 import { api, normalizeTeam, unwrapItem, unwrapList, userRoleLabel } from '../../lib/api'
+import { projectUnitLabel, projectUnitLower } from '../../lib/unit-label'
+import { useProject } from '../../lib/project-context'
 import { useResource } from '../../lib/use-api'
 import { PageHeader } from '../../components/layout/PageHeader'
+import { Modal } from '../../components/ui/modal'
 import { Button } from '../../components/ui/button'
 import { Card, CardHeader, CardTitle, CardContent } from '../../components/ui/card'
 import { Badge } from '../../components/ui/badge'
@@ -38,7 +41,7 @@ function TeamEditor({ team, projectId, onSaved, onCancel }) {
   }
   return <form onSubmit={submit} className="space-y-3 rounded-xl border border-neutral-200 bg-canvas p-4">
     <Feedback error={error} />
-    <div className="grid gap-3 sm:grid-cols-2">
+    <div className="grid gap-3">
       <label className="space-y-1 text-xs">Nama tim<input autoFocus required maxLength={255} value={name} onChange={e => setName(e.target.value)} className={inputClass} /></label>
       <label className="space-y-1 text-xs">Kode tim (opsional)<input maxLength={255} value={code} onChange={e => setCode(e.target.value)} className={inputClass} /></label>
     </div>
@@ -47,6 +50,9 @@ function TeamEditor({ team, projectId, onSaved, onCancel }) {
 }
 
 function TeamDetail({ teamId, projectId, onChanged }) {
+  const { project } = useProject()
+  const unitName = projectUnitLabel(project)
+  const unitLower = projectUnitLower(project)
   const detail = useResource(() => api.getTeam(teamId).then(r => normalizeTeam(unwrapItem(r))), [teamId])
   const assignments = useResource(() => api.teamAssignments(teamId).then(unwrapList), [teamId])
   const [email, setEmail] = useState('')
@@ -78,7 +84,7 @@ function TeamDetail({ teamId, projectId, onChanged }) {
   if (detail.error) return <div><Feedback error={detail.error.message} /><Button onClick={detail.reload}>Coba lagi</Button></div>
   if (!team) return null
   const existing = new Set(team.users.map(u => String(u.id)))
-  return <div className="space-y-5 border-t border-neutral-100 pt-4">
+  return <div className="space-y-3 border-t border-neutral-100 pt-3">
     <Feedback error={error} message={message} />
     {manage && <div className="flex flex-wrap gap-2">
       <Button variant="outline" disabled={busy} onClick={() => setEditing(!editing)}>Edit tim</Button>
@@ -100,7 +106,7 @@ function TeamDetail({ teamId, projectId, onChanged }) {
         }}>Keluarkan {user.name}</Button>}
       </li>)}</ul>
       {manage && team.status === 'active' && <div className="space-y-3 rounded-xl bg-canvas p-3">
-        <p className="text-xs text-neutral-500">Pilih anggota proyek atau cari pengguna aktif dengan alamat email lengkap. Menambahkan anggota tidak mengubah role akunnya.</p>
+        <p className="text-xs text-neutral-500">Cari pengguna aktif dengan email lengkap — role akun tidak berubah.</p>
         <form className="flex flex-wrap items-end gap-2" onSubmit={e => { e.preventDefault(); run(async () => { setCandidates(unwrapList(await api.teamCandidates(projectId, email.trim()))); setMemberId('') }, 'Daftar kandidat diperbarui.') }}>
           <label className="min-w-48 flex-1 text-xs">Email lengkap (opsional)<input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="Kosongkan untuk anggota proyek" className={inputClass} /></label>
           <Button type="submit" variant="outline" disabled={busy}>Cari anggota</Button>
@@ -112,30 +118,31 @@ function TeamDetail({ teamId, projectId, onChanged }) {
       </div>}
     </section>
     <section className="space-y-3" aria-label="Penugasan tim">
-      <h3 className="font-semibold">Penugasan tiang</h3>
+      <h3 className="font-semibold">Penugasan {unitLower}</h3>
       {assignments.loading && <p role="status">Memuat penugasan…</p>}
       {assignments.error && <div><Feedback error={assignments.error.message} /><Button onClick={assignments.reload}>Coba lagi</Button></div>}
-      {!assignments.loading && !assignments.error && !assignments.data?.length && <p className="text-sm text-neutral-500">Belum ada penugasan yang dapat dilihat. Untuk proyek kuantitas, realisasi tetap melalui menu Proyek.</p>}
+      {!assignments.loading && !assignments.error && !assignments.data?.length && <p className="text-sm text-neutral-500">Belum ada penugasan — progres proyek per jumlah dicatat lewat menu Proyek.</p>}
       <ul className="divide-y divide-neutral-100">{(assignments.data ?? []).map(assignment => <li key={assignment.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
-        <div><p>{assignment.pole?.pole_code ?? 'Tiang'} <Badge tone={assignment.status === 'active' ? 'sage' : 'sand'}>{assignment.status === 'active' ? 'Aktif' : 'Dicabut'}</Badge></p>
+        <div><p>{assignment.pole?.pole_code ?? unitName} <Badge tone={assignment.status === 'active' ? 'sage' : 'sand'}>{assignment.status === 'active' ? 'Aktif' : 'Dicabut'}</Badge></p>
           <p className="text-xs text-neutral-500">{assignment.pole?.address || 'Alamat belum diisi'}</p>
-          <Link className="text-sm text-brand-600 underline" href={`/tiang/${assignment.pole_id}`}>Buka tiang</Link>
+          <Link className="text-sm text-brand-600 underline" href={`/tiang/${assignment.pole_id}`}>Buka {unitLower}</Link>
         </div>
         {manage && assignment.status === 'active' && <Button variant="outline" size="sm" disabled={busy || assignment.user_id !== null} onClick={() => {
           if (window.confirm('Cabut penugasan ini? Histori pekerjaan tetap tersimpan.')) run(() => api.revokeTeamPole(team.id, assignment.id), 'Penugasan dicabut.', true)
         }}>{assignment.user_id !== null ? 'Penugasan pengguna (Admin)' : 'Cabut penugasan'}</Button>}
       </li>)}</ul>
       {manage && team.status === 'active' && <div className="space-y-3 rounded-xl bg-canvas p-3">
-        <form className="flex flex-wrap items-end gap-2" onSubmit={e => { e.preventDefault(); run(async () => { setPoles(unwrapList(await api.teamPoleCandidates(team.id, poleSearch))); setPoleId('') }, 'Daftar tiang diperbarui (maksimal 100 hasil).') }}>
-          <label className="min-w-48 flex-1 text-xs">Cari kode tiang proyek<input value={poleSearch} onChange={e => setPoleSearch(e.target.value)} className={inputClass} /></label><Button type="submit" variant="outline" disabled={busy}>Cari tiang</Button>
+        <form className="flex flex-wrap items-end gap-2" onSubmit={e => { e.preventDefault(); run(async () => { setPoles(unwrapList(await api.teamPoleCandidates(team.id, poleSearch))); setPoleId('') }, `Daftar ${unitLower} diperbarui (maksimal 100 hasil).`) }}>
+          <label className="min-w-48 flex-1 text-xs">Cari kode {unitLower} proyek<input value={poleSearch} onChange={e => setPoleSearch(e.target.value)} className={inputClass} /></label><Button type="submit" variant="outline" disabled={busy}>Cari {unitLower}</Button>
         </form>
-        <div className="flex flex-wrap items-end gap-2"><label className="min-w-48 flex-1 text-xs">Tiang untuk ditugaskan<select value={poleId} onChange={e => setPoleId(e.target.value)} className={inputClass}><option value="">Pilih tiang proyek ini</option>{poles.map(p => <option key={p.id} value={p.id}>{p.pole_code}</option>)}</select></label><Button disabled={busy || !poleId} onClick={() => run(async () => { await api.assignTeamPole(team.id, Number(poleId)); setPoleId('') }, 'Tiang ditugaskan ke tim.', true)}>Tugaskan tim</Button></div>
+        <div className="flex flex-wrap items-end gap-2"><label className="min-w-48 flex-1 text-xs">{unitName} untuk ditugaskan<select value={poleId} onChange={e => setPoleId(e.target.value)} className={inputClass}><option value="">Pilih {unitLower} proyek ini</option>{poles.map(p => <option key={p.id} value={p.id}>{p.pole_code}</option>)}</select></label><Button disabled={busy || !poleId} onClick={() => run(async () => { await api.assignTeamPole(team.id, Number(poleId)); setPoleId('') }, `${unitName} ditugaskan ke tim.`, true)}>Tugaskan tim</Button></div>
       </div>}
     </section>
   </div>
 }
 
 export default function ProjectTeams({ project, currentUser }) {
+  const [helpOpen, setHelpOpen] = useState(false)
   const teams = useResource(() => api.listTeams({ projectId: project.id }).then(r => unwrapList(r).map(normalizeTeam)), [project.id])
   const [search, setSearch] = useState('')
   const [status, setStatus] = useState('all')
@@ -143,8 +150,31 @@ export default function ProjectTeams({ project, currentUser }) {
   const [creating, setCreating] = useState(false)
   const manage = ['admin', 'supervisor'].includes(currentUser.role) || (project.ownerUserId != null && String(project.ownerUserId) === String(currentUser.id))
   const list = (teams.data ?? []).filter(t => (status === 'all' || t.status === status) && `${t.name} ${t.code || ''}`.toLowerCase().includes(search.toLowerCase()))
-  return <div className="space-y-5">
-    <PageHeader eyebrow={project.code || 'Proyek aktif'} title="Tim Proyek" subtitle={`${project.name} · ${manage ? 'Kelola tim, anggota, dan penugasan.' : 'Lihat tim, anggota, dan penugasan sesuai akses Anda.'}`} />
+  return <div className="space-y-3">
+    <PageHeader
+      title="Tim Proyek"
+      actions={
+        <button
+          type="button"
+          onClick={() => setHelpOpen(true)}
+          aria-label="Tentang tim proyek"
+          className="flex h-9 w-9 items-center justify-center rounded-xl border border-neutral-200 bg-paper text-sm font-semibold text-neutral-600 shadow-card transition-colors hover:border-brand-300 hover:text-brand-700"
+        >
+          ?
+        </button>
+      }
+    />
+    <Modal
+      open={helpOpen}
+      onClose={() => setHelpOpen(false)}
+      title="Tentang tim proyek"
+      size="sm"
+    >
+      <div className="space-y-2 text-sm leading-6 text-neutral-700">
+        <p>Admin mengelola tim. Supervisor dan PIC hanya melihat tim sesuai aksesnya.</p>
+        <p>Tim yang dinonaktifkan tetap menyimpan anggota dan riwayatnya.</p>
+      </div>
+    </Modal>
     <div className="flex flex-wrap items-end gap-3">
       <label className="min-w-48 flex-1 text-xs">Cari tim<input value={search} onChange={e => setSearch(e.target.value)} className={inputClass} placeholder="Nama atau kode tim" /></label>
       <label className="text-xs">Status<select value={status} onChange={e => setStatus(e.target.value)} className={inputClass}><option value="all">Semua status</option><option value="active">Aktif</option><option value="inactive">Nonaktif</option></select></label>
@@ -156,6 +186,5 @@ export default function ProjectTeams({ project, currentUser }) {
     {teams.error && <Feedback error={teams.error.message} />}
     {!teams.loading && !teams.error && !list.length && <EmptyState icon={UsersRound} title="Belum ada tim yang sesuai" description={manage ? 'Buat tim untuk proyek aktif atau ubah filter pencarian.' : 'Tim akan muncul setelah Admin atau pemilik proyek membuatnya.'} />}
     {list.map(team => <Card key={team.id}><CardHeader><div><CardTitle>{team.name}</CardTitle><p className="mt-1 text-xs text-neutral-500">{team.code || 'Tanpa kode'} · {team.usersCount} anggota · {team.status === 'active' ? 'Aktif' : 'Nonaktif'}</p></div><Button variant="outline" onClick={() => setOpenId(openId === team.id ? null : team.id)} aria-expanded={openId === team.id}>{openId === team.id ? 'Tutup detail' : 'Buka tim'}</Button></CardHeader>{openId === team.id && <CardContent><TeamDetail key={team.id} teamId={team.id} projectId={project.id} onChanged={teams.reload} /></CardContent>}</Card>)}
-    <p className="text-xs leading-5 text-neutral-500">Admin dan pemilik proyek mengelola tim. Supervisor dan PIC melihat data sesuai akses proyek; PIC membuka tiang sesuai penugasan atau wilayahnya. Menonaktifkan tim menyimpan anggota dan histori.</p>
   </div>
 }

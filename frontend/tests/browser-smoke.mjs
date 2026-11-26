@@ -54,9 +54,13 @@ try {
   const savedPhoto = (await saved.json()).photos[0].url
   assert.equal((await owner.request.get(savedPhoto)).status(), 200)
   await page.goto(`/tiang/${fixture.pole_id}`)
+  // Foto progres memakai loading="lazy" di seksi Dokumentasi (di bawah
+  // lipatan), jadi scroll dulu ke gambar sebelum menunggu unduhannya.
+  await page.locator('img[src*="/api/photos/"]').first().scrollIntoViewIfNeeded()
   await page.waitForFunction(() => [...document.images].some((img) => img.src.includes('/api/photos/') && img.complete && img.naturalWidth > 0))
   // Browser UAT: backend menolak tanggal sebelum awal proyek, dan UI
   // harus menjelaskan penyebabnya sebelum pengguna mengirim data.
+  // Pencatatan kini inline di "Tugas saya" (bukan modal terpisah).
   const projectResponse = await owner.request.get(`/api/projects/${fixture.project_id}`)
   assert.equal(projectResponse.status(), 200)
   const projectBody = (await projectResponse.json()).data
@@ -65,22 +69,30 @@ try {
   const invalidTime = hasStart
     ? new Date(Date.parse(`${startDate}T00:00:00.000Z`) - 86400000)
     : new Date(Date.now() + 86400000 * 2)
-  const invalidValue = `${invalidTime.toISOString().slice(0, 10)}T10:00`
-  await page.getByRole('button', { name: 'Catat Realisasi' }).click()
-  await page.locator('#progress-recorded-at').fill(invalidValue)
-  await page.locator('#progress-percent').fill('55')
-  await page.getByRole('button', { name: 'Simpan Realisasi' }).click()
-  await page.getByText(/(Realisasi tidak boleh sebelum|Waktu realisasi tidak boleh di masa depan)/).first().waitFor()
-  // Realisasi valid: waktu dikosongkan untuk memakai waktu server.
-  await page.locator('#progress-recorded-at').fill('')
+  const invalidDate = invalidTime.toISOString().slice(0, 10)
+  await page.goto(`/tugas-saya?lokasi=${fixture.pole_id}`)
+  // Form terbuka otomatis via ?lokasi=; pilih item pekerjaan dulu
+  // (slider + tanggal baru muncul setelah item dipilih).
+  await page.getByLabel('Item pekerjaan').selectOption(String(fixture.work_item_id))
+  await page.locator(`#pole-percent-${fixture.pole_id}`).waitFor()
+  await page.getByLabel('Tanggal progres (opsional)').fill(invalidDate)
+  await page.locator(`#pole-percent-${fixture.pole_id}`).evaluate((el, value) => {
+    el.value = String(value)
+    el.dispatchEvent(new Event('input', { bubbles: true }))
+    el.dispatchEvent(new Event('change', { bubbles: true }))
+  }, 55)
+  await page.getByRole('button', { name: 'Simpan progres' }).click()
+  await page.getByText(/(Tanggal tidak boleh di masa depan|Tanggal tidak boleh sebelum proyek mulai)/).first().waitFor()
+  // Progres valid: tanggal dikosongkan untuk memakai hari ini.
+  await page.getByLabel('Tanggal progres (opsional)').fill('')
   const savedFromForm = page.waitForResponse(response =>
     response.url().includes(`/api/projects/${fixture.project_id}/poles/${fixture.pole_id}/progress`)
     && response.request().method() === 'POST')
-  await page.getByRole('button', { name: 'Simpan Realisasi' }).click()
+  await page.getByRole('button', { name: 'Simpan progres' }).click()
   const persisted = await savedFromForm
-  assert.equal(persisted.status(), 200, 'Valid realization must be saved through browser form')
-  await page.getByText('Catat Realisasi —', { exact: false }).waitFor({ state: 'hidden' })
-  console.log('PASS field validation, user-visible errors, and successful realization form save')
+  assert.equal(persisted.status(), 200, 'Valid progress must be saved through browser form')
+  await page.getByText('Tersimpan.').waitFor()
+  console.log('PASS field validation, user-visible errors, and successful progress form save')
 
   await page.goto('/profil')
   await page.waitForFunction(() => [...document.images].some((img) => img.src.includes('/api/user/avatar/') && img.complete && img.naturalWidth > 0))

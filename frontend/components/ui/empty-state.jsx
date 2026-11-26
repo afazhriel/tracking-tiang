@@ -24,20 +24,20 @@ export function EmptyState({
     <div
       className={cn(
         'flex flex-col items-center justify-center rounded-card border border-dashed border-neutral-300 bg-paper/70 text-center',
-        compact ? 'px-5 py-8' : 'px-6 py-14',
+        compact ? 'px-5 py-6' : 'px-5 py-10',
         className
       )}
     >
       <span
         className={cn(
-          'flex h-12 w-12 items-center justify-center rounded-card ring-1 ring-inset ring-black/5',
+          'flex h-11 w-11 items-center justify-center rounded-card ring-1 ring-inset ring-black/5',
           resolved.icon
         )}
       >
         <Icon className="h-5 w-5" />
       </span>
 
-      <h3 className="mt-4 text-sm font-semibold text-neutral-800">{title}</h3>
+      <h3 className="mt-3 text-sm font-semibold text-neutral-800">{title}</h3>
 
       {description && (
         <p className="mt-2 max-w-md text-sm leading-6 text-neutral-500">
@@ -56,7 +56,7 @@ export function EmptyState({
         </span>
       )}
 
-      {action && <div className="mt-5">{action}</div>}
+      {action && <div className="mt-4">{action}</div>}
     </div>
   )
 }

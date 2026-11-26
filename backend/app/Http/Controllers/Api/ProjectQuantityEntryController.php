@@ -4,6 +4,9 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Project;
+use App\Models\ProjectActivity;
+use App\Services\ActivityLogger;
+use App\Services\NotificationService;
 use App\Services\ProjectQuantityProgress;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
@@ -12,6 +15,8 @@ use Illuminate\Support\Facades\DB;
 
 class ProjectQuantityEntryController extends Controller
 {
+    public function __construct(private NotificationService $notifications, private ActivityLogger $activity) {}
+
     public function index(
         Project $project,
         ProjectQuantityProgress $progress
@@ -21,7 +26,7 @@ class ProjectQuantityEntryController extends Controller
         abort_unless(
             $project->progress_source === 'quantity_entries',
             422,
-            'Proyek ini tidak menggunakan realisasi kuantitas.'
+            'Proyek ini tidak mencatat progres per jumlah.'
         );
 
         return response()->json([
@@ -39,7 +44,9 @@ class ProjectQuantityEntryController extends Controller
         Project $project,
         ProjectQuantityProgress $progress
     ): JsonResponse {
-        $this->authorize('update', $project);
+        // Anggota proyek dengan peran pengelola/pelaksana boleh mencatat;
+        // pelihat tidak. Admin/Supervisor/pemilik proyek selalu boleh.
+        $this->authorize('recordProgress', $project);
 
         $data = $request->validate([
             'quantity_delta' => [
@@ -63,7 +70,7 @@ class ProjectQuantityEntryController extends Controller
             $data['quantity_delta']
         );
 
-        abort_if($delta === 0, 422, 'Perubahan kuantitas tidak boleh nol.');
+        abort_if($delta === 0, 422, 'Perubahan jumlah tidak boleh nol.');
 
         // Fingerprint mengikat satu request_key ke seluruh payload.
         // Normalisasi angka memastikan 20 dan 20.0000 setara.
@@ -85,12 +92,12 @@ class ProjectQuantityEntryController extends Controller
                 ->lockForUpdate()
                 ->firstOrFail();
 
-            $this->authorize('update', $locked);
+            $this->authorize('recordProgress', $locked);
 
             abort_unless(
                 $locked->progress_source === 'quantity_entries',
                 422,
-                'Proyek ini tidak menggunakan realisasi kuantitas.'
+                'Proyek ini tidak mencatat progres per jumlah.'
             );
 
             $previous = DB::table('project_quantity_entries')
@@ -116,21 +123,30 @@ class ProjectQuantityEntryController extends Controller
                 ]);
             }
 
-            $recordedAt = Carbon::parse(
-                $data['recorded_at'] ?? now()
-            );
+            // Tanggal dinilai menurut kalender Asia/Jakarta (zona waktu
+            // pengguna), bukan UTC: tanggal hari ini di WIB sempat ditolak
+            // sebagai "masa depan" sebelum pukul 07:00 WIB, dan tanggal
+            // kosong yang disimpan dini hari dicatat sebagai kemarin.
+            $timezone = 'Asia/Jakarta';
+            $recordedAt = isset($data['recorded_at'])
+                ? Carbon::parse($data['recorded_at'], $timezone)
+                : now($timezone);
+            $recordedDate = $recordedAt->copy()
+                ->setTimezone($timezone)
+                ->toDateString();
+            $today = now($timezone)->toDateString();
 
             abort_if(
-                $recordedAt->isFuture(),
+                $recordedDate > $today,
                 422,
-                'Tanggal realisasi tidak boleh di masa depan.'
+                'Tanggal progres tidak boleh di masa depan.'
             );
 
             abort_if(
                 $locked->start_date &&
-                $recordedAt->lt($locked->start_date->copy()->startOfDay()),
+                $recordedDate < $locked->start_date->toDateString(),
                 422,
-                'Realisasi tidak boleh lebih awal dari tanggal mulai proyek.'
+                'Progres tidak boleh dicatat sebelum tanggal mulai proyek.'
             );
 
             $id = DB::table('project_quantity_entries')
@@ -156,8 +172,39 @@ class ProjectQuantityEntryController extends Controller
                 abort(422, $e->getMessage());
             }
 
+            // Kabari anggota proyek lain + catat ke riwayat aktivitas.
+            // (Jalur replay request_key di atas tidak sampai ke sini,
+            // jadi satu pencatatan = satu notifikasi.)
+            $actor = $request->user();
+            $total = $summary['actual_current_quantity'] ?? null;
+            $percent = $summary['actual_current_percent'] ?? null;
+            $deltaLabel = ((float) $data['quantity_delta'] > 0 ? '+' : '').$data['quantity_delta'];
+            $description = "{$actor->name} mencatat {$deltaLabel} {$locked->unit_code}"
+                .($total !== null
+                    ? " — total {$total} dari target {$locked->target_quantity} ({$percent}%)."
+                    : '.');
+            $this->notifications->sendToProjectMembers(
+                $locked,
+                'progress',
+                "Progress {$locked->name} diperbarui",
+                $description,
+                '/proyek',
+                ['project_id' => $locked->id, 'quantity_delta' => (float) $data['quantity_delta']],
+                $actor->id
+            );
+            $this->activity->log(
+                $locked,
+                $actor,
+                ProjectActivity::ACTION_PROGRESS_KUANTITAS,
+                "Progress {$locked->name} diperbarui",
+                $description,
+                'project',
+                $locked->id,
+                ['project_id' => $locked->id, 'quantity_delta' => (float) $data['quantity_delta']]
+            );
+
             return response()->json([
-                'message' => 'Realisasi kuantitas berhasil dicatat.',
+                'message' => 'Progres berhasil dicatat.',
                 'data' => DB::table('project_quantity_entries')
                     ->where('id', $id)
                     ->first(),

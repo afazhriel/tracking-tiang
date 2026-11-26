@@ -147,12 +147,32 @@ class ProvinceProgressTest extends TestCase
             ->assertCreated();
     }
 
-    public function test_pic_can_record_progress_in_assigned_province(): void
+    /**
+     * PIC hanya boleh mencatat progres di titik yang ditugaskan
+     * ke dia — akses wilayah saja tidak cukup (aturan Asana v1).
+     */
+    public function test_pic_with_province_but_no_assignment_cannot_record_progress(): void
     {
         $project = $this->makeProject();
         $workItem = $this->makeWorkItem($project);
         $pole = $this->makePole($project, '32');
         $pic = $this->picWithProvince('32', $project);
+
+        $this->actingAs($pic, 'sanctum')
+            ->postJson("/api/projects/{$project->id}/poles/{$pole->id}/progress", [
+                'work_item_id' => $workItem->id,
+                'progress_percent' => 50,
+            ])
+            ->assertStatus(403);
+    }
+
+    public function test_assigned_pic_can_record_progress_in_assigned_province(): void
+    {
+        $project = $this->makeProject();
+        $workItem = $this->makeWorkItem($project);
+        $pole = $this->makePole($project, '32');
+        $pic = $this->picWithProvince('32', $project);
+        $pic->poleAssignments()->create(['pole_id' => $pole->id, 'assigned_at' => now(), 'status' => 'active']);
 
         $this->actingAs($pic, 'sanctum')
             ->postJson("/api/projects/{$project->id}/poles/{$pole->id}/progress", [
@@ -231,6 +251,7 @@ class ProvinceProgressTest extends TestCase
         $workItem = $this->makeWorkItem($project);
         $pole = $this->makePole($project, '32');
         $pic = $this->picWithProvince('32', $project);
+        $pic->poleAssignments()->create(['pole_id' => $pole->id, 'assigned_at' => now(), 'status' => 'active']);
 
         $response = $this->actingAs($pic, 'sanctum')
             ->post("/api/projects/{$project->id}/poles/{$pole->id}/progress", [
@@ -275,6 +296,7 @@ class ProvinceProgressTest extends TestCase
         $workItem = $this->makeWorkItem($project);
         $pole = $this->makePole($project, '32');
         $pic = $this->picWithProvince('32', $project);
+        $pic->poleAssignments()->create(['pole_id' => $pole->id, 'assigned_at' => now(), 'status' => 'active']);
 
         $this->actingAs($pic, 'sanctum')
             ->post("/api/projects/{$project->id}/poles/{$pole->id}/progress", [

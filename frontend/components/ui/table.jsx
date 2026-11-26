@@ -26,7 +26,7 @@ export function Th({ className, children, align = 'left', ...props }) {
     <th
       scope="col"
       className={cn(
-        'border-b border-neutral-200 bg-neutral-50/70 px-4 py-3 text-xs font-semibold uppercase tracking-wider text-neutral-500 first:rounded-l-lg last:rounded-r-lg',
+        'border-b border-neutral-200 bg-neutral-50/70 px-4 py-2.5 text-xs font-semibold uppercase tracking-wider text-neutral-500 first:rounded-l-lg last:rounded-r-lg',
         align === 'right' && 'text-right',
         align === 'center' && 'text-center',
         className
@@ -42,7 +42,7 @@ export function Td({ className, children, align = 'left', ...props }) {
   return (
     <td
       className={cn(
-        'border-b border-neutral-100 px-4 py-3.5 text-sm text-neutral-700',
+        'border-b border-neutral-100 px-4 py-3 text-sm text-neutral-700',
         align === 'right' && 'text-right',
         align === 'center' && 'text-center',
         className

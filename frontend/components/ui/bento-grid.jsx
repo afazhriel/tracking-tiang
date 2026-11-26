@@ -11,8 +11,7 @@ export function BentoGrid({ children, className }) {
   return (
     <div
       className={cn(
-        'grid w-full auto-rows-[22rem] grid-cols-1 gap-4',
-        'lg:grid-cols-3',
+        'grid w-full grid-cols-1 gap-3',
         className
       )}
     >
@@ -22,11 +21,13 @@ export function BentoGrid({ children, className }) {
 }
 
 /**
- * Kartu bento untuk pintasan modul.
+ * Kartu pintasan modul.
  *
- * Setiap kartu punya nada sendiri (`tone`): garis aksen, warna ikon,
- * dan kabut latar yang bergerak saat hover. Inilah sumber
- * keragaman warna di dashboard — tanpa memecah design system.
+ * Satu kartu satu nada (`tone`): garis aksen atas, warna ikon, dan
+ * tombol. Tidak ada lagi kabut warna di belakang teks — teks selalu
+ * duduk di latar kertas polos supaya kontrasnya aman dan terbaca.
+ * Tombol aksi selalu terlihat (bukan muncul saat hover) supaya
+ * jelas di layar sentuh dan alurnya langsung kebaca.
  */
 export function BentoCard({
   name,
@@ -43,7 +44,7 @@ export function BentoCard({
   return (
     <div
       className={cn(
-        'group accent-top surface-elevate relative col-span-3 flex flex-col justify-between overflow-hidden rounded-card border border-neutral-200',
+        'group accent-top surface-elevate relative flex flex-col overflow-hidden rounded-card border border-neutral-200',
         'shadow-card transition-all duration-300 hover:-translate-y-1 hover:shadow-lift',
         className
       )}
@@ -52,40 +53,26 @@ export function BentoCard({
         '--accent-to': resolved.to,
       }}
     >
-      {/* Kabut warna: memberi kedalaman tanpa menambah elemen. */}
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute -right-16 -top-20 h-64 w-64 rounded-full opacity-60 blur-2xl transition-all duration-500 group-hover:opacity-90 group-hover:scale-110"
-        style={{ backgroundColor: resolved.hex }}
-      />
-
-      {/* Jejak teknis tipis: ditegaskan agar terasa seperti
-          papan kontrol, bukan kartu promosi. */}
-      <div
-        aria-hidden="true"
-        className="grid-paper pointer-events-none absolute inset-0 opacity-35"
-      />
-
-      <div className="pointer-events-none relative z-10 flex flex-col gap-1 p-6 transition-all duration-300 group-hover:-translate-y-10">
+      <div className="pointer-events-none relative z-10 flex flex-col gap-1 p-5 pb-1.5">
         <span
           className={cn(
-            'flex h-12 w-12 items-center justify-center rounded-card ring-1 ring-inset ring-black/5',
+            'flex h-10 w-10 items-center justify-center rounded-card ring-1 ring-inset ring-black/5',
             resolved.icon
           )}
         >
-          <Icon className="h-6 w-6" />
+          <Icon className="h-5 w-5" />
         </span>
 
-        <h3 className="mt-4 font-display text-xl font-semibold text-neutral-900">
+        <h3 className="mt-3 font-display text-lg font-semibold text-neutral-900">
           {name}
         </h3>
 
-        <p className="max-w-lg text-sm leading-6 text-neutral-500">
+        <p className="max-w-lg text-sm leading-6 text-neutral-600">
           {description}
         </p>
       </div>
 
-      <div className="pointer-events-none absolute bottom-0 flex w-full translate-y-10 items-center gap-3 p-4 opacity-0 transition-all duration-300 group-hover:translate-y-0 group-hover:opacity-100">
+      <div className="pointer-events-none relative z-10 mt-auto flex w-full flex-wrap items-center gap-3 p-5 pt-4">
         <Button
           variant="accent"
           tone={toneName}

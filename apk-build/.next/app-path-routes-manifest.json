@@ -1,0 +1,19 @@
+{
+  "/_global-error/page": "/_global-error",
+  "/_not-found/page": "/_not-found",
+  "/aktivitas/page": "/aktivitas",
+  "/dashboard/page": "/dashboard",
+  "/kurva-s/page": "/kurva-s",
+  "/login/page": "/login",
+  "/notifikasi/page": "/notifikasi",
+  "/page": "/",
+  "/pekerjaan/detail/page": "/pekerjaan/detail",
+  "/pekerjaan/page": "/pekerjaan",
+  "/pekerjaan/pengaturan/page": "/pekerjaan/pengaturan",
+  "/profil/page": "/profil",
+  "/register/page": "/register",
+  "/tiang/detail/page": "/tiang/detail",
+  "/tiang/page": "/tiang",
+  "/tiang/pekerjaan/page": "/tiang/pekerjaan",
+  "/tim/page": "/tim"
+}

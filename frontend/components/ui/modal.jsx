@@ -107,7 +107,7 @@ export function Modal({
           className
         )}
       >
-        <header className="flex items-start justify-between gap-4 border-b border-neutral-100 px-5 py-4">
+        <header className="flex items-start justify-between gap-4 border-b border-neutral-100 px-4 py-3">
           <div className="min-w-0">
             <h2 className="text-base font-semibold text-neutral-900">{title}</h2>
 
@@ -122,16 +122,16 @@ export function Modal({
             type="button"
             onClick={onClose}
             aria-label="Tutup"
-            className="-mr-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-neutral-500 transition-colors hover:bg-neutral-100 hover:text-neutral-800"
+            className="-mr-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl text-neutral-500 transition-colors hover:bg-neutral-100 hover:text-neutral-800"
           >
             <X className="h-4 w-4" />
           </button>
         </header>
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">{children}</div>
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">{children}</div>
 
         {footer && (
-          <footer className="flex flex-wrap items-center justify-end gap-2 border-t border-neutral-100 bg-neutral-50/60 px-5 py-4">
+          <footer className="flex flex-wrap items-center justify-end gap-2 border-t border-neutral-100 bg-neutral-50/60 px-4 py-3">
             {footer}
           </footer>
         )}

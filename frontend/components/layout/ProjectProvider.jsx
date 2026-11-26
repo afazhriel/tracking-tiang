@@ -23,7 +23,9 @@ async function loadProject() {
 
   const storedId = readStoredProjectId()
   const active =
-    projects.find((item) => String(item.id) === storedId) ?? projects[0]
+    projects.find((item) => String(item.id) === storedId) ??
+    projects.find((item) => item.status === 'active') ??
+    projects[0]
 
   let detail = null
 

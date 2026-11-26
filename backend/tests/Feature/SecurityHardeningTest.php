@@ -64,7 +64,8 @@ class SecurityHardeningTest extends TestCase
             'password' => 'rahasia123',
         ]);
 
-        for ($attempt = 0; $attempt < 5; $attempt++) {
+        /* Limiter login: 10/menit per email, 20/menit per IP. */
+        for ($attempt = 0; $attempt < 10; $attempt++) {
             $this->postJson('/api/login', [
                 'email' => 'budi@example.com',
                 'password' => 'salah-terus',
@@ -149,7 +150,13 @@ class SecurityHardeningTest extends TestCase
 
         $pic = User::factory()->pic()->create();
         $pic->provinces()->sync(['32']);
-        $pic->projects()->attach($project->id);
+        $pic->projects()->attach($project->id, ['role' => 'pelaksana']);
+
+        /* PIC hanya bisa mencatat di titik yang ditugaskan ke mereka (Asana v1). */
+        $admin = User::factory()->admin()->create();
+        $this->actingAs($admin, 'sanctum')
+            ->postJson("/api/users/{$pic->id}/poles", ['pole_id' => $pole->id])
+            ->assertCreated();
 
         $bytes = base64_decode(
             'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=='

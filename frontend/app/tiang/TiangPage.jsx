@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import {
   ArrowRight,
+  CalendarClock,
   CircleAlert,
   CircleCheck,
   CircleDot,
@@ -11,11 +12,13 @@ import {
   MapPin,
   RefreshCw,
   Upload,
+  User,
 } from 'lucide-react'
 
 import AppShell from '../../components/layout/AppShell'
 import { ActionButton, PageHeader } from '../../components/layout/PageHeader'
 import { useProject } from '../../lib/project-context'
+import { projectUnitLabel, projectUnitLower } from '../../lib/unit-label'
 import MapPanel from '../../components/tiang/MapPanel'
 import { Badge, StatusBadge } from '../../components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card'
@@ -41,6 +44,7 @@ import {
 } from '../../lib/status'
 import {
   formatCoordinate,
+  formatDate,
   formatNumber,
   formatPercent,
 } from '../../lib/format'
@@ -60,7 +64,7 @@ function PoleListItem({ pole, isSelected, progress, loading, onSelect }) {
       onClick={() => onSelect(pole)}
       aria-current={isSelected ? 'true' : undefined}
       className={cn(
-        'w-full rounded-card border p-4 text-left transition-colors',
+        'w-full rounded-card border p-3.5 text-left transition-colors',
         isSelected
           ? 'border-neutral-900 bg-canvas'
           : 'border-neutral-200 bg-paper hover:border-neutral-300 hover:bg-canvas/70'
@@ -82,7 +86,7 @@ function PoleListItem({ pole, isSelected, progress, loading, onSelect }) {
         />
       </div>
 
-      <div className="mt-3 flex items-center gap-3 text-[11px] text-neutral-400">
+      <div className="mt-2.5 flex items-center gap-3 text-[11px] text-neutral-400">
         <span className="inline-flex items-center gap-1">
           <MapPin className="h-3 w-3" />
           {pole.region?.name ?? 'Belum ditentukan'}
@@ -97,7 +101,36 @@ function PoleListItem({ pole, isSelected, progress, loading, onSelect }) {
         )}
       </div>
 
-      <div className="mt-3">
+      {(pole.assignedUsers.length > 0 || pole.dueDate) && (
+        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-neutral-400">
+          {pole.assignedUsers.length > 0 ? (
+            <span className="inline-flex items-center gap-1">
+              <User className="h-3 w-3" />
+              {pole.assignedUsers.map((user) => user.name).join(', ')}
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1">
+              <User className="h-3 w-3" />
+              Belum ditugaskan
+            </span>
+          )}
+
+          {pole.dueDate && (
+            <span
+              className={cn(
+                'inline-flex items-center gap-1',
+                pole.isOverdue && 'font-medium text-rose-600'
+              )}
+            >
+              <CalendarClock className="h-3 w-3" />
+              Tenggat {formatDate(pole.dueDate)}
+              {pole.isOverdue ? ' · Terlambat' : ''}
+            </span>
+          )}
+        </div>
+      )}
+
+      <div className="mt-2.5">
         {loading ? (
           <span className="flex items-center gap-2 text-[11px] text-neutral-400">
             <Spinner className="h-3 w-3" />
@@ -116,16 +149,16 @@ function PoleListItem({ pole, isSelected, progress, loading, onSelect }) {
   )
 }
 
-function PoleSelectionCard({ pole, progressEntry, loading, onReload }) {
+function PoleSelectionCard({ pole, progressEntry, loading, onReload, unit = 'Tiang' }) {
   if (!pole) {
     return (
       <Card>
-        <CardContent className="py-6">
+        <CardContent className="py-4">
           <EmptyState
             icon={MapPin}
             compact
-            title="Belum ada tiang dipilih"
-            description="Klik salah satu tiang pada daftar atau marker di peta untuk melihat ringkasan detail."
+            title={`Belum ada ${unit} dipilih`}
+            description={`Klik salah satu ${unit} pada daftar atau marker di peta untuk melihat ringkasan detail.`}
           />
         </CardContent>
       </Card>
@@ -160,30 +193,30 @@ function PoleSelectionCard({ pole, progressEntry, loading, onReload }) {
         </div>
       </CardHeader>
 
-      <CardContent className="space-y-4">
+      <CardContent className="space-y-3">
         <div className="grid grid-cols-2 gap-3">
-          <div className="rounded-xl bg-canvas p-3">
+          <div className="rounded-xl bg-canvas p-2.5">
             <p className="text-[11px] text-neutral-400">Latitude</p>
             <p className="mt-0.5 text-sm font-medium tabular-nums">
               {formatCoordinate(pole.latitude)}
             </p>
           </div>
 
-          <div className="rounded-xl bg-canvas p-3">
+          <div className="rounded-xl bg-canvas p-2.5">
             <p className="text-[11px] text-neutral-400">Longitude</p>
             <p className="mt-0.5 text-sm font-medium tabular-nums">
               {formatCoordinate(pole.longitude)}
             </p>
           </div>
 
-          <div className="rounded-xl bg-canvas p-3">
+          <div className="rounded-xl bg-canvas p-2.5">
             <p className="text-[11px] text-neutral-400">Wilayah</p>
             <p className="mt-0.5 text-sm font-medium">
               {pole.region?.name ?? 'Belum ditentukan'}
             </p>
           </div>
 
-          <div className="rounded-xl bg-canvas p-3">
+          <div className="rounded-xl bg-canvas p-2.5">
             <p className="text-[11px] text-neutral-400">Progress (bobot)</p>
             <p className="mt-0.5 text-sm font-medium tabular-nums">
               {loading ? 'â€¦' : formatPercent(progress)}
@@ -192,7 +225,7 @@ function PoleSelectionCard({ pole, progressEntry, loading, onReload }) {
         </div>
 
         {progressEntry?.items?.length ? (
-          <div className="space-y-2">
+          <div className="space-y-1.5">
             <p className="text-xs font-medium uppercase tracking-wider text-neutral-400">
               Progress per pekerjaan
             </p>
@@ -218,7 +251,7 @@ function PoleSelectionCard({ pole, progressEntry, loading, onReload }) {
 
         <Link
           href={`/tiang/${pole.id}`}
-          className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-neutral-900 text-sm font-medium text-white transition-colors hover:bg-neutral-800"
+          className="inline-flex h-9 w-full items-center justify-center gap-2 rounded-xl bg-neutral-900 text-sm font-medium text-white transition-colors hover:bg-neutral-800"
         >
           Lihat Detail
           <ArrowRight className="h-4 w-4" />
@@ -230,6 +263,9 @@ function PoleSelectionCard({ pole, progressEntry, loading, onReload }) {
 
 function TiangContent() {
   const { project, projectId, error: projectError } = useProject()
+  const unitName = projectUnitLabel(project)
+  const unitLower = projectUnitLower(project)
+  const isQuantity = project?.progressSource === 'quantity_entries'
 
   const currentUser = useCurrentUser()
   const isAdmin = ['admin', 'supervisor'].includes(currentUser?.role)
@@ -466,7 +502,7 @@ function TiangContent() {
   const totalRegistered = meta?.total ?? null
   const scopeHint =
     totalRegistered && totalRegistered > poles.length
-      ? `dari ${formatNumber(totalRegistered)} titik terdaftar`
+      ? `dari ${formatNumber(totalRegistered)} lokasi terdaftar`
       : null
 
   const coordinatesCount = useMemo(
@@ -475,11 +511,9 @@ function TiangContent() {
   )
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-3">
       <PageHeader
-        eyebrow="Monitoring"
-        title="Monitoring Tiang"
-        subtitle="Pantau lokasi, identitas, dan progres setiap titik tiang."
+        title={`Monitoring ${unitName}`}
 actions={
           <>
             {canManagePoles && (
@@ -519,16 +553,28 @@ actions={
         }
       />
 
+      {isQuantity && (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm leading-relaxed text-amber-900">
+          Proyek ini mencatat progres <strong>per jumlah ({unitName})</strong>, bukan per
+          titik lokasi — daftar lokasi di halaman ini tidak dipakai untuk perhitungan
+          progres proyek. Catat progres lewat{' '}
+          <a href="/tugas-saya" className="font-semibold underline">
+            Tugas saya
+          </a>
+          .
+        </div>
+      )}
+
       <StatCardGrid>
         <StatCard
-          label="Total Tiang"
+          label={`Total ${unitName}`}
           value={polesLoading ? 'â€¦' : formatNumber(totalRegistered ?? counts.total)}
-          hint={scopeHint ?? 'Tiap yang terdaftar pada project'}
+          hint={scopeHint ?? `${unitName} yang terdaftar pada proyek`}
           Icon={MapPin}
         />
 
         <StatCard
-          label="Tiang Aktif"
+          label={`${unitName} Aktif`}
           value={polesLoading ? 'â€¦' : formatNumber(counts.active)}
           hint={scopeHint ?? 'Sedang dikerjakan'}
           Icon={CircleDot}
@@ -536,7 +582,7 @@ actions={
         />
 
         <StatCard
-          label="Tiang Selesai"
+          label={`${unitName} Selesai`}
           value={polesLoading ? 'â€¦' : formatNumber(counts.done)}
           hint={scopeHint ?? 'Progress 100%'}
           Icon={CircleCheck}
@@ -544,7 +590,7 @@ actions={
         />
 
         <StatCard
-          label="Tiang Bermasalah"
+          label={`${unitName} Bermasalah`}
           value={polesLoading ? 'â€¦' : formatNumber(counts.issue)}
           hint={scopeHint ?? 'Perlu perhatian lapangan'}
           Icon={CircleAlert}
@@ -556,7 +602,7 @@ actions={
         <Card>
           <CardHeader>
             <div className="flex items-center gap-3">
-              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-neutral-100">
+              <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-neutral-100">
                 <Layers className="h-4 w-4" />
               </div>
 
@@ -583,7 +629,7 @@ actions={
           </CardHeader>
 
           <CardContent>
-            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid gap-2">
               {provinceSummary.map((row) => {
                 const id = row.province_id ? String(row.province_id) : null
                 const active = id !== null && provinceFilter === id
@@ -614,7 +660,7 @@ actions={
                         {row.province_name ?? 'Tanpa Provinsi'}
                       </span>
                       <span className="text-[11px] text-neutral-400">
-                        {formatNumber(row.pole_count ?? 0)} tiang
+                        {formatNumber(row.pole_count ?? 0)} {unitLower}
                       </span>
                     </span>
 
@@ -647,7 +693,7 @@ actions={
             setSearch(value)
             resetToFirstPage()
           }}
-          placeholder="Cari kode tiang atau alamat..."
+          placeholder={`Cari kode ${unitName} atau alamat...`}
         />
 
         <SelectField
@@ -695,21 +741,21 @@ actions={
         />
       </FilterBar>
 
-      <div className="grid gap-4 lg:grid-cols-12">
-        <div className="order-2 space-y-4 lg:order-1 lg:col-span-5">
+      <div className="grid gap-3">
+        <div className="order-2 space-y-3 lg:order-1 lg:col-span-5">
           <Card>
             <CardHeader>
               <div className="flex items-center gap-3">
-                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-neutral-100">
+                <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-neutral-100">
                   <MapPin className="h-4 w-4" />
                 </div>
 
                 <div>
-                  <CardTitle>Daftar Tiang</CardTitle>
+                  <CardTitle>Daftar {unitName}</CardTitle>
                   <p className="text-xs text-neutral-500">
                     {filteredPoles.length === poles.length
-                      ? `${formatNumber(poles.length)} titik pada halaman ini`
-                      : `${formatNumber(filteredPoles.length)} dari ${formatNumber(poles.length)} titik cocok`}
+                      ? `${formatNumber(poles.length)} lokasi pada halaman ini`
+                      : `${formatNumber(filteredPoles.length)} dari ${formatNumber(poles.length)} lokasi cocok`}
                   </p>
                 </div>
               </div>
@@ -728,7 +774,7 @@ actions={
               </div>
             </CardHeader>
 
-            <CardContent className="space-y-3">
+            <CardContent className="space-y-2.5">
               {polesLoading ? (
                 <SkeletonRows rows={5} />
               ) : polesError ? (
@@ -736,7 +782,7 @@ actions={
                   icon={CircleAlert}
                   compact
                   title="Daftar tiang gagal dimuat"
-                  description="Endpoint /api/projects/{id}/poles tidak dapat diakses. Coba muat ulang."
+                  description="Daftar tiang tidak dapat dimuat. Coba muat ulang."
                   action={
                     <ActionButton onClick={reloadPoles} icon={RefreshCw}>
                       Coba lagi
@@ -744,9 +790,9 @@ actions={
                   }
                 />
               ) : filteredPoles.length ? (
-                <div className="space-y-4">
+                <div className="space-y-3">
                   {poleGroups.map((group) => (
-                    <div key={group.key} className="space-y-2">
+                    <div key={group.key} className="space-y-1.5">
                       {showGroupHeaders && (
                         <div className="flex items-center justify-between gap-2 px-1">
                           <p className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-neutral-500">
@@ -763,7 +809,7 @@ actions={
                         </div>
                       )}
 
-                      <div className="space-y-3">
+                      <div className="space-y-2.5">
                         {group.poles.map((pole) => (
                           <PoleListItem
                             key={pole.id}
@@ -785,7 +831,7 @@ actions={
                 <EmptyState
                   icon={MapPin}
                   compact
-                  title={poles.length ? 'Tidak ada tiang yang cocok' : 'Belum ada data tiang'}
+                  title={poles.length ? `Tidak ada ${unitName} yang cocok` : `Belum ada data ${unitName}`}
                   description={
                     poles.length
                       ? 'Ubah kata kunci atau filter yang digunakan.'
@@ -804,9 +850,9 @@ actions={
           )}
         </div>
 
-        <div className="order-1 space-y-4 lg:order-2 lg:col-span-7">
+        <div className="order-1 space-y-3 lg:order-2 lg:col-span-7">
           <MapPanel
-            className="h-[360px] sm:h-[440px] lg:h-[540px]"
+            className="h-[280px] sm:h-[360px] lg:h-[420px]"
             poles={filteredPoles}
             selectedId={effectiveSelectedId}
             progressByPole={progressByPole}
@@ -815,6 +861,7 @@ actions={
 
           <PoleSelectionCard
             pole={selectedPole}
+            unit={unitName}
             progressEntry={store[effectiveSelectedId]}
             loading={store[effectiveSelectedId] === undefined && effectiveSelectedId !== null}
             onReload={() => {
@@ -853,7 +900,7 @@ actions={
 
 export default function TiangPage() {
   return (
-    <AppShell title="Tiang">
+    <AppShell title="Lokasi">
       <TiangContent />
     </AppShell>
   )

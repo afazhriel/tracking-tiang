@@ -23,7 +23,7 @@ class ProjectBaselineApproval
             abort_unless(
                 $approver->isActive() && $approver->can('update', $project),
                 403,
-                'Tidak berwenang mengesahkan baseline.'
+                'Tidak berwenang mengesahkan rencana.'
             );
 
             $baseline = ProjectBaseline::query()

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 
 import AppShell from '../../components/layout/AppShell'
 import QuantityPanel from './QuantityPanel'
+import RabSection from './RabSection'
 import {
   api,
   unwrapItem,
@@ -19,7 +20,12 @@ const emptyForm = {
   end_date: '',
   target_quantity: '',
   unit_code: 'unit',
+  unit_preset: 'unit',
 }
+
+/* Satuan yang dihitung per titik lokasi (bukan per jumlah). Dipakai
+   untuk menentukan cara pencatatan progres saat proyek dibuat. */
+const LOCATION_UNITS = ['pole', 'tangki', 'titik']
 
 const inputClass =
   'w-full rounded-xl border border-neutral-300 bg-white px-3 py-2.5 text-sm text-neutral-900 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100'
@@ -35,6 +41,18 @@ function Field({ label, children }) {
     </label>
   )
 }
+
+/* Peran anggota di dalam proyek (bukan peran akun): pengelola bisa
+   mengatur proyek, pelaksana mencatat progres, pelihat hanya melihat. */
+const PROJECT_ROLES = [
+  { value: 'pengelola', label: 'Pengelola' },
+  { value: 'pelaksana', label: 'Pelaksana' },
+  { value: 'pelihat', label: 'Pelihat' },
+]
+
+const PROJECT_ROLE_LABELS = Object.fromEntries(
+  PROJECT_ROLES.map((role) => [role.value, role.label])
+)
 
 function errorMessage(error) {
   return error?.message || 'Permintaan gagal. Silakan coba kembali.'
@@ -69,7 +87,12 @@ function ProyekContent() {
   const [membersLoading, setMembersLoading] = useState(false)
   const [membersError, setMembersError] = useState('')
   const [memberId, setMemberId] = useState('')
+  const [memberRole, setMemberRole] = useState('pelaksana')
   const [memberBusy, setMemberBusy] = useState(false)
+
+  const [editForm, setEditForm] = useState(null)
+  const [editError, setEditError] = useState('')
+  const [editSaving, setEditSaving] = useState(false)
 
   const canManage =
     Boolean(detail) &&
@@ -133,6 +156,83 @@ function ProyekContent() {
     setForm((previous) => ({ ...previous, [field]: value }))
   }
 
+  function pickUnit(value) {
+    setForm((previous) => ({
+      ...previous,
+      unit_preset: value,
+      unit_code: value === 'custom' ? '' : value,
+    }))
+  }
+
+  const UNIT_PRESETS = ['pole', 'unit', 'tangki', 'paket', 'km', 'titik']
+
+  function openEdit() {
+    if (!detail) return
+    const preset = UNIT_PRESETS.includes(detail.unit_code)
+      ? detail.unit_code
+      : 'custom'
+    setEditForm({
+      name: detail.name ?? '',
+      code: detail.code ?? '',
+      start_date: detail.start_date ? String(detail.start_date).slice(0, 10) : '',
+      end_date: detail.end_date ? String(detail.end_date).slice(0, 10) : '',
+      target_quantity:
+        detail.target_quantity != null
+          ? String(Number(detail.target_quantity))
+          : '',
+      unit_code: detail.unit_code ?? 'unit',
+      unit_preset: preset,
+      progress_source: detail.progress_source ?? 'quantity_entries',
+      status: detail.status ?? 'active',
+    })
+    setEditError('')
+  }
+
+  function updateEdit(field, value) {
+    setEditForm((previous) =>
+      previous ? { ...previous, [field]: value } : previous,
+    )
+  }
+
+  function pickEditUnit(value) {
+    setEditForm((previous) =>
+      previous
+        ? {
+            ...previous,
+            unit_preset: value,
+            unit_code: value === 'custom' ? '' : value,
+          }
+        : previous,
+    )
+  }
+
+  async function saveEdit(event) {
+    event.preventDefault()
+    if (!editForm || editSaving) return
+    setEditSaving(true)
+    setEditError('')
+    try {
+      const payload = {
+        name: editForm.name.trim(),
+        code: editForm.code.trim().toUpperCase(),
+        target_quantity: editForm.target_quantity,
+        unit_code: editForm.unit_code.trim().toLowerCase(),
+        progress_source: editForm.progress_source,
+        status: editForm.status,
+      }
+      if (editForm.start_date) payload.start_date = editForm.start_date
+      if (editForm.end_date) payload.end_date = editForm.end_date
+      const updated = unwrapItem(await api.updateProject(projectId, payload))
+      if (updated) setDetail(updated)
+      setEditForm(null)
+      setNotice('Proyek berhasil diperbarui.')
+    } catch (error) {
+      setEditError(errorMessage(error))
+    } finally {
+      setEditSaving(false)
+    }
+  }
+
   async function createProject(event) {
     event.preventDefault()
     if (saving || !canCreateProject) return
@@ -151,6 +251,11 @@ function ProyekContent() {
       if (form.end_date) payload.end_date = form.end_date
       payload.target_quantity = form.target_quantity
       payload.unit_code = form.unit_code.trim().toLowerCase()
+      /* Cara pencatatan ditentukan dari satuan: titik lokasi dicatat
+         per titik, satuan lain dicatat sebagai jumlah terhadap target. */
+      payload.progress_source = LOCATION_UNITS.includes(payload.unit_code)
+        ? 'pole_weighted'
+        : 'quantity_entries'
 
       const response = await api.createProject(payload)
       const created = unwrapItem(response)
@@ -184,10 +289,29 @@ function ProyekContent() {
     setNotice('')
 
     try {
-      await api.addProjectMember(projectId, id)
+      await api.addProjectMember(projectId, id, memberRole)
       await refreshMembers()
       setMemberId('')
+      setMemberRole('pelaksana')
       setNotice('Anggota proyek berhasil ditambahkan.')
+    } catch (error) {
+      setMembersError(errorMessage(error))
+    } finally {
+      setMemberBusy(false)
+    }
+  }
+
+  async function changeMemberRole(member, role) {
+    if (memberBusy) return
+    if ((member.project_role ?? 'pelaksana') === role) return
+
+    setMemberBusy(true)
+    setMembersError('')
+
+    try {
+      await api.updateProjectMemberRole(projectId, member.id, role)
+      await refreshMembers()
+      setNotice(`Peran ${member.name} diubah menjadi ${PROJECT_ROLE_LABELS[role] ?? role}.`)
     } catch (error) {
       setMembersError(errorMessage(error))
     } finally {
@@ -217,14 +341,11 @@ function ProyekContent() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-6xl space-y-6 pb-12">
+    <div className="mx-auto w-full max-w-6xl space-y-3 pb-6">
         <div>
-          <h1 className="text-2xl font-bold text-neutral-900">
+          <h1 className="text-lg font-bold text-neutral-900">
             Manajemen Proyek
           </h1>
-          <p className="mt-1 text-sm text-neutral-600">
-            Buat proyek, pilih proyek aktif, dan atur anggota sesuai hak akses.
-          </p>
         </div>
 
         {notice && (
@@ -233,14 +354,11 @@ function ProyekContent() {
           </p>
         )}
 
-        <div className="grid gap-6 lg:grid-cols-2">
-          <section className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
+        <div className="grid gap-3">
+          <section className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm">
             <h2 className="text-lg font-semibold text-neutral-900">
               Proyek Saya
             </h2>
-            <p className="mt-1 text-sm text-neutral-500">
-              Pilih proyek untuk membuka data dan progres proyek tersebut.
-            </p>
 
             {projectsError && (
               <p role="alert" className="mt-3 text-sm text-red-700">
@@ -286,7 +404,7 @@ function ProyekContent() {
             </div>
           </section>
 
-          {canCreateProject && (<section className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
+          {canCreateProject && (<section className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm">
             <h2 className="text-lg font-semibold text-neutral-900">
               Buat Proyek Baru
             </h2>
@@ -294,7 +412,7 @@ function ProyekContent() {
               Proyek baru otomatis menjadi milik akun Anda.
             </p>
 
-            <form onSubmit={createProject} className="mt-4 space-y-4">
+            <form onSubmit={createProject} className="mt-4 space-y-3">
               <Field label="Nama proyek">
                 <input
                   className={inputClass}
@@ -342,7 +460,7 @@ function ProyekContent() {
                 </Field>
               </div>
 
-              <Field label="Target Kuantitas Proyek">
+              <Field label="Target Jumlah Proyek">
                 <input
                   type="number"
                   required
@@ -357,17 +475,37 @@ function ProyekContent() {
                 />
               </Field>
               <Field label="Satuan Proyek">
-                <input
+                <select
                   className={inputClass}
-                  required
-                  maxLength={32}
-                  pattern="[a-z][a-z0-9_]*"
-                  value={form.unit_code}
-                  onChange={(event) =>
-                    updateForm('unit_code', event.target.value.toLowerCase())
-                  }
-                  placeholder="Contoh: unit, tangki, km, paket"
-                />
+                  value={form.unit_preset}
+                  onChange={(event) => pickUnit(event.target.value)}
+                >
+                  <option value="pole">Tiang</option>
+                  <option value="unit">Unit</option>
+                  <option value="tangki">Tangki</option>
+                  <option value="paket">Paket</option>
+                  <option value="km">Kilometer</option>
+                  <option value="titik">Lokasi</option>
+                  <option value="custom">Lainnya (isi sendiri)</option>
+                </select>
+                {form.unit_preset === 'custom' && (
+                  <input
+                    className={`${inputClass} mt-2`}
+                    required
+                    maxLength={32}
+                    pattern="[a-z][a-z0-9_]*"
+                    value={form.unit_code}
+                    onChange={(event) =>
+                      updateForm('unit_code', event.target.value.toLowerCase())
+                    }
+                    placeholder="Contoh: mesin, gardu, panel"
+                  />
+                )}
+                <p className="mt-1 text-xs text-neutral-500">
+                  {LOCATION_UNITS.includes(form.unit_code.trim().toLowerCase())
+                    ? 'Progres dicatat per titik lokasi.'
+                    : 'Progres dicatat sebagai jumlah terhadap target.'}
+                </p>
               </Field>
 
               {formError && (
@@ -399,7 +537,190 @@ function ProyekContent() {
           />
         )}
 
-        <section className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
+        {detail && canManage && (
+          <section className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-semibold text-neutral-900">
+                  Pengaturan Proyek
+                </h2>
+              </div>
+              {!editForm && (
+                <button
+                  type="button"
+                  onClick={openEdit}
+                  className="rounded-xl border border-neutral-300 px-4 py-2.5 text-sm font-semibold text-neutral-700 hover:bg-neutral-50"
+                >
+                  Ubah Proyek
+                </button>
+              )}
+            </div>
+
+            {editForm && (
+              <form onSubmit={saveEdit} className="mt-5 grid gap-3">
+                <Field label="Nama Proyek">
+                  <input
+                    className={inputClass}
+                    required
+                    value={editForm.name}
+                    onChange={(event) => updateEdit('name', event.target.value)}
+                  />
+                </Field>
+                <Field label="Kode Proyek">
+                  <input
+                    className={inputClass}
+                    required
+                    value={editForm.code}
+                    onChange={(event) => updateEdit('code', event.target.value)}
+                  />
+                </Field>
+                <Field label="Tanggal Mulai">
+                  <input
+                    type="date"
+                    className={inputClass}
+                    value={editForm.start_date}
+                    onChange={(event) => updateEdit('start_date', event.target.value)}
+                  />
+                </Field>
+                <Field label="Tanggal Selesai">
+                  <input
+                    type="date"
+                    className={inputClass}
+                    value={editForm.end_date}
+                    onChange={(event) => updateEdit('end_date', event.target.value)}
+                  />
+                </Field>
+                <Field label="Cara mencatat progres">
+                  <div className="grid gap-2">
+                    {[
+                      { value: 'pole_weighted', title: 'Per lokasi' },
+                      { value: 'quantity_entries', title: 'Per jumlah' },
+                    ].map((opt) => (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => updateEdit('progress_source', opt.value)}
+                        className={`rounded-xl border p-3 text-left text-sm font-semibold transition ${
+                          editForm.progress_source === opt.value
+                            ? 'border-orange-500 bg-orange-50 text-neutral-900'
+                            : 'border-neutral-300 text-neutral-600 hover:border-orange-300'
+                        }`}
+                      >
+                        {opt.title}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="mt-1 text-xs text-neutral-500">
+                    Mode hanya dapat diubah selama proyek belum memiliki data
+                    lokasi maupun catatan jumlah.
+                  </p>
+                </Field>
+                <Field label="Status Proyek">
+                  <select
+                    className={inputClass}
+                    value={editForm.status}
+                    onChange={(event) => updateEdit('status', event.target.value)}
+                  >
+                    <option value="active">Aktif</option>
+                    <option value="draft">Draf</option>
+                    {!['active', 'draft'].includes(editForm.status) && (
+                      <option value={editForm.status}>{editForm.status}</option>
+                    )}
+                  </select>
+                </Field>
+                <Field label="Target Jumlah Proyek">
+                  <input
+                    type="number"
+                    required
+                    min="0.0001"
+                    step="0.0001"
+                    className={inputClass}
+                    value={editForm.target_quantity}
+                    onChange={(event) =>
+                      updateEdit('target_quantity', event.target.value)
+                    }
+                  />
+                </Field>
+                <Field label="Satuan Proyek">
+                  <select
+                    className={inputClass}
+                    value={editForm.unit_preset}
+                    onChange={(event) => pickEditUnit(event.target.value)}
+                  >
+                    <option value="pole">Tiang</option>
+                    <option value="unit">Unit</option>
+                    <option value="tangki">Tangki</option>
+                    <option value="paket">Paket</option>
+                    <option value="km">Kilometer</option>
+                    <option value="titik">Lokasi</option>
+                    <option value="custom">Lainnya (isi sendiri)</option>
+                  </select>
+                  {editForm.unit_preset === 'custom' && (
+                    <input
+                      className={`${inputClass} mt-2`}
+                      required
+                      maxLength={32}
+                      pattern="[a-z][a-z0-9_]*"
+                      value={editForm.unit_code}
+                      onChange={(event) =>
+                        updateEdit('unit_code', event.target.value.toLowerCase())
+                      }
+                      placeholder="Contoh: mesin, gardu, panel"
+                    />
+                  )}
+                </Field>
+
+                {editError && (
+                  <p role="alert" className="text-sm text-red-700 sm:col-span-2">
+                    {editError}
+                  </p>
+                )}
+
+                <div className="flex gap-2 sm:col-span-2">
+                  <button type="submit" disabled={editSaving} className={primaryClass}>
+                    {editSaving ? 'Menyimpan...' : 'Simpan Perubahan'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditForm(null)}
+                    className="rounded-xl border border-neutral-300 px-4 py-2.5 text-sm font-semibold text-neutral-700 hover:bg-neutral-50"
+                  >
+                    Batal
+                  </button>
+                </div>
+              </form>
+            )}
+          </section>
+        )}
+
+        {detail && (
+          <section className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm">
+            <div>
+              <h2 className="text-lg font-semibold text-neutral-900">
+                Surat Job / Perintah Kerja
+              </h2>
+              <p className="mt-1 max-w-xl text-sm text-neutral-500">
+                {detail.progress_source === 'quantity_entries'
+                  ? 'Terbitkan surat perintah kerja berisi catatan progres, tim pelaksana, dan progres terakhir — siap dicetak atau disimpan sebagai PDF untuk dibagikan ke tim lapangan.'
+                  : 'Terbitkan surat perintah kerja berisi daftar titik lokasi, wilayah, tim pelaksana, dan progres terakhir — siap dicetak atau disimpan sebagai PDF untuk dibagikan ke tim lapangan.'}
+              </p>
+            </div>
+            <a
+              href={`/surat-job?proyek=${projectId}`}
+              target="_blank"
+              rel="noreferrer"
+              className="rounded-xl bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-800"
+            >
+              Buka Surat Job
+            </a>
+          </section>
+        )}
+
+        {detail && (
+          <RabSection projectId={projectId} currentUser={currentUser} />
+        )}
+
+        <section className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm">
           <h2 className="text-lg font-semibold text-neutral-900">
             Kelola Anggota Proyek Aktif
           </h2>
@@ -428,7 +749,7 @@ function ProyekContent() {
           )}
 
           {canManage && (
-            <div className="mt-4 space-y-4">
+            <div className="mt-4 space-y-3">
               <p className="text-sm text-neutral-600">
                 Pemilik proyek: pengguna ID {detail.owner_user_id}
               </p>
@@ -452,6 +773,22 @@ function ProyekContent() {
                   </Field>
                 </div>
 
+                <div className="min-w-40">
+                  <Field label="Peran di proyek">
+                    <select
+                      className={inputClass}
+                      value={memberRole}
+                      onChange={(event) => setMemberRole(event.target.value)}
+                    >
+                      {PROJECT_ROLES.map((role) => (
+                        <option key={role.value} value={role.value}>
+                          {role.label}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                </div>
+
                 <button
                   type="submit"
                   disabled={memberBusy}
@@ -464,6 +801,8 @@ function ProyekContent() {
               <p className="text-xs text-neutral-500">
                 Gunakan ID akun pengguna yang sudah terdaftar dan aktif.
                 Menambahkan anggota tidak mengubah peran akun pengguna.
+                Pelaksana mencatat progres, pengelola mengatur proyek,
+                pelihat hanya melihat.
               </p>
 
               {membersError && (
@@ -500,18 +839,37 @@ function ProyekContent() {
                           {member.name}
                         </p>
                         <p className="text-xs text-neutral-500">
-                          ID {member.id} · {member.email}
+                          ID {member.id} · {member.email} ·{' '}
+                          {PROJECT_ROLE_LABELS[member.project_role] ?? 'Pelaksana'}
                         </p>
                       </div>
 
-                      <button
-                        type="button"
-                        disabled={memberBusy || protectedMember}
-                        onClick={() => removeMember(member)}
-                        className="rounded-lg border border-red-200 px-3 py-2 text-xs font-medium text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40"
-                      >
-                        {protectedMember ? 'Dilindungi' : 'Cabut Akses'}
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <select
+                          aria-label={`Peran ${member.name} di proyek`}
+                          className="rounded-lg border border-neutral-300 bg-white px-2 py-2 text-xs font-medium text-neutral-700 outline-none focus:border-orange-500 disabled:cursor-not-allowed disabled:opacity-40"
+                          value={member.project_role ?? 'pelaksana'}
+                          disabled={memberBusy || protectedMember}
+                          onChange={(event) =>
+                            changeMemberRole(member, event.target.value)
+                          }
+                        >
+                          {PROJECT_ROLES.map((role) => (
+                            <option key={role.value} value={role.value}>
+                              {role.label}
+                            </option>
+                          ))}
+                        </select>
+
+                        <button
+                          type="button"
+                          disabled={memberBusy || protectedMember}
+                          onClick={() => removeMember(member)}
+                          className="rounded-lg border border-red-200 px-3 py-2 text-xs font-medium text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40"
+                        >
+                          {protectedMember ? 'Dilindungi' : 'Cabut Akses'}
+                        </button>
+                      </div>
                     </li>
                   )
                 })}
