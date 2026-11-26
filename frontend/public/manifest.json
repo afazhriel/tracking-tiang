@@ -1,7 +1,7 @@
 {
-  "name": "Tracking Proyek",
+  "name": "Tracking Pekerjaan",
   "short_name": "Tracking",
-  "description": "Sistem Monitoring Proyek Tegangan - Pantau tiang, progres, dan kurva S",
+  "description": "Sistem Monitoring Pekerjaan - Pantau progres dan kurva S",
   "start_url": "/dashboard",
   "display": "standalone",
   "background_color": "#1c1614",

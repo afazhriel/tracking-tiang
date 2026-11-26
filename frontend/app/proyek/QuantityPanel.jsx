@@ -6,6 +6,21 @@ import { api } from '../../lib/api'
 const fieldClass =
   'w-full rounded-xl border border-neutral-300 bg-white px-3 py-2.5 text-sm text-neutral-900 focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-100'
 
+function todayLocal() {
+  const now = new Date()
+  return [
+    now.getFullYear(),
+    String(now.getMonth() + 1).padStart(2, '0'),
+    String(now.getDate()).padStart(2, '0'),
+  ].join('-')
+}
+
+function formatDateId(isoDate) {
+  const [y, m, d] = String(isoDate).split('-')
+  if (!y || !m || !d) return String(isoDate)
+  return `${d}/${m}/${y}`
+}
+
 export default function QuantityPanel({
   projectId,
   startDate = null,
@@ -40,7 +55,7 @@ export default function QuantityPanel({
         await reload()
       } catch (err) {
         if (active) {
-          setError(err.message || 'Gagal memuat realisasi kuantitas.')
+          setError(err.message || 'Gagal memuat progres.')
         }
       } finally {
         if (active) setLoading(false)
@@ -61,27 +76,51 @@ export default function QuantityPanel({
     setMessage('')
   }
 
+  /* Tanggal mulai (kalender lokal) dan hari ini (kalender lokal).
+     Rentang tanggal hanya dipakai kalau proyek sudah mulai; kalau
+     proyek belum mulai, form diganti pemberitahuan, bukan error. */
+  const start = String(startDate ?? '').slice(0, 10)
+  const today = todayLocal()
+  const notStarted = Boolean(start && start > today)
+  const minDate = start && !notStarted ? start : undefined
+
+  const current = Number(summary?.actual_current_quantity ?? 0)
+  const target = Number(targetQuantity)
+  const delta = Number(quantity)
+  const validDelta =
+    /^-?\d{1,10}(?:\.\d{1,4})?$/.test(quantity) &&
+    Number.isFinite(delta) &&
+    delta !== 0
+  const nextTotal = validDelta ? current + delta : null
+  const nextWithin =
+    nextTotal !== null &&
+    nextTotal >= 0 &&
+    (targetQuantity === null || nextTotal <= target)
+  const percentOf = (value) =>
+    target > 0 ? (value / target) * 100 : 0
+
   async function submit(event) {
     event.preventDefault()
-    if (!canWrite || busy) return
+    if (!canWrite || busy || notStarted) return
 
-    const delta = Number(quantity)
-    const current = Number(summary?.actual_current_quantity ?? 0)
-    const max = Number(targetQuantity)
-    if (!/^-?\d{1,10}(?:\.\d{1,4})?$/.test(quantity) || !Number.isFinite(delta) || delta === 0) {
+    if (!validDelta) {
       setError('Masukkan jumlah selain nol, maksimal empat angka di belakang koma.')
       return
     }
     const next = Math.round((current + delta) * 10000)
-    if (next < 0 || (targetQuantity !== null && next > Math.round(max * 10000))) {
-      setError(`Total realisasi harus antara 0 dan target ${targetQuantity} ${unitCode}.`)
+    if (next < 0 || (targetQuantity !== null && next > Math.round(target * 10000))) {
+      setError(`Total progres harus antara 0 dan target ${targetQuantity} ${unitCode}.`)
       return
     }
-    const start = String(startDate ?? '').slice(0, 10)
-    const today = [new Date().getFullYear(), String(new Date().getMonth()+1).padStart(2,'0'), String(new Date().getDate()).padStart(2,'0')].join('-')
-    if (date && ((start && date < start) || date > today)) {
-      setError(`Tanggal realisasi harus antara ${start || 'awal proyek'} dan hari ini.`)
-      return
+    if (date) {
+      if (date > today) {
+        setError('Tanggal tidak boleh di masa depan. Kosongkan tanggal untuk memakai hari ini.')
+        return
+      }
+      if (start && date < start) {
+        setError(`Tanggal tidak boleh sebelum proyek mulai (${formatDateId(start)}).`)
+        return
+      }
     }
 
     setBusy(true)
@@ -99,14 +138,6 @@ export default function QuantityPanel({
       }
 
       if (date) {
-        const current = new Date()
-
-        const today = [
-          current.getFullYear(),
-          String(current.getMonth() + 1).padStart(2, '0'),
-          String(current.getDate()).padStart(2, '0'),
-        ].join('-')
-
         // Untuk hari ini, biarkan server mencatat waktu sekarang.
         // Untuk hari sebelumnya, gunakan awal tanggal terpilih.
         if (date !== today) {
@@ -118,7 +149,7 @@ export default function QuantityPanel({
         payload.notes = notes.trim()
       }
 
-      await api.recordProjectQuantity(projectId, payload)
+      const saved = await api.recordProjectQuantity(projectId, payload)
 
       // Penyimpanan sudah berhasil: jangan laporkan "gagal simpan" hanya
       // karena pembacaan ulang riwayat terputus sesudah commit database.
@@ -126,45 +157,50 @@ export default function QuantityPanel({
       setQuantity('')
       setDate('')
       setNotes('')
-      setMessage('Realisasi kuantitas berhasil disimpan di server.')
+      const savedSummary = saved?.summary ?? null
+      const total = Number(
+        savedSummary?.actual_current_quantity ?? summary?.actual_current_quantity ?? 0
+      )
+      const pct = Number(
+        savedSummary?.actual_current_percent ??
+          (target > 0 ? (total / target) * 100 : 0)
+      )
+      setMessage(
+        `Tersimpan. Total progres sekarang ${total.toLocaleString('id-ID')} dari target ${targetQuantity} ${unitCode} (${pct.toLocaleString('id-ID', { maximumFractionDigits: 2 })}%).`
+      )
       try {
         await reload()
       } catch {
         setError('Data sudah tersimpan, tetapi daftar riwayat belum berhasil diperbarui. Muat ulang halaman untuk memeriksa.')
       }
     } catch (err) {
-      setError(Object.values(err.fieldErrors ?? {}).flat()[0] || err.message || 'Gagal menyimpan realisasi.')
+      setError(Object.values(err.fieldErrors ?? {}).flat()[0] || err.message || 'Gagal menyimpan progres.')
     } finally {
       setBusy(false)
     }
   }
 
   return (
-    <section className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
+    <section className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm">
       <h2 className="text-lg font-semibold text-neutral-900">
-        Tambah Realisasi Proyek
+        Catat Progres
       </h2>
-
-      <p className="mt-1 text-sm text-neutral-500">
-        Masukkan jumlah pekerjaan yang sudah terealisasi dalam satuan {unitCode}.
-        Perubahan akan memengaruhi Kurva S aktual.
-      </p>
 
       {loading ? (
         <p className="mt-4 text-sm text-neutral-500">
-          Memuat realisasi...
+          Memuat progres...
         </p>
       ) : (
         <div className="mt-4 rounded-xl bg-neutral-50 p-4">
           <p className="text-xs text-neutral-500">
-            Kuantitas terealisasi
+            Progres tercatat
           </p>
-          <p className="mt-1 text-2xl font-bold text-neutral-900">
-            {Number(summary?.actual_current_quantity ?? 0).toLocaleString('id-ID')}
+          <p className="mt-1 text-xl font-bold text-neutral-900">
+            {current.toLocaleString('id-ID')}
             {' '}{unitCode}
           </p>
           <p className="mt-1 text-sm text-neutral-600">
-            {Number(summary?.actual_current_percent ?? 0).toLocaleString(
+            {percentOf(current).toLocaleString(
               'id-ID',
               { maximumFractionDigits: 2 }
             )}% dari target proyek
@@ -172,11 +208,22 @@ export default function QuantityPanel({
         </div>
       )}
 
-      {canWrite && (
-        <form onSubmit={submit} className="mt-5 space-y-3">
-          <div className="grid gap-3 sm:grid-cols-2">
+      {canWrite && notStarted && (
+        <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm leading-relaxed text-amber-900">
+          Proyek mulai {formatDateId(start)} — progres bisa dicatat mulai tanggal itu.
+          {' '}Kalau pekerjaan sudah mulai hari ini,{' '}
+          <a href="/proyek" className="font-semibold underline">
+            ubah tanggal mulai
+          </a>{' '}
+          di halaman proyek.
+        </div>
+      )}
+
+      {canWrite && !notStarted && (
+        <form onSubmit={submit} className="mt-5 space-y-3" noValidate>
+          <div className="grid gap-3">
             <label className="space-y-1 text-sm font-medium text-neutral-700">
-              <span>Kuantitas (+ realisasi, − koreksi)</span>
+              <span>Jumlah (+ tambah, − koreksi)</span>
               <input
                 type="number"
                 step="0.0001"
@@ -191,11 +238,11 @@ export default function QuantityPanel({
             </label>
 
             <label className="space-y-1 text-sm font-medium text-neutral-700">
-              <span>Tanggal realisasi (opsional)</span>
+              <span>Tanggal progres (opsional)</span>
               <input
                 type="date"
-                min={startDate ? String(startDate).slice(0, 10) : undefined}
-                max={[new Date().getFullYear(), String(new Date().getMonth() + 1).padStart(2, '0'), String(new Date().getDate()).padStart(2, '0')].join('-')}
+                min={minDate}
+                max={today}
                 className={fieldClass}
                 value={date}
                 onChange={(event) =>
@@ -218,13 +265,20 @@ export default function QuantityPanel({
             />
           </label>
 
-          <p className="text-xs text-neutral-500">Kosongkan tanggal untuk memakai waktu penyimpanan saat ini. Total realisasi tidak boleh negatif atau melebihi target.</p>
+          <p className="text-xs text-neutral-500">
+            {validDelta && nextWithin
+              ? `Jumlah ini menambah progres — total jadi ${nextTotal.toLocaleString('id-ID')} dari target ${targetQuantity} ${unitCode} (${percentOf(nextTotal).toLocaleString('id-ID', { maximumFractionDigits: 2 })}%).`
+              : validDelta
+                ? `Total jadi ${nextTotal.toLocaleString('id-ID')} — di luar target, periksa lagi jumlahnya.`
+                : `Progres saat ini ${current.toLocaleString('id-ID')} dari target ${targetQuantity} ${unitCode}. Isi jumlah di atas untuk menambah progres.`}
+            {' '}Total tidak boleh negatif atau melebihi target. Tanggal kosong memakai hari ini.
+          </p>
           <button
             type="submit"
             disabled={busy}
             className="rounded-xl bg-orange-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-orange-700 disabled:opacity-50"
           >
-            {busy ? 'Menyimpan...' : 'Catat Realisasi'}
+            {busy ? 'Menyimpan...' : 'Catat Progres'}
           </button>
         </form>
       )}
@@ -241,14 +295,14 @@ export default function QuantityPanel({
         </p>
       )}
 
-      <div className="mt-6">
+      <div className="mt-4">
         <h3 className="text-sm font-semibold text-neutral-900">
-          Riwayat Realisasi
+          Riwayat Progres
         </h3>
 
         {!loading && items.length === 0 && (
           <p className="mt-3 text-sm text-neutral-500">
-            Belum ada realisasi yang tercatat.
+            Belum ada progres yang tercatat.
           </p>
         )}
 
@@ -260,7 +314,7 @@ export default function QuantityPanel({
             >
               <div className="min-w-0">
                 <p className="text-sm font-medium text-neutral-900">
-                  {item.notes || 'Pencatatan kuantitas'}
+                  {item.notes || 'Pencatatan jumlah'}
                 </p>
                 <p className="text-xs text-neutral-500">
                   {String(item.recorded_at || '').replace('T', ' ').slice(0, 19)}

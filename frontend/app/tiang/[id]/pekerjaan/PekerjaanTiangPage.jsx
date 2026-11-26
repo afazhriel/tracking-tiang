@@ -36,6 +36,7 @@ import { StatCard, StatCardGrid } from '../../../../components/ui/stat-card'
 import { Table, TableWrap, Td, Th, Tr } from '../../../../components/ui/table'
 import { ErrorNotice, SkeletonRows } from '../../../../components/ui/states'
 import { useProject } from '../../../../lib/project-context'
+import { projectUnitLabel, projectUnitLower } from '../../../../lib/unit-label'
 import {
   api,
   normalizePole,
@@ -82,6 +83,8 @@ function PoleWorkItemFormModal({
   existingItems,
   onSaved,
 }) {
+  const { project } = useProject()
+  const unitLower = projectUnitLower(project)
   const editingId = workItem?.id ?? null
 
   const [form, setForm] = useState(() =>
@@ -148,7 +151,7 @@ function PoleWorkItemFormModal({
       )
 
       if (duplicate) {
-        errors.name = ['Nama pekerjaan sudah dipakai pada tiang ini.']
+        errors.name = [`Nama pekerjaan sudah dipakai pada ${unitLower} ini.`]
       }
     }
 
@@ -212,8 +215,8 @@ function PoleWorkItemFormModal({
     <Modal
       open={open}
       onClose={onClose}
-      title={editingId ? 'Ubah Item Tiang' : 'Tambah Item Tiang'}
-      description="Item ini hanya berlaku untuk tiang ini. Bobot otomatis dinormalisasi agar total 100%."
+      title={editingId ? 'Ubah Item Pekerjaan' : 'Tambah Item Pekerjaan'}
+      description={`Item ini hanya berlaku untuk ${unitLower} ini. Bobot otomatis dinormalisasi agar total 100%.`}
       size="md"
       footer={
         <>
@@ -232,7 +235,7 @@ function PoleWorkItemFormModal({
       <form
         id="pole-work-item-form"
         onSubmit={handleSubmit}
-        className="space-y-4"
+        className="space-y-3"
         noValidate
       >
         {formError && (
@@ -258,7 +261,7 @@ function PoleWorkItemFormModal({
           htmlFor="pole-work-item-name"
           required
           error={fieldErrors?.name?.[0]}
-          hint="Unik per tiang. Contoh: Pembersihan Lahan."
+          hint={`Unik per ${unitLower}. Contoh: Pembersihan Lahan.`}
         >
           <TextInput
             id="pole-work-item-name"
@@ -273,13 +276,13 @@ function PoleWorkItemFormModal({
           />
         </FormField>
 
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid gap-3">
           <FormField
             label="Bobot (%)"
             htmlFor="pole-work-item-weight"
             required
             error={fieldErrors?.weight_percent?.[0]}
-            hint="0 – 100. Total seluruh item tiang otomatis dinormalisasi ke 100%."
+            hint={`0 – 100. Total seluruh item ${unitLower} otomatis dinormalisasi ke 100%.`}
           >
             <TextInput
               id="pole-work-item-weight"
@@ -335,7 +338,7 @@ function PoleWorkItemFormModal({
           />
         </FormField>
 
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid gap-3">
           <FormField
             label="Bulan Mulai"
             htmlFor="pole-work-item-start"
@@ -410,7 +413,7 @@ function PoleWorkItemFormModal({
             ' — sudah tepat 100%.'
           ) : scaleFactor !== null ? (
             <>
-              {' — saat disimpan, seluruh item tiang dinormalisasi ke 100% '}
+              {` — saat disimpan, seluruh item ${unitLower} dinormalisasi ke 100% `}
               <span className="tabular-nums">
                 (faktor ×{scaleFactor.toFixed(3)})
               </span>
@@ -432,7 +435,9 @@ function PekerjaanTiangContent() {
      query `/tiang/detail/pekerjaan?pole={id}` — lihat `poleWorkHref`
      di lib/native.js. */
   const poleId = params?.id ?? searchParams?.get('pole') ?? null
-  const { projectId } = useProject()
+  const { projectId, project } = useProject()
+  const unitName = projectUnitLabel(project)
+  const unitLower = projectUnitLower(project)
 
   const [createOpen, setCreateOpen] = useState(false)
   const [editing, setEditing] = useState(null)
@@ -521,11 +526,9 @@ function PekerjaanTiangContent() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-3">
       <PageHeader
-        eyebrow="Item Tiang"
-        title={pole ? `Item Pekerjaan ${pole.poleCode}` : 'Item Pekerjaan Tiang'}
-        subtitle="Kelola item pekerjaan khusus tiang ini. Item di sini independen dari tiang lain dan menjadi dasar progres tiang."
+        title={pole ? `Item Pekerjaan ${pole.poleCode}` : 'Item Pekerjaan'}
         actions={
           <>
             <ActionButton href={`/tiang/${poleId}`} icon={ArrowLeft}>
@@ -552,7 +555,7 @@ function PekerjaanTiangContent() {
 
       <StatCardGrid columns={3}>
         <StatCard
-          label="Total Item Tiang"
+          label="Total Item Pekerjaan"
           value={loading ? '…' : String(workItems.length)}
           hint={
             disabledCount
@@ -612,7 +615,7 @@ function PekerjaanTiangContent() {
             </div>
 
             <div>
-              <CardTitle>Daftar Item Pekerjaan Tiang</CardTitle>
+              <CardTitle>Daftar Item Pekerjaan {unitName}</CardTitle>
               <CardDescription>
                 Perubahan daftar ini hanya berlaku untuk tiang yang dipilih.
               </CardDescription>

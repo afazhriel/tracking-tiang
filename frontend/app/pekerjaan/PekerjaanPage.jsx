@@ -19,8 +19,9 @@ import {
 import AppShell from '../../components/layout/AppShell'
 import { ActionButton, PageHeader } from '../../components/layout/PageHeader'
 import { useProject } from '../../lib/project-context'
+import { projectUnitLabel, projectUnitLower } from '../../lib/unit-label'
 import { Badge, StatusBadge } from '../../components/ui/badge'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card'
 import { EmptyState } from '../../components/ui/empty-state'
 import { ProgressBar } from '../../components/ui/progress-bar'
 import { StatCard, StatCardGrid } from '../../components/ui/stat-card'
@@ -124,14 +125,15 @@ function SyncProgressControl({ onSync, onCancel, running, progressInfo }) {
           Sinkron {progressInfo.done}/{progressInfo.total}
         </span>
       ) : (
-        'Sinkronkan progress aktual'
+        'Sinkronkan progres aktual'
       )}
     </ActionButton>
   )
 }
 
 function PekerjaanContent() {
-  const { projectId, error: projectError } = useProject()
+  const { projectId, project, error: projectError } = useProject()
+  const unitLower = projectUnitLower(project)
 
   const currentUser = useCurrentUser()
   const isAdmin = ['admin', 'supervisor'].includes(currentUser?.role)
@@ -265,20 +267,26 @@ function PekerjaanContent() {
   }).length
 
   if (itemsData?.meta?.progress_source === 'quantity_entries') {
-    return <div className="space-y-4">
-      <h1 className="text-2xl font-semibold">Realisasi Kuantitas</h1>
-      <p>Proyek ini memakai kuantitas terhadap target, bukan bobot pekerjaan tiang.</p>
-      <p>Progres: {formatPercent(itemsData.meta.actual_current_percent)}</p>
-      <ActionButton href="/proyek">Buka Catat Realisasi</ActionButton>
+    return <div className="space-y-3">
+      <PageHeader
+        title="Progres Jumlah"
+      />
+
+      <Card>
+        <CardContent className="space-y-3">
+          <p className="text-sm text-neutral-600">
+            Progres: {formatPercent(itemsData.meta.actual_current_percent)}
+          </p>
+          <ActionButton href="/tugas-saya">Catat di Tugas saya</ActionButton>
+        </CardContent>
+      </Card>
     </div>
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-3">
       <PageHeader
-        eyebrow="Project Control"
         title="Pekerjaan"
-        subtitle="Pantau progres setiap item pekerjaan pada seluruh proyek."
         actions={
           <>
             <ActionButton href="/kurva-s" icon={BarChart3}>
@@ -305,18 +313,18 @@ function PekerjaanContent() {
         <StatCard
           label="Total Work Item"
           value={itemsLoading ? '…' : formatNumber(workItems.length)}
-          hint="Item pekerjaan pada project"
+          hint="Item pekerjaan pada proyek"
           Icon={ClipboardList}
         />
 
         <StatCard
-          label="Progress Keseluruhan"
+          label="Progres Keseluruhan"
           value={hasProgressData ? formatPercent(overallProgress) : '—'}
           hint={
             hasProgressData
               ? hasBackendAggregate
-                ? `Dari ${formatNumber(scopeCount)} tiang (agregat server)`
-                : `Dari ${formatNumber(scopeCount)} tiang tersinkron`
+                ? `Dari ${formatNumber(scopeCount)} ${unitLower} (agregat server)`
+                : `Dari ${formatNumber(scopeCount)} ${unitLower} tersinkron`
               : 'Belum tersedia'
           }
           Icon={Gauge}
@@ -326,7 +334,7 @@ function PekerjaanContent() {
         <StatCard
           label="Pekerjaan Aktif"
           value={hasProgressData ? formatNumber(activeCount) : '—'}
-          hint={hasProgressData ? 'Progress 1% – 99%' : 'Belum tersedia'}
+          hint={hasProgressData ? 'Progres 1% – 99%' : 'Belum tersedia'}
           Icon={Layers}
           tone="amber"
         />
@@ -334,7 +342,7 @@ function PekerjaanContent() {
         <StatCard
           label="Pekerjaan Selesai"
           value={hasProgressData ? formatNumber(doneCount) : '—'}
-          hint={hasProgressData ? 'Progress 100%' : 'Belum tersedia'}
+          hint={hasProgressData ? 'Progres 100%' : 'Belum tersedia'}
           Icon={Square}
           tone="emerald"
         />
@@ -352,22 +360,19 @@ function PekerjaanContent() {
         <ErrorNotice
           error={polesError}
           compact
-          title="Rujukan tiang gagal dimuat"
+          title={`Data ${projectUnitLabel(project)} gagal dimuat`}
         />
       )}
 
       <Card>
         <CardHeader>
           <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-neutral-100">
+            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-neutral-100">
               <ClipboardList className="h-4 w-4" />
             </div>
 
             <div>
-              <CardTitle>Work Item Project</CardTitle>
-              <CardDescription>
-                Sumber data: GET /api/projects/{'{id}'}/work-items
-              </CardDescription>
+              <CardTitle>Item Pekerjaan</CardTitle>
             </div>
           </div>
 
@@ -398,7 +403,7 @@ function PekerjaanContent() {
                     <Link
                       key={item.id}
                       href={`/pekerjaan/${item.id}`}
-                      className="block rounded-card border border-neutral-200 bg-paper p-4 transition-colors hover:border-neutral-300"
+                      className="block rounded-card border border-neutral-200 bg-paper p-3.5 transition-colors hover:border-neutral-300"
                     >
                       <div className="flex items-start justify-between gap-3">
                         <div className="flex min-w-0 items-start gap-3">
@@ -420,19 +425,19 @@ function PekerjaanContent() {
                         <StatusBadge size="sm" status={status} />
                       </div>
 
-                      <div className="mt-3">
+                      <div className="mt-2.5">
                         <ProgressBar
                           value={value}
                           size="sm"
                           tone={status.key}
-                          label="Progress aktual"
+                          label="Progres aktual"
                           showLabel
                         />
 
                         <p className="mt-2 text-[11px] text-neutral-400">
                           {meta
-                            ? `${formatNumber(meta.polesWithData)} dari ${formatNumber(meta.scopeCount)} tiang punya data`
-                            : 'Belum ada data progress aktual'}
+                            ? `${formatNumber(meta.polesWithData)} dari ${formatNumber(meta.scopeCount)} ${unitLower} punya data`
+                            : 'Belum ada data progres aktual'}
                         </p>
                       </div>
                     </Link>
@@ -451,7 +456,7 @@ function PekerjaanContent() {
                         <Th align="right">Bobot</Th>
                         <Th align="right">Durasi</Th>
                         <Th align="center">Periode</Th>
-                        <Th className="min-w-[220px]">Progress</Th>
+                        <Th className="min-w-[220px]">Progres</Th>
                         <Th align="center">Status</Th>
                         <Th align="right" className="w-16">Detail</Th>
                       </tr>
@@ -479,8 +484,8 @@ function PekerjaanContent() {
 
                               <p className="mt-0.5 text-[11px] text-neutral-400">
                                 {meta
-                                  ? `${formatNumber(meta.polesWithData)} dari ${formatNumber(meta.scopeCount)} tiang punya data`
-                                  : 'Belum ada data progress aktual'}
+                                  ? `${formatNumber(meta.polesWithData)} dari ${formatNumber(meta.scopeCount)} ${unitLower} punya data`
+                                  : 'Belum ada data progres aktual'}
                               </p>
                             </Td>
 
@@ -503,7 +508,7 @@ function PekerjaanContent() {
                                 value={value}
                                 size="sm"
                                 tone={status.key}
-                                label="Progress"
+                                label="Progres"
                               />
                             </Td>
 
@@ -547,31 +552,16 @@ function PekerjaanContent() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Catatan Perhitungan</CardTitle>
+          <CardTitle>Cara Progres Dihitung</CardTitle>
         </CardHeader>
 
         <CardContent className="space-y-2 text-xs leading-6 text-neutral-500">
-          {hasBackendAggregate ? (
-            <p>
-              Progres aktual tiap item dihitung di server dari tabel{' '}
-              <code className="rounded bg-neutral-100 px-1.5 py-0.5 text-[11px] text-neutral-600">
-                pole_work_progress
-              </code>{' '}
-              dan dibagi dengan penyebut proyek yang sama dengan Kurva S
-              (target jumlah tiang, atau jumlah tiang terdaftar bila target
-              belum diatur).
-            </p>
-          ) : (
-            <p>
-              Backend belum mengirim progres agregat, sehingga halaman memakai
-              data dari{' '}
-              <code className="rounded bg-neutral-100 px-1.5 py-0.5 text-[11px] text-neutral-600">
-                GET /api/projects/{'{project}'}/poles/{'{pole}'}/progress
-              </code>
-              . Tekan <strong>Sinkronkan progress aktual</strong> untuk
-              memuatnya. Tidak ada data progress yang diestimasi.
-            </p>
-          )}
+          <p>
+            Progres tiap item dihitung dari data lapangan dan memakai target
+            yang sama dengan Kurva S (target proyek, atau jumlah yang
+            terdaftar bila target belum diatur). Tidak ada angka yang
+            dibuat-buat.
+          </p>
 
           <p>
             Bobot, durasi, dan periode item pekerjaan diatur pada halaman{' '}
@@ -580,11 +570,7 @@ function PekerjaanContent() {
               className="font-medium text-brand-700 underline-offset-2 hover:underline"
             >
               Pengaturan Pekerjaan
-            </Link>{' '}
-            dan tersimpan di tabel{' '}
-            <code className="rounded bg-neutral-100 px-1.5 py-0.5 text-[11px] text-neutral-600">
-              work_items
-            </code>
+            </Link>
             .
           </p>
         </CardContent>

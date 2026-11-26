@@ -24,7 +24,6 @@ import { Badge } from '../../../components/ui/badge'
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from '../../../components/ui/card'
@@ -150,7 +149,7 @@ function WorkItemFormModal({
       )
 
       if (duplicate) {
-        errors.name = ['Nama pekerjaan sudah dipakai pada project ini.']
+        errors.name = ['Nama pekerjaan sudah dipakai pada proyek ini.']
       }
     }
 
@@ -234,7 +233,7 @@ function WorkItemFormModal({
       <form
         id="work-item-form"
         onSubmit={handleSubmit}
-        className="space-y-4"
+        className="space-y-3"
         noValidate
       >
         {formError && (
@@ -275,7 +274,7 @@ function WorkItemFormModal({
           />
         </FormField>
 
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid gap-3">
           <FormField
             label="Bobot (%)"
             htmlFor="work-item-weight"
@@ -337,7 +336,7 @@ function WorkItemFormModal({
           />
         </FormField>
 
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid gap-3">
           <FormField
             label="Bulan Mulai"
             htmlFor="work-item-start"
@@ -516,11 +515,9 @@ function PekerjaanSettingsContent() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-3">
       <PageHeader
-        eyebrow="Project Control"
         title="Pengaturan Pekerjaan"
-        subtitle="Kelola jenis item pekerjaan, bobot, durasi, dan periode rencananya. Semua halaman lain mengikuti data ini."
         actions={
           <>
             <ActionButton href="/pekerjaan" icon={ArrowLeft}>
@@ -632,9 +629,6 @@ function PekerjaanSettingsContent() {
 
             <div>
               <CardTitle>Daftar Item Pekerjaan</CardTitle>
-              <CardDescription>
-                Sumber data: GET /api/projects/{'{id}'}/work-items
-              </CardDescription>
             </div>
           </div>
 
@@ -751,7 +745,7 @@ function PekerjaanSettingsContent() {
             <EmptyState
               icon={ClipboardList}
               title="Belum ada item pekerjaan"
-              description="Tambahkan item pekerjaan beserta bobotnya. Data ini menjadi dasar progres berbobot dan Kurva S."
+              description="Tambahkan item pekerjaan beserta bobotnya."
               action={
                 isAdmin && (
                   <ActionButton

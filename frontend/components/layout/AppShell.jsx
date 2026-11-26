@@ -43,14 +43,14 @@ function AppSidebar({ title, trailing }) {
   return (
     <Sidebar open={open} setOpen={toggle} animate>
       <SidebarBody
-        className="justify-between gap-6 md:sticky md:top-0 md:h-screen"
+        className="justify-between gap-4 md:sticky md:top-0 md:h-screen"
         mobileLabel={title}
         trailing={trailing}
       >
         <div className="flex flex-1 flex-col">
           <SidebarHeader />
 
-          <nav className="flex flex-col gap-1.5">
+          <nav className="flex flex-col gap-1">
             {NAV_ITEMS.map((item) => (
               <SidebarLink
                 key={item.href}
@@ -98,16 +98,16 @@ function SidebarHeader() {
   const { expanded } = useSidebar()
 
   return (
-    <div className="mb-6 flex items-center gap-2.5">
-      {/* Mark aplikasi (public/brand/logo-mark.svg) — sumber yang sama
-          dengan favicon dan icon launcher, jadi logo di bar web tidak
-          pernah berbeda dari logo di aplikasi mobile. */}
+    <div className="mb-3 flex items-center gap-2.5">
+      {/* Pin tanpa latar (public/brand/logo-pin.svg) — varian khusus bar
+          samping atas permintaan user: logo tampil polos tanpa kotak
+          gelap. Ubin gelap tetap dipakai favicon dan icon launcher. */}
       <img
-        src="/brand/logo-mark.svg"
+        src="/brand/logo-pin.svg"
         alt=""
         width={40}
         height={40}
-        className="h-10 w-10 shrink-0 rounded-xl shadow-[0_8px_18px_-10px_rgba(201,111,66,.9)]"
+        className="h-9 w-9 shrink-0"
       />
 
       <motion.div
@@ -121,10 +121,10 @@ function SidebarHeader() {
         style={{ pointerEvents: expanded ? 'auto' : 'none' }}
       >
         <span className="block truncate font-display text-sm font-semibold text-neutral-900">
-          Tracking Proyek
+          Tracking Pekerjaan
         </span>
         <span className="block truncate text-xs text-neutral-500">
-          Project Dashboard
+          Sistem Monitoring Pekerjaan
         </span>
       </motion.div>
     </div>
@@ -151,7 +151,8 @@ function UserMenu({ compact = false }) {
   const { projectId, projects, selectProject } = useProject()
 
   const name = user?.name || user?.nama || 'Pengguna'
-  const role = user?.role?.name || user?.role || 'Project Control'
+  const role = user?.role?.name || user?.role || 'Pengguna'
+  const orgName = user?.organization?.name ?? null
   const initial = String(name).trim().charAt(0).toUpperCase() || 'U'
 
   /* Jumlah notifikasi belum dibaca untuk badge pada dropdown.
@@ -281,6 +282,9 @@ function UserMenu({ compact = false }) {
                 {name}
               </p>
               <p className="truncate text-xs text-neutral-500">{role}</p>
+              {orgName && (
+                <p className="truncate text-xs text-neutral-500">{orgName}</p>
+              )}
             </div>
           </div>
 
@@ -369,12 +373,12 @@ function ShellContent({ children, title }) {
         <div className="flex min-w-0 flex-1 flex-col">
           {/* Bar atas tanpa judul — hanya profil di kanan. Judul halaman
               cukup lewat PageHeader di konten dan label bar mobile. */}
-          <div className="sticky top-0 z-40 hidden h-12 items-center justify-end border-b border-neutral-200/80 bg-paper/85 px-4 backdrop-blur-md sm:px-6 md:flex">
+          <div className="sticky top-0 z-40 hidden h-10 items-center justify-end border-b border-neutral-200/80 bg-paper/85 px-4 backdrop-blur-md sm:px-6 md:flex">
             <UserMenu />
           </div>
 
           {(error || loading) && (
-            <div className="px-4 pt-5 sm:px-6">
+            <div className="px-4 pt-3 sm:px-6">
               {error ? (
                 <ErrorNotice
                   error={error}
@@ -390,19 +394,21 @@ function ShellContent({ children, title }) {
           )}
 
           {projects.length > 0 && (
-            <label className="mx-4 mt-4 block text-sm sm:mx-6">
+            <label className="mx-4 mt-2 block text-sm sm:mx-5">
               <span className="font-medium">Proyek aktif</span>
               <select aria-label="Proyek aktif" value={projectId ?? ''}
                 onChange={(event) => selectProject(event.target.value)}
-                className="ml-3 max-w-full rounded-lg border border-neutral-300 bg-white p-2">
+                className="ml-3 max-w-full rounded-lg border border-neutral-300 bg-white px-2.5 py-1.5">
                 {projects.map((item) => <option key={item.id} value={item.id}>
                   {item.code ? `${item.code} · ${item.name}` : item.name}
                 </option>)}
               </select>
             </label>
           )}
-          <main className="flex-1 px-4 py-4 sm:px-6 sm:py-6">
-            <div className="mx-auto w-full max-w-[1500px]">{children}</div>
+          <main className="flex-1 px-4 py-2.5 sm:px-5 sm:py-3">
+            {/* Satu kolom tengah yang sempit di semua lebar layar —
+                web memakai layout yang sama dengan mobile. */}
+            <div className="mx-auto w-full max-w-3xl">{children}</div>
           </main>
         </div>
     </div>

@@ -109,7 +109,7 @@ export function FilterBar({ className, children }) {
   return (
     <div
       className={cn(
-        'grid grid-cols-1 gap-3 rounded-card border border-neutral-200 bg-paper p-4 shadow-card sm:grid-cols-2 lg:grid-cols-4',
+        'grid grid-cols-1 gap-3 rounded-card border border-neutral-200 bg-paper p-3 shadow-card',
         className
       )}
     >

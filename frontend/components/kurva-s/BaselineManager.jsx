@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { api } from '../../lib/api'
 import { useCurrentUser } from '../../lib/use-current-user'
+import { projectUnitLower } from '../../lib/unit-label'
 
 const dateOnly = (value) => String(value ?? '').slice(0, 10)
 
@@ -92,7 +93,7 @@ export default function BaselineManager({ projectId, project, onApproved }) {
         }
       })
       .catch((err) => {
-        if (!cancelled) setError(err.message || 'Gagal memuat baseline.')
+        if (!cancelled) setError(err.message || 'Gagal memuat rencana.')
       })
       .finally(() => {
         if (!cancelled) setLoading(false)
@@ -170,7 +171,7 @@ export default function BaselineManager({ projectId, project, onApproved }) {
 
       if (result?.data?.id) setSelection(String(result.data.id))
       setRevision((n) => n + 1)
-      setMessage('Draf baseline berhasil disimpan.')
+      setMessage('Draf rencana berhasil disimpan.')
     } catch (err) {
       setError(err.message || 'Gagal menyimpan draf.')
     } finally {
@@ -191,7 +192,7 @@ export default function BaselineManager({ projectId, project, onApproved }) {
       return
     }
 
-    if (!window.confirm('Sahkan baseline ini? Setelah disahkan, rencana tidak bisa diedit langsung.')) {
+    if (!window.confirm('Sahkan rencana ini? Setelah disahkan, rencana tidak bisa diedit langsung.')) {
       return
     }
 
@@ -202,49 +203,46 @@ export default function BaselineManager({ projectId, project, onApproved }) {
     try {
       await api.approveBaseline(projectId, selected.id)
       setRevision((n) => n + 1)
-      setMessage('Baseline berhasil disahkan.')
+      setMessage('Rencana berhasil disahkan.')
       onApproved?.()
     } catch (err) {
-      setError(err.message || 'Gagal mengesahkan baseline.')
+      setError(err.message || 'Gagal mengesahkan rencana.')
     } finally {
       setSaving(false)
     }
   }
 
   return (
-    <section className="space-y-5 rounded-xl border border-neutral-200 bg-white p-5">
+    <section className="space-y-3 rounded-xl border border-neutral-200 bg-white p-3.5">
       <div>
-        <h2 className="text-lg font-semibold text-neutral-900">
-          Pengaturan Baseline Kurva S
+        <h2 className="text-base font-semibold text-neutral-900">
+          Pengaturan Rencana Kurva S
         </h2>
-        <p className="mt-1 text-sm text-neutral-500">
-          Target rencana per periode. Pengesahan hanya dapat dilakukan Admin.
-        </p>
       </div>
 
-      <div className="grid gap-3 text-sm sm:grid-cols-3">
-        <div className="rounded-lg bg-neutral-50 p-3">
+      <div className="grid gap-3 text-sm">
+        <div className="rounded-lg bg-neutral-50 p-2.5">
           <p className="text-neutral-500">Target proyek</p>
-          <p className="text-xl font-semibold">{formatAmount(target)} tiang</p>
+          <p className="text-lg font-semibold">{formatAmount(target)} {projectUnitLower(project)}</p>
         </div>
-        <div className="rounded-lg bg-neutral-50 p-3">
+        <div className="rounded-lg bg-neutral-50 p-2.5">
           <p className="text-neutral-500">Total periode</p>
-          <p className="text-xl font-semibold">{formatAmount(total)} tiang</p>
+          <p className="text-lg font-semibold">{formatAmount(total)} {projectUnitLower(project)}</p>
         </div>
-        <div className="rounded-lg bg-neutral-50 p-3">
-          <p className="text-neutral-500">Baseline berlaku</p>
-          <p className="text-xl font-semibold">
+        <div className="rounded-lg bg-neutral-50 p-2.5">
+          <p className="text-neutral-500">Rencana berlaku</p>
+          <p className="text-lg font-semibold">
             {approved ? `Versi ${approved.version}` : 'Belum disahkan'}
           </p>
         </div>
       </div>
 
-      {loading && <p className="text-sm text-neutral-500">Memuat baseline…</p>}
+      {loading && <p className="text-sm text-neutral-500">Memuat rencana…</p>}
       {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
       {message && <p role="status" className="text-sm text-emerald-700">{message}</p>}
 
       <label className="block space-y-1 text-sm">
-        <span className="font-medium">Versi baseline</span>
+        <span className="font-medium">Versi rencana</span>
         <select
           value={selection}
           onChange={(event) => {
@@ -252,11 +250,11 @@ export default function BaselineManager({ projectId, project, onApproved }) {
             setError('')
             setMessage('')
           }}
-          className="w-full rounded-lg border border-neutral-300 p-2"
+          className="w-full rounded-lg border border-neutral-300 px-2.5 py-1.5"
         >
-          {selection === 'auto' && <option value="auto">Memuat baseline…</option>}
+          {selection === 'auto' && <option value="auto">Memuat rencana…</option>}
           {canManageBaseline && <option value="new">Buat draf versi baru</option>}
-          {!canManageBaseline && <option value="new">Pilih versi baseline</option>}
+          {!canManageBaseline && <option value="new">Pilih versi rencana</option>}
           {baselines.map((baseline) => (
             <option key={baseline.id} value={baseline.id}>
               Versi {baseline.version} — {baseline.status}
@@ -272,8 +270,8 @@ export default function BaselineManager({ projectId, project, onApproved }) {
             value={notes}
             onChange={(event) => setNotes(event.target.value)}
             maxLength={5000}
-            rows={2}
-            className="w-full rounded-lg border border-neutral-300 p-2"
+            rows={1}
+            className="w-full rounded-lg border border-neutral-300 px-2.5 py-1.5"
           />
         </label>
       )}
@@ -282,32 +280,32 @@ export default function BaselineManager({ projectId, project, onApproved }) {
         <div className="space-y-3">
           <h3 className="font-semibold">Target per periode</h3>
           {periods.map((period, index) => (
-            <div key={index} className="grid gap-3 rounded-lg border border-neutral-200 p-3 sm:grid-cols-4">
+            <div key={index} className="grid gap-2 rounded-lg border border-neutral-200 p-2.5">
               <label className="text-sm">
                 <span className="block pb-1">Periode</span>
-                <span className="block py-2 font-medium">#{index + 1}</span>
+                <span className="block py-1.5 font-medium">#{index + 1}</span>
               </label>
               <label className="text-sm">
                 <span className="block pb-1">Mulai</span>
                 <input type="date" value={period.period_start}
                   disabled={!canEdit}
                   onChange={(e) => updatePeriod(index, 'period_start', e.target.value)}
-                  className="w-full rounded border p-2" />
+                  className="w-full rounded border px-2 py-1.5" />
               </label>
               <label className="text-sm">
                 <span className="block pb-1">Selesai</span>
                 <input type="date" value={period.period_end}
                   disabled={!canEdit}
                   onChange={(e) => updatePeriod(index, 'period_end', e.target.value)}
-                  className="w-full rounded border p-2" />
+                  className="w-full rounded border px-2 py-1.5" />
               </label>
               <label className="text-sm">
-                <span className="block pb-1">Rencana Kuantitas</span>
+                <span className="block pb-1">Rencana Jumlah</span>
                 <input type="number" min="0" step="0.0001"
                   value={period.planned_quantity}
                   disabled={!canEdit}
                   onChange={(e) => updatePeriod(index, 'planned_quantity', e.target.value)}
-                  className="w-full rounded border p-2" />
+                  className="w-full rounded border px-2 py-1.5" />
               </label>
               {canEdit && periods.length > 1 && (
                 <button type="button"
@@ -333,7 +331,7 @@ export default function BaselineManager({ projectId, project, onApproved }) {
           <p className={`text-sm ${validTotal ? 'text-emerald-700' : 'text-amber-700'}`}>
             {validTotal
               ? 'Total target sudah sesuai.'
-              : `Selisih terhadap target: ${formatAmount(target - total)} tiang.`}
+              : `Selisih terhadap target: ${formatAmount(target - total)} ${projectUnitLower(project)}.`}
           </p>
         </div>
       )}
@@ -342,24 +340,22 @@ export default function BaselineManager({ projectId, project, onApproved }) {
         <div className="flex flex-wrap gap-3">
           <button type="button" disabled={saving || !projectId}
             onClick={saveDraft}
-            className="rounded-lg bg-blue-700 px-4 py-2 text-sm font-medium text-white disabled:opacity-50">
+            className="rounded-lg bg-blue-700 px-3.5 py-1.5 text-sm font-medium text-white disabled:opacity-50">
             {saving ? 'Memproses…' : selected ? 'Simpan perubahan draf' : 'Simpan draf baru'}
           </button>
 
           {selected?.status === 'draft' && (
             <button type="button" disabled={saving || !validTotal || draftChanged}
               onClick={approveDraft}
-              className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-medium text-white disabled:opacity-50">
-              Sahkan baseline
+              className="rounded-lg bg-emerald-700 px-3.5 py-1.5 text-sm font-medium text-white disabled:opacity-50">
+              Sahkan rencana
             </button>
           )}
         </div>
       )}
 
       <p className="text-xs text-neutral-500">
-        Baseline yang sudah disahkan tidak dapat diubah langsung.
-        Buat versi baru untuk merevisi jadwal. Seluruh target periode
-        harus sama dengan target proyek dan tanggalnya harus berurutan.
+        Rencana yang disahkan tidak dapat diubah — buat versi baru untuk merevisi.
       </p>
     </section>
   )

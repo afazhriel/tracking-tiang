@@ -24,13 +24,13 @@ export function PageHeader({
   return (
     <section
       className={cn(
-        'flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between',
+        'flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between',
         className
       )}
     >
       <div className="min-w-0">
         {eyebrow && (
-          <p className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-neutral-500">
+          <p className="mb-1 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-neutral-500">
             <span
               aria-hidden="true"
               className="inline-block h-1.5 w-6 rounded-full"
@@ -42,12 +42,12 @@ export function PageHeader({
           </p>
         )}
 
-        <h2 className="font-display text-2xl font-semibold tracking-tight text-neutral-900 sm:text-3xl">
+        <h2 className="font-display text-lg font-semibold tracking-tight text-neutral-900 sm:text-xl">
           {title}
         </h2>
 
         {subtitle && (
-          <p className="mt-2 max-w-3xl text-sm leading-6 text-neutral-500">{subtitle}</p>
+          <p className="mt-0.5 max-w-3xl text-sm leading-5 text-neutral-500">{subtitle}</p>
         )}
       </div>
 
@@ -71,7 +71,7 @@ export function ActionButton({
   const resolved = tone(toneName)
 
   const classes = cn(
-    'inline-flex h-10 items-center justify-center gap-2 rounded-xl px-3.5 text-sm font-medium transition-all',
+    'inline-flex h-9 items-center justify-center gap-2 rounded-xl px-3 text-sm font-medium transition-all',
     'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2 focus-visible:ring-offset-canvas',
     'disabled:pointer-events-none disabled:opacity-50',
     variant === 'primary'

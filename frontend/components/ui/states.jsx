@@ -104,7 +104,7 @@ export function SkeletonRows({ rows = 4, className }) {
 
 export function SkeletonStats({ count = 4 }) {
   return (
-    <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+    <div className="grid grid-cols-2 gap-3 sm:gap-4">
       {Array.from({ length: count }).map((_, index) => (
         <Skeleton key={index} className="h-24 w-full" />
       ))}

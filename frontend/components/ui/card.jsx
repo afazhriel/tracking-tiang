@@ -29,7 +29,7 @@ export function CardHeader({ className, children, ...props }) {
   return (
     <div
       className={cn(
-        'flex flex-col gap-1 border-b border-neutral-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between',
+        'flex flex-col gap-1 border-b border-neutral-100 px-4 py-3 sm:flex-row sm:items-center sm:justify-between',
         className
       )}
       {...props}
@@ -64,7 +64,7 @@ export function CardDescription({ className, children, ...props }) {
 export function CardContent({ className, children, ...props }) {
   return (
     <div
-      className={cn('px-5 py-5', className)}
+      className={cn('px-4 py-4', className)}
       {...props}
     >
       {children}
@@ -76,7 +76,7 @@ export function CardFooter({ className, children, ...props }) {
   return (
     <div
       className={cn(
-        'flex flex-wrap items-center justify-between gap-3 border-t border-neutral-100 px-5 py-4',
+        'flex flex-wrap items-center justify-between gap-3 border-t border-neutral-100 px-4 py-3',
         className
       )}
       {...props}
@@ -98,7 +98,7 @@ export function CardHeading({ Icon, title, description, tone: toneName = 'brand'
     <div className={cn('flex items-center gap-3', className)}>
       <div
         className={cn(
-          'flex h-9 w-9 shrink-0 items-center justify-center rounded-xl',
+          'flex h-8 w-8 shrink-0 items-center justify-center rounded-xl',
           resolved.icon
         )}
       >

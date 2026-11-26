@@ -29,7 +29,7 @@ export function StatCard({
     <div
       style={accentVars(toneName)}
       className={cn(
-        'accent-top surface-elevate rounded-card border border-neutral-200 px-4 py-4',
+        'accent-top surface-elevate rounded-card border border-neutral-200 px-3.5 py-3',
         'transition-shadow duration-200 hover:shadow-lift',
         className
       )}
@@ -40,7 +40,7 @@ export function StatCard({
         {Icon && (
           <span
             className={cn(
-              'flex h-8 w-8 shrink-0 items-center justify-center rounded-lg',
+              'flex h-7 w-7 shrink-0 items-center justify-center rounded-lg',
               resolved.icon
             )}
           >
@@ -51,7 +51,7 @@ export function StatCard({
 
       <p
         className={cn(
-          'mt-2 font-display text-2xl font-semibold tabular-nums tracking-tight',
+          'mt-1.5 font-display text-xl font-semibold tabular-nums tracking-tight',
           valueTone ? resolved.text : 'text-neutral-900',
           valueClassName
         )}
@@ -65,16 +65,17 @@ export function StatCard({
 }
 
 export function StatCardGrid({ className, children, columns = 4 }) {
+  /* Satu susunan di semua lebar layar — sama seperti mobile. */
   const columnClass = {
-    2: 'grid-cols-1 sm:grid-cols-2',
-    3: 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3',
-    4: 'grid-cols-2 lg:grid-cols-4',
+    2: 'grid-cols-1',
+    3: 'grid-cols-1',
+    4: 'grid-cols-2',
   }
 
   return (
     <div
       className={cn(
-        'grid gap-3 sm:gap-4',
+        'grid gap-3',
         columnClass[columns] || columnClass[4],
         className
       )}

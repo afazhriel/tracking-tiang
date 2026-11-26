@@ -13,6 +13,7 @@ import { useParams } from "next/navigation";
 import {
   ArrowLeft,
   BarChart3,
+  CalendarClock,
   Camera,
   CircleAlert,
   ClipboardList,
@@ -20,17 +21,17 @@ import {
   History,
   ListChecks,
   MapPin,
+  User,
+  UserPlus,
 } from "lucide-react";
 
 import AppShell from "../../../components/layout/AppShell";
+import { useCurrentUser } from "../../../lib/use-current-user";
 import { useProject } from "../../../lib/project-context";
+import { projectUnitLabel, projectUnitLower } from "../../../lib/unit-label";
 import MapPanel from "../../../components/tiang/MapPanel";
 import SCurveChart from "../../../components/kurva-s/SCurveChart";
 import CurveVarianceTable from "../../../components/kurva-s/CurveVarianceTable";
-import {
-  UpdateProgressButton,
-  UpdateProgressModal,
-} from "../../../components/tiang/UpdateProgressModal";
 import { Badge, StatusBadge } from "../../../components/ui/badge";
 import { Breadcrumbs } from "../../../components/ui/breadcrumbs";
 import {
@@ -103,7 +104,19 @@ function TiangDetailContent() {
   const params = useParams();
   const poleId = params?.id ?? null;
   const { projectId, project } = useProject();
-  const [progressOpen, setProgressOpen] = useState(false);
+  const unitName = projectUnitLabel(project);
+  const unitLower = projectUnitLower(project);
+
+  /* PIC & tenggat (gaya Asana). */
+  const currentUser = useCurrentUser();
+  const isAdmin = ["admin", "supervisor"].includes(currentUser?.role);
+  const [assignUserId, setAssignUserId] = useState("");
+  const [assignBusy, setAssignBusy] = useState(false);
+  const [assignError, setAssignError] = useState(null);
+  const [dueDate, setDueDate] = useState(null);
+  const [dueBusy, setDueBusy] = useState(false);
+  const [dueError, setDueError] = useState(null);
+  const [actionNotice, setActionNotice] = useState("");
 
   const poleLoader = useCallback(async () => {
     if (!projectId || !poleId) return null;
@@ -141,6 +154,13 @@ function TiangDetailContent() {
     return await api.getPoleCurve(projectId, poleId);
   }, [projectId, poleId]);
 
+  /* Anggota proyek — kandidat PIC (hanya dimuat untuk admin/supervisor). */
+  const membersLoader = useCallback(async () => {
+    if (!projectId || !isAdmin) return null;
+
+    return unwrapList(await api.listProjectMembers(projectId));
+  }, [projectId, isAdmin]);
+
   const {
     data: rawPole,
     error: poleError,
@@ -175,6 +195,10 @@ function TiangDetailContent() {
     loading: curveLoading,
     reload: reloadCurve,
   } = useResource(curveLoader, [projectId, poleId], { enabled });
+
+  const { data: members } = useResource(membersLoader, [projectId, isAdmin], {
+    enabled: Boolean(projectId && isAdmin),
+  });
 
   const pole = useMemo(
     () => (rawPole ? normalizePole(rawPole) : null),
@@ -238,6 +262,87 @@ function TiangDetailContent() {
 
   const status = resolveStatus(pole?.status, weightedProgress);
 
+  /* PIC hanya boleh mencatat progres di titik yang ditugaskan ke
+     dirinya; admin/supervisor selalu boleh. */
+  const isAssignedToMe =
+    isAdmin ||
+    (pole?.assignedUsers ?? []).some(
+      (user) => String(user.id) === String(currentUser?.id)
+    );
+
+  const dueValue = dueDate ?? pole?.dueDate ?? "";
+
+  const assignCandidates = useMemo(() => {
+    const assignedIds = new Set(
+      (pole?.assignedUsers ?? []).map((user) => String(user.id))
+    );
+
+    return (members ?? []).filter(
+      (member) => !assignedIds.has(String(member.id))
+    );
+  }, [members, pole?.assignedUsers]);
+
+  async function handleAssign(event) {
+    event.preventDefault();
+
+    if (!assignUserId || assignBusy) return;
+
+    setAssignBusy(true);
+    setAssignError(null);
+    setActionNotice("");
+
+    try {
+      await api.assignPoleToUser(assignUserId, poleId);
+      setAssignUserId("");
+      setActionNotice("PIC berhasil ditugaskan.");
+      reloadPole();
+    } catch (err) {
+      setAssignError(err);
+    } finally {
+      setAssignBusy(false);
+    }
+  }
+
+  async function handleRevoke(user) {
+    if (assignBusy) return;
+    if (!window.confirm(`Cabut penugasan ${user.name} di ${pole?.poleCode}?`)) return;
+
+    setAssignBusy(true);
+    setAssignError(null);
+    setActionNotice("");
+
+    try {
+      await api.revokePoleFromUser(user.id, poleId);
+      setActionNotice("Penugasan dicabut.");
+      reloadPole();
+    } catch (err) {
+      setAssignError(err);
+    } finally {
+      setAssignBusy(false);
+    }
+  }
+
+  async function handleSaveDueDate() {
+    if (dueBusy) return;
+
+    setDueBusy(true);
+    setDueError(null);
+    setActionNotice("");
+
+    try {
+      await api.updatePole(projectId, poleId, {
+        due_date: dueValue === "" ? null : dueValue,
+      });
+      setDueDate(null);
+      setActionNotice("Tenggat disimpan.");
+      reloadPole();
+    } catch (err) {
+      setDueError(err);
+    } finally {
+      setDueBusy(false);
+    }
+  }
+
   /* Tanggal paling baru yang benar-benar ada di data progress. */
   const lastUpdated = useMemo(() => {
     const stamps = workProgress
@@ -266,18 +371,18 @@ function TiangDetailContent() {
     if (!pole) return;
 
     if (typeof document !== "undefined") {
-      document.title = `${pole.poleCode} · Monitoring Tiang`;
+      document.title = `${pole.poleCode} · Monitoring ${unitName}`;
     }
   }, [pole]);
 
   if (!enabled) {
     return (
-      <div className="space-y-6">
+      <div className="space-y-3">
         <PageNotice />
         <ErrorNotice
           error={{
             message:
-              "Project belum dapat dimuat sehingga detail tiang tidak bisa ditampilkan.",
+              `Proyek belum dapat dimuat sehingga detail ${unitLower} tidak bisa ditampilkan.`,
           }}
           title="Project belum siap"
         />
@@ -286,22 +391,22 @@ function TiangDetailContent() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-3">
       <PageNotice />
 
       {poleError && (
         <ErrorNotice
           error={poleError}
           onRetry={reloadPole}
-          title="Detail tiang gagal dimuat"
+          title={`Detail ${unitLower} gagal dimuat`}
         />
       )}
 
       {poleLoading ? (
-        <div className="space-y-4">
+        <div className="space-y-3">
           <Skeleton className="h-10 w-64" />
           <Skeleton className="h-32 w-full" />
-          <div className="grid gap-4 lg:grid-cols-3">
+          <div className="grid gap-3">
             <Skeleton className="h-72 w-full lg:col-span-2" />
             <Skeleton className="h-72 w-full" />
           </div>
@@ -309,36 +414,36 @@ function TiangDetailContent() {
       ) : !pole ? (
         <EmptyState
           icon={CircleAlert}
-          title="Tiang tidak ditemukan"
-          description={`Tiang dengan id ${poleId} tidak tersedia pada project ini.`}
+          title={`${unitName} tidak ditemukan`}
+          description={`${unitName} dengan id ${poleId} tidak tersedia pada proyek ini.`}
           action={
             <Link
               href="/tiang"
               className="inline-flex h-10 items-center gap-2 rounded-xl bg-neutral-900 px-4 text-sm font-medium text-white"
             >
               <ArrowLeft className="h-4 w-4" />
-              Kembali ke daftar tiang
+              Kembali ke daftar {unitLower}
             </Link>
           }
         />
       ) : (
         <>
-          <section className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <section className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
             <div className="min-w-0">
               <Breadcrumbs
                 items={[
                   { label: "Dashboard", href: "/dashboard" },
-                  { label: "Tiang", href: "/tiang" },
+                  { label: unitName, href: "/tiang" },
                   { label: pole.poleCode },
                 ]}
               />
 
-              <h2 className="mt-3 text-2xl font-semibold tracking-tight sm:text-3xl">
+              <h2 className="mt-1.5 text-lg font-semibold tracking-tight sm:text-xl">
                 {pole.poleCode}
               </h2>
 
               <p className="mt-2 max-w-2xl text-sm leading-6 text-neutral-500">
-                {pole.address || "Alamat belum diisi pada data tiang."}
+                {pole.address || `Alamat belum diisi pada data ${unitLower}.`}
               </p>
             </div>
 
@@ -351,22 +456,28 @@ function TiangDetailContent() {
                 </Badge>
               )}
 
-              <UpdateProgressButton
-                onClick={() => setProgressOpen(true)}
-                disabled={
-                  poleLoading ||
-                  progressLoading ||
-                  workItemsLoading ||
-                  !poleWorkItems?.length
-                }
-              />
+              {/* Progres dicatat dari Tugas saya — satu tempat, bukan
+                  form terpisah di halaman ini. */}
+              {isAssignedToMe ? (
+                <Link
+                  href={`/tugas-saya?lokasi=${poleId}`}
+                  className="inline-flex h-9 items-center gap-2 rounded-xl bg-orange-600 px-3 text-sm font-semibold text-white transition-colors hover:bg-orange-700"
+                >
+                  <ClipboardList className="h-4 w-4" />
+                  Catat progres
+                </Link>
+              ) : (
+                <span className="text-xs text-neutral-400">
+                  Lokasi ini belum ditugaskan ke Anda — progres dicatat dari Tugas saya
+                </span>
+              )}
 
               <Link
                 href={`/tiang/${poleId}/pekerjaan`}
                 className="inline-flex h-9 items-center gap-2 rounded-xl border border-neutral-200 bg-paper px-3 text-sm font-medium text-neutral-700 transition-colors hover:bg-canvas"
               >
                 <ListChecks className="h-4 w-4" />
-                Kelola Item Tiang
+                Kelola Pekerjaan
               </Link>
 
               <Link
@@ -379,8 +490,8 @@ function TiangDetailContent() {
             </div>
           </section>
 
-          <div className="grid gap-4 lg:grid-cols-3">
-            <div className="space-y-4 lg:col-span-2">
+          <div className="grid gap-3">
+            <div className="space-y-3 lg:col-span-2">
               <Card>
                 <CardHeader>
                   <div className="flex items-center gap-3">
@@ -397,8 +508,8 @@ function TiangDetailContent() {
                   </div>
                 </CardHeader>
 
-                <CardContent className="space-y-4">
-                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                <CardContent className="space-y-3">
+                  <div className="grid gap-3">
                     <DetailRow label="Kode Tiang" value={pole.poleCode} />
                     <DetailRow
                       label="Wilayah"
@@ -422,7 +533,7 @@ function TiangDetailContent() {
                   </div>
 
                   <MapPanel
-                    className="h-[300px] w-full sm:h-[340px]"
+                    className="h-[260px] w-full sm:h-[300px]"
                     poles={mappedPole}
                     selectedId={pole.id}
                   />
@@ -439,7 +550,7 @@ function TiangDetailContent() {
                     <div>
                       <CardTitle>Progress Pekerjaan</CardTitle>
                       <CardDescription>
-                        Realisasi per item pekerjaan pada tiang ini
+                        Progres per item pekerjaan pada tiang ini
                       </CardDescription>
                     </div>
                   </div>
@@ -468,7 +579,7 @@ function TiangDetailContent() {
                   ) : progressLoading || workItemsLoading ? (
                     <SkeletonRows rows={4} />
                   ) : mergedStages.length ? (
-                    <div className="space-y-4">
+                    <div className="space-y-3">
                       <ProgressBar
                         value={weightedProgress}
                         size="md"
@@ -522,7 +633,7 @@ function TiangDetailContent() {
                               )}
 
                               {!item.hasData && (
-                                <span>Belum ada realisasi</span>
+                                <span>Belum ada progres</span>
                               )}
                             </div>
                           </div>
@@ -541,7 +652,7 @@ function TiangDetailContent() {
                           className="inline-flex h-9 items-center gap-2 rounded-xl bg-neutral-900 px-3 text-sm font-medium text-white"
                         >
                           <ListChecks className="h-4 w-4" />
-                          Kelola Item Tiang
+                          Kelola Pekerjaan
                         </Link>
                       }
                     />
@@ -559,7 +670,7 @@ function TiangDetailContent() {
                     <div className="flex-1">
                       <CardTitle>Kurva S Tiang</CardTitle>
                       <CardDescription>
-                        Rencana khusus tiang ini dibanding realisasi progress-nya
+                        Rencana khusus tiang ini dibanding progresnya
                       </CardDescription>
                     </div>
 
@@ -571,10 +682,10 @@ function TiangDetailContent() {
                   </div>
                 </CardHeader>
 
-                <CardContent className="space-y-5">
+                <CardContent className="space-y-3">
                   <CurveBasisNotice curve={curvePayload} />
                   {curveLoading ? (
-                    <Skeleton className="h-[380px] w-full" />
+                    <Skeleton className="h-[280px] w-full" />
                   ) : curveError ? (
                     <ErrorNotice
                       error={curveError}
@@ -597,7 +708,7 @@ function TiangDetailContent() {
 
                         <div className="rounded-xl bg-canvas p-3 text-center">
                           <dt className="text-[11px] text-neutral-400">
-                            Realisasi
+                            Progres
                           </dt>
                           <dd className="mt-0.5 text-sm font-semibold tabular-nums text-neutral-800">
                             {formatPercent(curveSummary.actualProgress)}
@@ -632,7 +743,7 @@ function TiangDetailContent() {
                       icon={BarChart3}
                       compact
                       title="Kurva S tiang belum tersedia"
-                      description="Tambahkan item pekerjaan dengan bulan rencana, lalu catat realisasi progress untuk menampilkan kurva S tiang ini."
+                      description="Tambahkan item pekerjaan dengan bulan rencana, lalu catat progres untuk menampilkan kurva S tiang ini."
                     />
                   )}
                 </CardContent>
@@ -671,7 +782,7 @@ function TiangDetailContent() {
                       description="Riwayat akan muncul setelah progress pekerjaan diperbarui."
                     />
                   ) : (
-                    <div className="space-y-4">
+                    <div className="space-y-3">
                       {activityPayload.data.map((activity) => (
                         <div
                           key={activity.id}
@@ -727,16 +838,16 @@ function TiangDetailContent() {
               </Card>
             </div>
 
-            <div className="space-y-4">
+            <div className="space-y-3">
               <Card>
                 <CardHeader>
                   <CardTitle>Progress Keseluruhan</CardTitle>
                 </CardHeader>
 
-                <CardContent className="space-y-4">
+                <CardContent className="space-y-3">
                   <div className="flex items-end justify-between">
-                    <span className="text-xs text-neutral-400">Realisasi</span>
-                    <span className="text-3xl font-semibold tabular-nums text-neutral-900">
+                    <span className="text-xs text-neutral-400">Progres</span>
+                    <span className="text-xl font-semibold tabular-nums text-neutral-900">
                       {progressLoading ? "…" : formatPercent(weightedProgress)}
                     </span>
                   </div>
@@ -752,7 +863,7 @@ function TiangDetailContent() {
                     </div>
 
                     <div className="flex items-center justify-between">
-                      <dt className="text-neutral-400">Item punya realisasi</dt>
+                      <dt className="text-neutral-400">Item punya progres</dt>
                       <dd className="font-medium text-neutral-700">
                         {workProgress.length}
                       </dd>
@@ -776,6 +887,150 @@ function TiangDetailContent() {
                       </dd>
                     </div>
                   </dl>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-neutral-100">
+                      <User className="h-4 w-4" />
+                    </div>
+
+                    <div>
+                      <CardTitle>PIC & Tenggat</CardTitle>
+                      <CardDescription>Siapa yang mengerjakan lokasi ini</CardDescription>
+                    </div>
+                  </div>
+                </CardHeader>
+
+                <CardContent className="space-y-3">
+                  {pole.assignedUsers.length ? (
+                    <ul className="space-y-2">
+                      {pole.assignedUsers.map((user) => (
+                        <li
+                          key={user.id}
+                          className="flex items-center justify-between gap-2 rounded-xl bg-canvas p-2.5"
+                        >
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-medium text-neutral-800">
+                              {user.name}
+                            </p>
+                            <p className="text-[11px] text-neutral-400">
+                              {user.teamName
+                                ? `Tim ${user.teamName}`
+                                : "Penugasan langsung"}
+                            </p>
+                          </div>
+
+                          {isAdmin && (
+                            <button
+                              type="button"
+                              onClick={() => handleRevoke(user)}
+                              disabled={assignBusy}
+                              className="shrink-0 rounded-lg border border-red-200 px-2.5 py-1.5 text-xs font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
+                            >
+                              Cabut
+                            </button>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="text-sm text-neutral-500">
+                      Belum ada PIC. Lokasi ini belum ditugaskan ke siapa pun.
+                    </p>
+                  )}
+
+                  {isAdmin && (
+                    <form onSubmit={handleAssign} className="space-y-2">
+                      <label
+                        htmlFor="assign-pic"
+                        className="block text-xs font-medium text-neutral-500"
+                      >
+                        Tugaskan PIC
+                      </label>
+
+                      <div className="flex gap-2">
+                        <select
+                          id="assign-pic"
+                          value={assignUserId}
+                          onChange={(event) => setAssignUserId(event.target.value)}
+                          disabled={assignBusy}
+                          className="min-w-0 flex-1 rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 outline-none focus:border-orange-500 disabled:opacity-50"
+                        >
+                          <option value="">Pilih anggota proyek…</option>
+                          {assignCandidates.map((member) => (
+                            <option key={member.id} value={member.id}>
+                              {member.name}
+                            </option>
+                          ))}
+                        </select>
+
+                        <button
+                          type="submit"
+                          disabled={!assignUserId || assignBusy}
+                          className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-neutral-900 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
+                        >
+                          <UserPlus className="h-4 w-4" />
+                          Tugaskan
+                        </button>
+                      </div>
+
+                      <p className="text-[11px] text-neutral-400">
+                        PIC harus anggota proyek dulu — tambah di halaman Proyek.
+                      </p>
+                    </form>
+                  )}
+
+                  <div className="border-t border-neutral-100 pt-3">
+                    <label
+                      htmlFor="pole-due-date"
+                      className="block text-xs font-medium text-neutral-500"
+                    >
+                      Tenggat
+                    </label>
+
+                    <div className="mt-1.5 flex gap-2">
+                      <input
+                        id="pole-due-date"
+                        type="date"
+                        value={dueValue}
+                        onChange={(event) => setDueDate(event.target.value)}
+                        disabled={!isAdmin || dueBusy}
+                        className="min-w-0 flex-1 rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 outline-none focus:border-orange-500 disabled:opacity-50"
+                      />
+
+                      {isAdmin && (
+                        <button
+                          type="button"
+                          onClick={handleSaveDueDate}
+                          disabled={dueBusy}
+                          className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-neutral-900 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
+                        >
+                          <CalendarClock className="h-4 w-4" />
+                          Simpan
+                        </button>
+                      )}
+                    </div>
+
+                    {pole.isOverdue && (
+                      <p className="mt-1.5 text-[11px] font-medium text-rose-600">
+                        Tenggat sudah lewat dan lokasi belum selesai.
+                      </p>
+                    )}
+                  </div>
+
+                  {(assignError || dueError) && (
+                    <p role="alert" className="text-sm text-red-700">
+                      {(assignError || dueError)?.message ??
+                        "Permintaan gagal. Silakan coba kembali."}
+                    </p>
+                  )}
+
+                  {actionNotice && (
+                    <p className="text-sm text-emerald-700">{actionNotice}</p>
+                  )}
                 </CardContent>
               </Card>
 
@@ -828,19 +1083,6 @@ function TiangDetailContent() {
               </Card>
             </div>
           </div>
-
-          {progressOpen && (
-            <UpdateProgressModal
-              open={progressOpen}
-              onClose={() => setProgressOpen(false)}
-              projectId={projectId}
-              projectStartDate={project?.startDate}
-              pole={pole}
-              workItems={poleWorkItems ?? []}
-              currentProgress={workProgress}
-              onSaved={() => { reloadPole(); reloadProgress(); reloadWorkItems(); reloadActivities(); reloadCurve(); }}
-            />
-          )}
         </>
       )}
     </div>

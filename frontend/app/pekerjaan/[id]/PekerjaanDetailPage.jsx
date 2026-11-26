@@ -16,6 +16,7 @@ import {
 
 import AppShell from '../../../components/layout/AppShell'
 import { useProject } from '../../../lib/project-context'
+import { projectUnitLabel, projectUnitLower } from '../../../lib/unit-label'
 import { Badge, StatusBadge } from '../../../components/ui/badge'
 import { Breadcrumbs } from '../../../components/ui/breadcrumbs'
 import {
@@ -65,6 +66,8 @@ function PekerjaanDetailContent() {
   const params = useParams()
   const workItemId = params?.id ?? null
   const { projectId, project } = useProject()
+  const unitName = projectUnitLabel(project)
+  const unitLower = projectUnitLower(project)
 
   const enabled = Boolean(projectId && workItemId)
 
@@ -183,15 +186,7 @@ function PekerjaanDetailContent() {
 
   return (
     <>
-      <div className="space-y-6">
-        <p className="text-xs text-neutral-400">
-          Sumber data:{' '}
-          <code className="rounded bg-neutral-100 px-1.5 py-0.5 text-[11px] text-neutral-600">
-            GET /api/projects/{'{id}'}/work-items/{'{workItem}'}
-          </code>
-          . Riwayat rencana diambil dari endpoint kurva S yang sama.
-        </p>
-
+      <div className="space-y-3">
         {itemError && (
           <ErrorNotice
             error={itemError}
@@ -206,7 +201,7 @@ function PekerjaanDetailContent() {
           <EmptyState
             icon={CircleAlert}
             title="Item pekerjaan tidak ditemukan"
-            description={`Work item dengan id ${workItemId} tidak tersedia pada project ini.`}
+            description="Item pekerjaan ini tidak tersedia pada proyek ini."
             action={
               <Link
                 href="/pekerjaan"
@@ -219,7 +214,7 @@ function PekerjaanDetailContent() {
           />
         ) : (
           <>
-            <section className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <section className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
               <div className="min-w-0">
                 <Breadcrumbs
                   items={[
@@ -230,14 +225,14 @@ function PekerjaanDetailContent() {
                 />
 
                 <div className="mt-3 flex flex-wrap items-center gap-3">
-                  <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">
+                  <h2 className="text-lg font-semibold tracking-tight sm:text-xl">
                     {workItem.name}
                   </h2>
 
                   <StatusBadge status={statusFromProgress(stats.average)} />
                 </div>
 
-                <p className="mt-2 max-w-2xl text-sm leading-6 text-neutral-500">
+                <p className="mt-1 max-w-2xl text-sm leading-5 text-neutral-500">
                   Bobot {formatPercent(workItem.weight)} terhadap total pekerjaan
                   {workItem.plannedDurationDays
                     ? ` · durasi rencana ${formatDays(workItem.plannedDurationDays)}`
@@ -267,7 +262,7 @@ function PekerjaanDetailContent() {
               <StatCard
                 label="Bobot Pekerjaan"
                 value={formatPercent(workItem.weight)}
-                hint="Terhadap total bobot project"
+                hint="Terhadap total bobot proyek"
                 Icon={ClipboardList}
               />
 
@@ -284,7 +279,7 @@ function PekerjaanDetailContent() {
               />
 
               <StatCard
-                label="Progress Aktual"
+                label="Progres Aktual"
                 value={
                   running
                     ? `${progressInfo.done}/${progressInfo.total}`
@@ -292,15 +287,15 @@ function PekerjaanDetailContent() {
                 }
                 hint={
                   stats.touched
-                    ? `Rata-rata ${formatNumber(stats.touched)} tiang`
-                    : 'Belum ada data progress'
+                    ? `Rata-rata ${formatNumber(stats.touched)} ${unitLower}`
+                    : 'Belum ada data progres'
                 }
                 Icon={Download}
                 tone="emerald"
               />
 
               <StatCard
-                label="Tiang Selesai"
+                label={`${unitName} Selesai`}
                 value={formatNumber(stats.done)}
                 hint={`${formatNumber(stats.inProgress)} masih dikerjakan`}
                 Icon={MapPin}
@@ -308,8 +303,8 @@ function PekerjaanDetailContent() {
               />
             </StatCardGrid>
 
-            <div className="grid gap-4 lg:grid-cols-3">
-              <div className="space-y-4 lg:col-span-2">
+            <div className="grid gap-3">
+              <div className="space-y-3 lg:col-span-2">
                 <Card>
                   <CardHeader>
                     <div className="flex items-center gap-3">
@@ -318,7 +313,7 @@ function PekerjaanDetailContent() {
                       </div>
 
                       <div>
-                        <CardTitle>Rencana & Realisasi</CardTitle>
+                        <CardTitle>Rencana & Progres</CardTitle>
                         <CardDescription>
                           Progres item pekerjaan ini pada periode proyek
                         </CardDescription>
@@ -326,8 +321,8 @@ function PekerjaanDetailContent() {
                     </div>
                   </CardHeader>
 
-                  <CardContent className="space-y-5">
-                    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                  <CardContent className="space-y-3">
+                    <div className="grid gap-3">
                       <Row
                         label="Nama Pekerjaan"
                         value={workItem.name}
@@ -342,7 +337,7 @@ function PekerjaanDetailContent() {
                         value={formatDays(workItem.plannedDurationDays)}
                       />
                       <Row
-                        label="Urutan (Sequence)"
+                        label="Urutan"
                         value={workItem.sequence ?? '—'}
                         mono
                       />
@@ -371,7 +366,7 @@ function PekerjaanDetailContent() {
                         }
                       />
                       <Row
-                        label="Progress Aktual"
+                        label="Progres Aktual"
                         value={formatPercent(stats.average)}
                         mono
                       />
@@ -381,7 +376,7 @@ function PekerjaanDetailContent() {
                       <ProgressBar
                         value={stats.average}
                         size="md"
-                        label="Progress aktual (rata-rata tiang)"
+                        label={`Progres aktual (rata-rata ${unitName})`}
                         showLabel
                       />
                     </div>
@@ -392,7 +387,7 @@ function PekerjaanDetailContent() {
                           Kontribusi rencana per bulan
                         </p>
 
-                        <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
+                        <div className="mt-3 grid grid-cols-2 gap-2">
                           {curve.planned_curve
                             .filter((point) => point.month >= (workItem.plannedStartMonth ?? 1) &&
                               point.month <= (workItem.plannedEndMonth ?? 0))
@@ -415,11 +410,7 @@ function PekerjaanDetailContent() {
 
                         <SectionNote>
                           Nilai di atas adalah kontribusi bobot item ini terhadap
-                          progres rencana proyek tiap bulan, dihitung dari
-                          <code className="mx-1 rounded bg-neutral-100 px-1 py-0.5 text-[10px] text-neutral-500">
-                            planned_curve
-                          </code>
-                          pada endpoint kurva S.
+                          progres rencana proyek tiap bulan.
                         </SectionNote>
                       </div>
                     ) : (
@@ -427,8 +418,7 @@ function PekerjaanDetailContent() {
                         icon={CalendarDays}
                         compact
                         title="Rencana bulanan belum tersedia"
-                        description="Endpoint kurva S belum mengembalikan data rencana untuk project ini."
-                        hint="Ready for API integration"
+                        description="Data rencana bulanan belum tersedia untuk proyek ini."
                       />
                     )}
                   </CardContent>
@@ -442,11 +432,11 @@ function PekerjaanDetailContent() {
                       </div>
 
                       <div>
-                        <CardTitle>Tiang Terkait</CardTitle>
+                        <CardTitle>{unitName} Terkait</CardTitle>
                         <CardDescription>
                           {totalRegistered
-                            ? `${formatNumber(totalRegistered)} tiang terdaftar pada project`
-                            : 'Daftar tiang project'}
+                            ? `${formatNumber(totalRegistered)} ${unitLower} terdaftar pada proyek`
+                            : `Daftar ${unitLower} proyek`}
                         </CardDescription>
                       </div>
                     </div>
@@ -467,7 +457,7 @@ function PekerjaanDetailContent() {
                         ) : (
                           <>
                             <Download className="h-3.5 w-3.5" />
-                            Muat progress tiang
+                            Muat progres {unitName}
                           </>
                         )}
                       </button>
@@ -475,8 +465,8 @@ function PekerjaanDetailContent() {
                       <button
                         type="button"
                         onClick={reloadPoles}
-                        aria-label="Muat ulang daftar tiang"
-                        title="Muat ulang daftar tiang"
+                        aria-label={`Muat ulang daftar ${unitLower}`}
+                        title={`Muat ulang daftar ${unitLower}`}
                         className="flex h-9 w-9 items-center justify-center rounded-xl border border-neutral-200 text-neutral-500 transition-colors hover:bg-canvas"
                       >
                         <RefreshCw className="h-3.5 w-3.5" />
@@ -490,24 +480,23 @@ function PekerjaanDetailContent() {
                         error={polesError}
                         onRetry={reloadPoles}
                         compact
-                        title="Daftar tiang gagal dimuat"
+                        title={`Daftar ${unitLower} gagal dimuat`}
                       />
                     ) : polesLoading ? (
-                      <InlineLoader label="Memuat daftar tiang..." />
+                      <InlineLoader label={`Memuat daftar ${unitLower}...`} />
                     ) : !poles.length ? (
                       <EmptyState
                         icon={MapPin}
                         compact
-                        title="Belum ada tiang terdaftar"
-                        description="Tidak ada tiang pada project ini sehingga detail per tiang tidak dapat ditampilkan."
+                        title={`Belum ada ${unitLower} terdaftar`}
+                        description={`Tidak ada ${unitLower} pada proyek ini sehingga detail per ${unitLower} tidak dapat ditampilkan.`}
                       />
                     ) : stats.touched === 0 ? (
                       <EmptyState
                         icon={MapPin}
                         compact
-                        title="Progress tiang belum dimuat"
-                        description="Backend menyediakan endpoint progress per tiang, namun belum ada endpoint ringkasan progress per work item. Tekan “Muat progress tiang” untuk mengambil data asli dari API."
-                        hint="Ready for API integration"
+                        title={`Progres ${unitName} belum dimuat`}
+                        description={`Belum ada ringkasan progres per ${unitName}. Tekan "Muat progres ${unitName}" untuk memuat data terbaru.`}
                       />
                     ) : (
                       <div className="space-y-2">
@@ -560,20 +549,20 @@ function PekerjaanDetailContent() {
                 </Card>
               </div>
 
-              <div className="space-y-4">
+              <div className="space-y-3">
                 <Card>
                   <CardHeader>
-                    <CardTitle>Progress History</CardTitle>
+                    <CardTitle>Riwayat Progres</CardTitle>
                   </CardHeader>
 
-                  <CardContent className="space-y-4">
+                  <CardContent className="space-y-3">
                     {curve?.actual_curve?.length ? (
                       <>
                         <div className="flex items-end justify-between">
                           <span className="text-xs text-neutral-400">
-                            Realisasi proyek
+                            Progres proyek
                           </span>
-                          <span className="text-2xl font-semibold tabular-nums text-neutral-900">
+                          <span className="text-lg font-semibold tabular-nums text-neutral-900">
                             {formatPercent(curve.actual_current_percent)}
                           </span>
                         </div>
@@ -598,9 +587,8 @@ function PekerjaanDetailContent() {
                         </ul>
 
                         <p className="text-[11px] leading-5 text-neutral-400">
-                          Riwayat di atas adalah realisasi progres proyek
-                          keseluruhan dari endpoint kurva S, bukan per item
-                          pekerjaan.
+                          Riwayat di atas adalah catatan progres proyek
+                          keseluruhan, bukan per item pekerjaan.
                         </p>
                       </>
                     ) : (
@@ -608,36 +596,12 @@ function PekerjaanDetailContent() {
                         icon={CalendarDays}
                         compact
                         title="Riwayat belum tersedia"
-                        description="Endpoint kurva S belum mengembalikan data actual curve."
-                        hint="Ready for API integration"
+                        description="Data riwayat belum tersedia untuk proyek ini."
                       />
                     )}
                   </CardContent>
                 </Card>
 
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Endpoint</CardTitle>
-                  </CardHeader>
-
-                  <CardContent>
-                    <ul className="space-y-2 text-[11px] leading-5 text-neutral-500">
-                      {[
-                        `/api/projects/{project}/work-items/${workItem.id}`,
-                        `/api/projects/{project}/poles`,
-                        `/api/projects/{project}/poles/{pole}/progress`,
-                        `/api/projects/{project}/curve`,
-                      ].map((path) => (
-                        <li
-                          key={path}
-                          className="break-all rounded-lg bg-canvas px-3 py-2 font-mono text-neutral-600"
-                        >
-                          {path}
-                        </li>
-                      ))}
-                    </ul>
-                  </CardContent>
-                </Card>
               </div>
             </div>
           </>

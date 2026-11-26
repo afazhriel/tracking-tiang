@@ -28,17 +28,16 @@ import { Badge } from '../../components/ui/badge'
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from '../../components/ui/card'
 import { EmptyState } from '../../components/ui/empty-state'
 import { StatCard, StatCardGrid } from '../../components/ui/stat-card'
-import { ProgressBar } from '../../components/ui/progress-bar'
 import { ErrorNotice, Skeleton } from '../../components/ui/states'
 import { api } from '../../lib/api'
 import { useResource } from '../../lib/use-api'
 import { summarizeCurve } from '../../lib/curve'
+import { projectUnitLabel, projectUnitLower } from '../../lib/unit-label'
 import {
   formatDate,
   formatNumber,
@@ -118,11 +117,9 @@ function KurvaSContent() {
   }, [summary])
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-3">
       <PageHeader
-        eyebrow="Project Control"
         title="Kurva S"
-        subtitle="Perbandingan rencana dan realisasi progres proyek."
         actions={
           <>
             <ActionButton
@@ -172,12 +169,12 @@ function KurvaSContent() {
         />
 
         <StatCard
-          label="Realisasi"
+          label="Progres"
           value={loading ? '…' : formatPercent(summary?.actualProgress ?? null)}
           hint={
             summary?.lastActualDate
               ? `terakhir ${formatDate(summary.lastActualDate)}`
-              : 'Belum ada realisasi'
+              : 'Belum ada progres'
           }
           Icon={Gauge}
           tone="blue"
@@ -188,10 +185,10 @@ function KurvaSContent() {
           value={loading ? '…' : formatSignedPercent(variance)}
           hint={
             variance === null
-              ? 'Butuh data rencana & realisasi'
+              ? 'Butuh data rencana & progres'
               : variance >= 0
-                ? 'Realisasi di atas rencana'
-                : 'Realisasi di bawah rencana'
+                ? 'Progres di atas rencana'
+                : 'Progres di bawah rencana'
           }
           Icon={
             variance !== null && variance !== undefined ? VarianceIcon : Gauge
@@ -204,7 +201,7 @@ function KurvaSContent() {
           value={loading ? '…' : currentPeriodLabel}
           hint={
             curve?.project?.end_date
-              ? `project ends ${formatDate(curve.project.end_date)}`
+              ? `Berakhir ${formatDate(curve.project.end_date)}`
               : 'Periode berjalan'
           }
           Icon={CalendarDays}
@@ -215,21 +212,20 @@ function KurvaSContent() {
       <Card>
         <CardHeader>
           <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-neutral-100">
+            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-neutral-100">
               <BarChart3 className="h-4 w-4" />
             </div>
 
             <div>
-              <CardTitle>Grafik Rencana dan Realisasi</CardTitle>
-              <CardDescription>
-                Data dari catatan realisasi dan jadwal proyek
-              </CardDescription>
+              <CardTitle>Grafik Rencana dan Progres</CardTitle>
             </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
             <Badge className="bg-neutral-100 text-neutral-600 ring-neutral-500/20">
-              {formatNumber(curve?.registered_poles ?? null)} tiang terdaftar
+              {curve?.project?.progress_source === 'quantity_entries'
+                ? `Target ${formatNumber(curve?.project?.target_quantity ?? null)} ${projectUnitLower(curve?.project)}`
+                : `${formatNumber(curve?.registered_poles ?? null)} ${projectUnitLower(curve?.project)} terdaftar`}
             </Badge>
 
             <Badge className={varianceToneClass}>
@@ -241,62 +237,45 @@ function KurvaSContent() {
           </div>
         </CardHeader>
 
-        <CardContent className="space-y-5">
+        <CardContent className="space-y-3">
                   <CurveBasisNotice curve={curve} />
           {loading ? (
-            <Skeleton className="h-[380px] w-full" />
+            <Skeleton className="h-[280px] w-full" />
           ) : summary?.hasPlanned || summary?.hasActual ? (
             <>
               <SCurveChart
                 series={summary.series}
-                height={380}
+                height={280}
               />
 
-              <div className="flex flex-wrap gap-4 text-xs text-neutral-500">
+              <div className="flex flex-wrap gap-3 text-xs text-neutral-500">
                 <span className="flex items-center gap-1.5">
                   <span className="h-0.5 w-6 border-t-2 border-dashed border-neutral-900" />
                   Rencana
                 </span>
                 <span className="flex items-center gap-1.5">
                   <span className="h-0.5 w-6 bg-blue-600" />
-                  Realisasi
-                </span>
-                <span className="ml-auto text-neutral-400">
-                  {summary.hasActual
-                    ? `Actual berisi ${formatNumber(
-                        curve?.actual_curve?.length ?? 0
-                      )} titik data`
-                    : 'Actual belum memiliki data'}
+                  Progres
                 </span>
               </div>
 
-              <div className="hidden sm:block">
-                <div className="mb-3">
-                  <ProgressBar
-                    value={summary.actualProgress}
-                    label="Posisi realisasi saat ini"
-                    showLabel
-                    size="md"
-                  />
-                </div>
-              </div>
             </>
           ) : (
             <EmptyState
               icon={CircleAlert}
               title={
                 curve?.baseline_status === 'not_approved'
-                  ? 'Baseline Kurva S belum disahkan'
+                  ? 'Rencana Kurva S belum disahkan'
                   : 'Data kurva belum tersedia'
               }
               description={
                 curve?.baseline_status === 'not_approved'
-                  ? 'Rencana proyek belum ditampilkan karena belum ada baseline yang disahkan. Admin atau pemilik proyek dapat mengisi rencana kuantitas per periode melalui formulir baseline di atas.'
-                  : 'Belum ada titik rencana atau realisasi yang dapat ditampilkan.'
+                  ? 'Isi target per periode di formulir rencana di atas, lalu ajukan pengesahan.'
+                  : 'Belum ada data rencana atau progres yang dapat ditampilkan.'
               }
               hint={
                 curve?.baseline_status === 'not_approved'
-                  ? 'Kurva rencana akan muncul setelah baseline disahkan.'
+                  ? 'Kurva rencana akan muncul setelah rencana disahkan.'
                   : 'Muat ulang setelah data tersedia.'
               }
             />
@@ -304,19 +283,17 @@ function KurvaSContent() {
         </CardContent>
       </Card>
 
-      {/* Kurva S per Tiang - Clickable Cards */}
+      {/* Kurva S per titik lokasi — hanya untuk proyek per lokasi */}
+      {curve?.project?.progress_source !== 'quantity_entries' && (
       <Card>
         <CardHeader>
           <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-neutral-100">
+            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-neutral-100">
               <MapPin className="h-4 w-4" />
             </div>
 
             <div>
-              <CardTitle>Kurva S per Tiang</CardTitle>
-              <CardDescription>
-                Klik tiang untuk melihat detail dan kurva S individual
-              </CardDescription>
+              <CardTitle>Kurva S per {projectUnitLabel(curve?.project)}</CardTitle>
             </div>
           </div>
         </CardHeader>
@@ -325,16 +302,16 @@ function KurvaSContent() {
           {polesLoading ? (
             <div className="animate-pulse space-y-3">
               {[1, 2, 3].map((i) => (
-                <div key={i} className="h-20 w-full rounded-xl bg-neutral-100" />
+                <div key={i} className="h-14 w-full rounded-xl bg-neutral-100" />
               ))}
             </div>
           ) : poles.length > 0 ? (
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            <div className="grid gap-3">
               {poles.map((pole) => (
                 <Link
                   key={pole.id}
                   href={`/tiang/${pole.id}`}
-                  className="group rounded-xl border border-neutral-200 bg-paper p-4 transition-all hover:border-brand-300 hover:bg-brand-50 hover:shadow-md"
+                  className="group rounded-xl border border-neutral-200 bg-paper p-3 transition-all hover:border-brand-300 hover:bg-brand-50 hover:shadow-md"
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
@@ -369,33 +346,31 @@ function KurvaSContent() {
             <EmptyState
               icon={MapPin}
               compact
-              title="Belum ada data tiang"
-              description="Tiang akan muncul di sini setelah ditambahkan ke project."
+              title={`Belum ada data ${projectUnitLower(curve?.project)}`}
+              description={`${projectUnitLabel(curve?.project)} akan muncul di sini setelah ditambahkan ke proyek.`}
             />
           )}
         </CardContent>
       </Card>
+      )}
 
       <Card>
         <CardHeader>
           <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-neutral-100">
+            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-neutral-100">
               <CalendarDays className="h-4 w-4" />
             </div>
 
             <div>
               <CardTitle>Rincian Angka Per Periode</CardTitle>
-              <CardDescription>
-                Rincian rencana, realisasi, dan deviasi per periode
-              </CardDescription>
             </div>
           </div>
         </CardHeader>
 
         <CardContent>
           <details>
-            <summary className="cursor-pointer rounded-xl border border-neutral-200 p-3 text-sm font-medium text-neutral-700">Tampilkan tabel lengkap</summary>
-            <div className="mt-4"><CurveVarianceTable series={summary?.series ?? []} loading={loading} /></div>
+            <summary className="cursor-pointer rounded-xl border border-neutral-200 p-2 text-sm font-medium text-neutral-700">Tampilkan tabel lengkap</summary>
+            <div className="mt-3"><CurveVarianceTable series={summary?.series ?? []} loading={loading} /></div>
           </details>
         </CardContent>
       </Card>

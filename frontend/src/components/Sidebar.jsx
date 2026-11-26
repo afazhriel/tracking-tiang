@@ -18,11 +18,11 @@ import { useState } from 'react'
 
 const MENU = [
   {
-    label: 'OVERVIEW',
+    label: 'RINGKASAN',
     items: [{ id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard }],
   },
   {
-    label: 'PROJECT',
+    label: 'PROYEK',
     items: [
       { id: 'tiang', label: 'Tiang', icon: MapPin },
       { id: 'pekerjaan', label: 'Pekerjaan', icon: ClipboardList },
@@ -30,7 +30,7 @@ const MENU = [
     ],
   },
   {
-    label: 'MONITORING',
+    label: 'PANTAUAN',
     items: [{ id: 'aktivitas', label: 'Aktivitas', icon: Activity }],
   },
 ]
@@ -45,7 +45,7 @@ function Brand({ collapsed }) {
       {!collapsed && (
         <div className="pcr-brand-text">
           <strong>TRACKING TIANG</strong>
-          <span>PROJECT CONTROL</span>
+          <span>SISTEM MONITORING</span>
         </div>
       )}
     </div>
@@ -100,7 +100,7 @@ function UserBlock({ collapsed, onLogout }) {
   })
 
   const name = user?.name || user?.nama || 'Administrator'
-  const role = user?.role?.name || user?.role || 'Project Control'
+  const role = user?.role?.name || user?.role || 'Pengguna'
   const initial = String(name).trim().charAt(0) || 'T'
 
   return (
@@ -122,8 +122,8 @@ function UserBlock({ collapsed, onLogout }) {
         type="button"
         className="pcr-logout"
         onClick={onLogout}
-        aria-label="Logout"
-        title="Logout"
+        aria-label="Keluar"
+        title="Keluar"
       >
         <LogOut size={15} strokeWidth={1.9} />
       </button>
@@ -202,13 +202,13 @@ export default function Sidebar({
           <Menu size={18} />
         </button>
 
-        <strong>Tracking Tiang</strong>
+        <strong>Tracking Pekerjaan</strong>
 
         <button
           type="button"
           className="pcr-iconbtn"
           onClick={handleLogout}
-          aria-label="Logout"
+          aria-label="Keluar"
         >
           <LogOut size={16} />
         </button>
@@ -243,7 +243,7 @@ export default function Sidebar({
 
                   <div className="pcr-brand-text">
                     <strong>TRACKING TIANG</strong>
-                    <span>PROJECT CONTROL</span>
+                    <span>SISTEM MONITORING</span>
                   </div>
 
                   <button

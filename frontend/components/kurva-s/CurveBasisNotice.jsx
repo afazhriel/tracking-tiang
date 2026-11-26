@@ -20,7 +20,7 @@ export default function CurveBasisNotice({ curve }) {
         {issues.length ? `Ada ${issues.length} informasi kualitas data` : 'Dasar perhitungan grafik'}
         <span className="ml-2 text-xs font-normal text-neutral-500">Lihat penjelasan</span>
       </summary>
-      <p className="mt-2 leading-6">Realisasi dihitung dengan bobot pekerjaan aktif saat ini, bukan bobot asli tiap tanggal. Catatan lama tetap disimpan dan tidak diubah.</p>
+      <p className="mt-2 leading-6">Progres dihitung dengan bobot pekerjaan aktif saat ini, bukan bobot asli tiap tanggal. Catatan lama tetap disimpan dan tidak diubah.</p>
       {issues.length > 0 && <ul className="mt-2 list-disc space-y-1 pl-5">{issues.map(issue => <li key={issue}>{issue}</li>)}</ul>}
       <p className="mt-2 text-xs text-neutral-500">Jangan mengubah tanggal atau normalisasi bobot tanpa pemeriksaan dokumen proyek.</p>
     </details>

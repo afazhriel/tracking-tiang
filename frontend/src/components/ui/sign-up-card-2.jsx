@@ -25,8 +25,10 @@ import { api, ApiError } from '../../../lib/api'
  */
 export function Component() {
   const [showPassword, setShowPassword] = useState(false)
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [form, setForm] = useState({
     name: '',
+    organization_name: '',
     email: '',
     password: '',
     password_confirmation: '',
@@ -35,6 +37,7 @@ export function Component() {
   const [error, setError] = useState('')
   const [fieldErrors, setFieldErrors] = useState(null)
   const [done, setDone] = useState(false)
+  const [doneMessage, setDoneMessage] = useState('')
 
   function update(field, value) {
     setForm((previous) => ({ ...previous, [field]: value }))
@@ -48,7 +51,8 @@ export function Component() {
     setFieldErrors(null)
 
     try {
-      await api.register(form)
+      const res = await api.register(form)
+      setDoneMessage(res?.message || '')
       setDone(true)
     } catch (err) {
       if (err instanceof ApiError && err.fieldErrors) {
@@ -106,8 +110,8 @@ export function Component() {
               </h1>
 
               <p className="mt-2 text-sm leading-6 text-neutral-500">
-                Akun Anda dibuat dengan status <strong>menunggu persetujuan</strong>.
-                Admin perlu mengaktifkan akun sebelum Anda bisa masuk.
+                {doneMessage ||
+                  'Akun Anda dibuat dengan status menunggu persetujuan. Admin perlu mengaktifkan akun sebelum Anda bisa masuk.'}
               </p>
 
               <Link
@@ -129,8 +133,7 @@ export function Component() {
                 </h1>
 
                 <p className="mt-2 text-sm text-neutral-500">
-                  Daftar untuk mengakses Tracking Tiang. Akun akan
-                  diaktifkan oleh admin.
+                  Daftar untuk mengakses Tracking Pekerjaan.
                 </p>
               </div>
 
@@ -155,6 +158,31 @@ export function Component() {
                   />
 
                   {fieldError('name')}
+                </div>
+
+                <div>
+                  <label
+                    htmlFor="register-organization"
+                    className="mb-1.5 block text-xs font-medium text-neutral-600"
+                  >
+                    Nama PT / Organisasi
+                  </label>
+
+                  <input
+                    id="register-organization"
+                    type="text"
+                    placeholder="Contoh: PT Atap Teknologi Indonesia"
+                    value={form.organization_name}
+                    onChange={(e) => update('organization_name', e.target.value)}
+                    required
+                    autoComplete="organization"
+                    className="h-11 w-full rounded-xl border border-neutral-200 bg-canvas px-3.5 text-sm text-neutral-800 outline-none transition-colors placeholder:text-neutral-400 focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
+                  />
+                  <p className="mt-1 text-xs text-neutral-500">
+                    PT ini tampil di kop Surat Job.
+                  </p>
+
+                  {fieldError('organization_name')}
                 </div>
 
                 <div>
@@ -228,18 +256,39 @@ export function Component() {
                     Konfirmasi password
                   </label>
 
-                  <input
-                    id="register-password-confirmation"
-                    type={showPassword ? 'text' : 'password'}
-                    placeholder="Ulangi password"
-                    value={form.password_confirmation}
-                    onChange={(e) =>
-                      update('password_confirmation', e.target.value)
-                    }
-                    required
-                    autoComplete="new-password"
-                    className="h-11 w-full rounded-xl border border-neutral-200 bg-canvas px-3.5 text-sm text-neutral-800 outline-none transition-colors placeholder:text-neutral-400 focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
-                  />
+                  <div className="relative">
+                    <input
+                      id="register-password-confirmation"
+                      type={showConfirmPassword ? 'text' : 'password'}
+                      placeholder="Ulangi password"
+                      value={form.password_confirmation}
+                      onChange={(e) =>
+                        update('password_confirmation', e.target.value)
+                      }
+                      required
+                      autoComplete="new-password"
+                      className="h-11 w-full rounded-xl border border-neutral-200 bg-canvas px-3.5 pr-11 text-sm text-neutral-800 outline-none transition-colors placeholder:text-neutral-400 focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
+                    />
+
+                    <button
+                      type="button"
+                      aria-label={
+                        showConfirmPassword
+                          ? 'Sembunyikan konfirmasi password'
+                          : 'Tampilkan konfirmasi password'
+                      }
+                      onClick={() => setShowConfirmPassword((value) => !value)}
+                      className="absolute right-1.5 top-1.5 flex h-8 w-8 items-center justify-center rounded-lg text-neutral-400 transition-colors hover:bg-neutral-100 hover:text-neutral-700"
+                    >
+                      {showConfirmPassword ? (
+                        <EyeOff className="h-4 w-4" />
+                      ) : (
+                        <Eye className="h-4 w-4" />
+                      )}
+                    </button>
+                  </div>
+
+                  {fieldError('password_confirmation')}
                 </div>
 
                 {error && !fieldErrors && (
@@ -285,7 +334,7 @@ export function Component() {
         </div>
 
         <p className="mt-5 text-center text-xs text-espresso-300/70">
-          Tracking Tiang · Project Control System
+          Tracking Pekerjaan · Sistem Monitoring Pekerjaan
         </p>
       </div>
     </main>
