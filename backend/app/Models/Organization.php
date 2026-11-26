@@ -15,7 +15,20 @@ class Organization extends Model
         'address',
         'phone',
         'email',
+        'logo_path',
     ];
+
+    /**
+     * logo_url ikut terserialisasi di mana pun organisasi dikirim
+     * (mis. bersarang di detail proyek) supaya kop Surat Job / RAB
+     * bisa memakai logo tanpa memanggil endpoint organisasi lagi.
+     */
+    protected $appends = ['logo_url'];
+
+    public function getLogoUrlAttribute(): ?string
+    {
+        return $this->logoUrl();
+    }
 
     public function users(): HasMany
     {
@@ -44,6 +57,19 @@ class Organization extends Model
     }
 
     /**
+     * URL logo organisasi (kop Surat Job dan cetakan RAB).
+     * Disajikan lewat endpoint berizin, bukan URL publik langsung.
+     */
+    public function logoUrl(): ?string
+    {
+        if (! $this->logo_path) {
+            return null;
+        }
+
+        return '/api/organizations/'.$this->id.'/logo';
+    }
+
+    /**
      * Bentuk organisasi yang dikirim ke frontend (kop Surat Job,
      * kartu Organisasi di Profil).
      */
@@ -55,6 +81,7 @@ class Organization extends Model
             'address' => $this->address,
             'phone' => $this->phone,
             'email' => $this->email,
+            'logo_url' => $this->logoUrl(),
         ];
     }
 }

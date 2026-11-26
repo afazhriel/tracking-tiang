@@ -30,6 +30,25 @@ class Project extends Model
         'target_quantity' => 'decimal:4',
     ];
 
+    /* Hak user yang sedang login atas proyek ini — supaya frontend
+       menampilkan tombol catat hanya bila server mengizinkan.
+       Tanpa user login (mis. showcase publik) nilainya null/false. */
+    protected $appends = ['my_project_role', 'can_record_progress'];
+
+    public function getMyProjectRoleAttribute(): ?string
+    {
+        $user = auth()->user();
+
+        return $user instanceof User ? $user->projectRole((int) $this->getKey()) : null;
+    }
+
+    public function getCanRecordProgressAttribute(): bool
+    {
+        $user = auth()->user();
+
+        return $user instanceof User && $user->canRecordProjectProgress($this);
+    }
+
     protected static function booted(): void
     {
         static::creating(function (Project $project): void {

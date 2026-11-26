@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\CurveController;
 use App\Http\Controllers\Api\HafiWebhookController;
 use App\Http\Controllers\Api\InvitationController;
+use App\Http\Controllers\Api\KpiController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\OrganizationController;
 use App\Http\Controllers\Api\PhotoController;
@@ -14,6 +15,7 @@ use App\Http\Controllers\Api\PoleController;
 use App\Http\Controllers\Api\PoleWorkItemController;
 use App\Http\Controllers\Api\ProgressController;
 use App\Http\Controllers\Api\ProjectBaselineController;
+use App\Http\Controllers\Api\ProjectBudgetController;
 use App\Http\Controllers\Api\ProjectController;
 use App\Http\Controllers\Api\ProjectMemberController;
 use App\Http\Controllers\Api\ProjectQuantityEntryController;
@@ -107,6 +109,8 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
     /* Organisasi (PT klien) — kop Surat Job berasal dari sini. */
     Route::get('/organizations/{organization}', [OrganizationController::class, 'show']);
     Route::patch('/organizations/{organization}', [OrganizationController::class, 'update']);
+    Route::post('/organizations/{organization}/logo', [OrganizationController::class, 'uploadLogo']);
+    Route::get('/organizations/{organization}/logo', [OrganizationController::class, 'showLogo']);
 
     /* Asisten AI — sama mesinnya dengan AI Si Tani (OpenAI-compatible,
        kunci dari env AI_API_KEY). */
@@ -139,6 +143,21 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
         '/projects/{project}/quantities',
         [ProjectQuantityEntryController::class, 'store']
     );
+
+    /* RAB pengajuan per proyek: draf -> diajukan -> disetujui/ditolak. */
+    Route::get('/projects/{project}/budgets', [ProjectBudgetController::class, 'index']);
+    Route::post('/projects/{project}/budgets', [ProjectBudgetController::class, 'store']);
+    Route::get('/projects/{project}/budgets/{budget}', [ProjectBudgetController::class, 'show']);
+    Route::put('/projects/{project}/budgets/{budget}', [ProjectBudgetController::class, 'update']);
+    Route::patch('/projects/{project}/budgets/{budget}', [ProjectBudgetController::class, 'update']);
+    Route::delete('/projects/{project}/budgets/{budget}', [ProjectBudgetController::class, 'destroy']);
+    Route::post('/projects/{project}/budgets/{budget}/submit', [ProjectBudgetController::class, 'submit']);
+    Route::post('/projects/{project}/budgets/{budget}/decide', [ProjectBudgetController::class, 'decide']);
+    Route::post('/projects/{project}/budgets/{budget}/duplicate', [ProjectBudgetController::class, 'duplicate']);
+
+    /* KPI per user (Tim): daftar yang boleh dilihat + satu user. */
+    Route::get('/kpi', [KpiController::class, 'index']);
+    Route::get('/users/{user}/kpi', [KpiController::class, 'show']);
 
     /* Tiang / Pole */
     Route::get('/projects/{project}/poles', [PoleController::class, 'index']);
