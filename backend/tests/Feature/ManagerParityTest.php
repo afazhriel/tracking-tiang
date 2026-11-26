@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\Organization;
 use App\Models\Pole;
 use App\Models\Project;
 use App\Models\User;
@@ -45,8 +46,10 @@ class ManagerParityTest extends TestCase
 
     public function test_inactive_managers_are_denied_and_last_real_admin_cannot_be_demoted(): void
     {
-        $admin = User::factory()->admin()->create();
-        $supervisor = User::factory()->supervisor()->create();
+        /* Supervisor hanya bisa mengelola user organisasinya sendiri. */
+        $organization = Organization::create(['name' => 'PT Contoh']);
+        $admin = User::factory()->admin()->create(['org_id' => $organization->id]);
+        $supervisor = User::factory()->supervisor()->create(['org_id' => $organization->id]);
         $this->actingAs($supervisor, 'sanctum')->putJson("/api/users/{$admin->id}", ['role' => 'pic'])->assertUnprocessable();
         $this->assertSame('admin', $admin->fresh()->role);
         foreach (['admin', 'supervisor'] as $role) {

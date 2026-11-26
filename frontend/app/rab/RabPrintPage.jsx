@@ -26,7 +26,12 @@ export default function RabPrintPage() {
 
   useEffect(() => {
     const q = new URLSearchParams(window.location.search)
-    setParams({ proyek: q.get('proyek'), rab: q.get('rab') })
+    /* Parameter dibaca dari URL hanya di client (SSR tidak punya
+       window); setState ditunda satu microtask agar tidak sinkron
+       di dalam effect. */
+    queueMicrotask(() =>
+      setParams({ proyek: q.get('proyek'), rab: q.get('rab') })
+    )
     const t = setTimeout(() => {
       try {
         if (!window.localStorage.getItem('tracking_tiang_user')) {
@@ -42,8 +47,10 @@ export default function RabPrintPage() {
   useEffect(() => {
     if (!params) return
     if (!params.proyek || !params.rab) {
-      setError('Parameter proyek atau RAB tidak ditemukan. Buka halaman ini dari daftar RAB proyek.')
-      setLoading(false)
+      queueMicrotask(() => {
+        setError('Parameter proyek atau RAB tidak ditemukan. Buka halaman ini dari daftar RAB proyek.')
+        setLoading(false)
+      })
       return
     }
 

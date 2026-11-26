@@ -131,7 +131,7 @@ class ProjectBudgetController extends Controller
 
         $actor = $request->user();
 
-        DB::transaction(function () use ($request, $project, $budget, $actor) {
+        DB::transaction(function () use ($project, $budget, $actor) {
             $budget->update([
                 'status' => ProjectBudget::STATUS_DIAJUKAN,
                 'submitted_by' => $actor->id,
@@ -162,7 +162,7 @@ class ProjectBudgetController extends Controller
                     $project->id,
                     'rab',
                     "RAB diajukan di {$project->name}",
-                    "{$actor->name} mengajukan RAB \"".($budget->title ?: 'RAB')."\" — menunggu persetujuan.",
+                    "{$actor->name} mengajukan RAB \"".($budget->title ?: 'RAB').'" — menunggu persetujuan.',
                     '/proyek',
                     ['project_id' => $project->id, 'budget_id' => $budget->id]
                 );
@@ -204,7 +204,7 @@ class ProjectBudgetController extends Controller
             ], 422);
         }
 
-        DB::transaction(function () use ($request, $project, $budget, $data, $actor) {
+        DB::transaction(function () use ($project, $budget, $data, $actor) {
             $budget->update([
                 'status' => $data['decision'],
                 'decided_by' => $actor->id,
@@ -236,8 +236,8 @@ class ProjectBudgetController extends Controller
                         ? "RAB disetujui di {$project->name}"
                         : "RAB ditolak di {$project->name}",
                     $approved
-                        ? "RAB \"".($budget->title ?: 'RAB')."\" disetujui oleh {$actor->name}."
-                        : "RAB \"".($budget->title ?: 'RAB')."\" ditolak oleh {$actor->name}: ".trim((string) $data['note']),
+                        ? 'RAB "'.($budget->title ?: 'RAB')."\" disetujui oleh {$actor->name}."
+                        : 'RAB "'.($budget->title ?: 'RAB')."\" ditolak oleh {$actor->name}: ".trim((string) $data['note']),
                     '/proyek',
                     ['project_id' => $project->id, 'budget_id' => $budget->id]
                 );

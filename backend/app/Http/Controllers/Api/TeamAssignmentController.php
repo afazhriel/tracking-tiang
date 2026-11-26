@@ -19,6 +19,7 @@ use Illuminate\Support\Facades\DB;
 class TeamAssignmentController extends Controller
 {
     public function __construct(private NotificationService $notifications, private ActivityLogger $activity) {}
+
     public function index(Request $request, Team $team): JsonResponse
     {
         $this->authorize('view', $team);

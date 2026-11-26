@@ -234,7 +234,6 @@ function ActivityRow({ activity }) {
 function AktivitasContent() {
   const { projectId, project, error: projectError } = useProject()
   const unitName = projectUnitLabel(project)
-  const unitLower = projectUnitLower(project)
 
   const [userFilter, setUserFilter] = useState('all')
   const [poleFilter, setPoleFilter] = useState('all')

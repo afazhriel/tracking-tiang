@@ -2,6 +2,9 @@
 
 namespace App\Services;
 
+use App\Models\Pole;
+use App\Models\Project;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use RuntimeException;
 
@@ -52,7 +55,7 @@ PROMPT;
             return 'Tidak ada proyek yang dipilih.';
         }
 
-        $project = \App\Models\Project::query()
+        $project = Project::query()
             ->withCount(['poles'])
             ->find($projectId);
 
@@ -61,7 +64,7 @@ PROMPT;
         }
 
         $org = $project->organization?->name ?? '—';
-        $poles = \App\Models\Pole::query()
+        $poles = Pole::query()
             ->where('project_id', $project->id)
             ->selectRaw('status, COUNT(*) as total')
             ->groupBy('status')
@@ -72,14 +75,14 @@ PROMPT;
         /* Progres nyata per lokasi: jumlah berbobot dari pole_work_progress
            (pola yang sama dipakai PoleController). Status tiang saja tidak
            cukup — tiang berstatus "proses" bisa sudah 100%. */
-        $perPole = \Illuminate\Support\Facades\DB::table('poles')
+        $perPole = DB::table('poles')
             ->leftJoin('pole_work_progress as pwp', 'pwp.pole_id', '=', 'poles.id')
             ->leftJoin('work_items as wi', 'wi.id', '=', 'pwp.work_item_id')
             ->where('poles.project_id', $project->id)
             ->groupBy('poles.id', 'poles.pole_code')
             ->select(
                 'poles.pole_code',
-                \Illuminate\Support\Facades\DB::raw('COALESCE(SUM(CASE WHEN wi.is_active THEN pwp.progress_percent * wi.weight_percent / 100 ELSE 0 END), 0) as pole_progress')
+                DB::raw('COALESCE(SUM(CASE WHEN wi.is_active THEN pwp.progress_percent * wi.weight_percent / 100 ELSE 0 END), 0) as pole_progress')
             )
             ->get();
 
@@ -88,7 +91,7 @@ PROMPT;
         $notStarted = $perPole->filter(fn ($row) => (float) $row->pole_progress <= 0)->map(fn ($row) => $row->pole_code)->values();
 
         if (($project->progress_source ?? '') === 'quantity_entries') {
-            $realized = (float) \Illuminate\Support\Facades\DB::table('project_quantity_entries')
+            $realized = (float) DB::table('project_quantity_entries')
                 ->where('project_id', $project->id)
                 ->sum('quantity_delta');
             $target = (float) ($project->target_quantity ?? 0);

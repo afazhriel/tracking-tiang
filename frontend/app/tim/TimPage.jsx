@@ -325,7 +325,7 @@ function ProvinceCell({ user, disabled, onManage }) {
   )
 }
 
-function AdminTimContent({ currentUser }) {
+function AdminTimContent() {
   const [search, setSearch] = useState('')
   const [roleFilter, setRoleFilter] = useState('all')
   const [statusFilter, setStatusFilter] = useState('all')

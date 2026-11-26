@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Pole;
+use App\Models\PoleProgressHistory;
 use App\Models\PoleWorkProgress;
 use App\Models\Project;
 use App\Models\User;
@@ -178,7 +179,7 @@ class ProgressCalculationTest extends TestCase
             'planned_end_month' => 12,
         ]);
 
-        \App\Models\PoleProgressHistory::create([
+        PoleProgressHistory::create([
             'pole_id' => $pole->id,
             'work_item_id' => $item->id,
             'progress_percent' => 50,

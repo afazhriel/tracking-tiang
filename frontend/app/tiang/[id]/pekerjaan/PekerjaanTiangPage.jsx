@@ -437,7 +437,6 @@ function PekerjaanTiangContent() {
   const poleId = params?.id ?? searchParams?.get('pole') ?? null
   const { projectId, project } = useProject()
   const unitName = projectUnitLabel(project)
-  const unitLower = projectUnitLower(project)
 
   const [createOpen, setCreateOpen] = useState(false)
   const [editing, setEditing] = useState(null)

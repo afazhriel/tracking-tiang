@@ -5,7 +5,7 @@ import { CircleAlert, MapPin, Plus } from 'lucide-react'
 
 import { api } from '../../lib/api'
 import { useProject } from '../../lib/project-context'
-import { projectUnitLabel, projectUnitLower } from '../../lib/unit-label'
+import { projectUnitLabel } from '../../lib/unit-label'
 import {
   FormField,
   Modal,
@@ -67,7 +67,6 @@ export function CreatePoleModal({
 }) {
   const { project } = useProject()
   const unitName = projectUnitLabel(project)
-  const unitLower = projectUnitLower(project)
   const [form, setForm] = useState(EMPTY_FORM)
 
   const [provinces, setProvinces] = useState([])

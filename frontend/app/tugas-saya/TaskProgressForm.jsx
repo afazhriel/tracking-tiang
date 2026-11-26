@@ -43,8 +43,6 @@ export default function TaskProgressForm({
   projectId,
   pole,
   startDate = null,
-  unitLabel = 'Lokasi',
-  unitLower = 'lokasi',
   onSaved = null,
 }) {
   const [workItems, setWorkItems] = useState([])
@@ -64,11 +62,16 @@ export default function TaskProgressForm({
   /* Tanggal mulai proyek dipakai untuk pemberitahuan "belum mulai"
      dan batas tanggal. Kalau tidak dikirim sebagai prop, ambil dari
      detail proyek. */
+  /* Sinkronisasi prop ke state saat render (pola "adjusting state
+     when a prop changes"), bukan lewat effect. */
+  const [prevStartDate, setPrevStartDate] = useState(startDate)
+  if (prevStartDate !== startDate) {
+    setPrevStartDate(startDate)
+    setProjectStart(startDate ?? null)
+  }
+
   useEffect(() => {
-    if (startDate) {
-      setProjectStart(startDate)
-      return undefined
-    }
+    if (startDate) return undefined
     let active = true
     api.getProject(projectId)
       .then((payload) => {
@@ -130,10 +133,15 @@ export default function TaskProgressForm({
     [progressEntries, workItemId]
   )
 
-  /* Persentase awal mengikuti nilai yang sudah tercatat untuk item ini. */
-  useEffect(() => {
+  /* Persentase awal mengikuti nilai yang sudah tercatat untuk item ini.
+     Disinkronkan saat render (pola "adjusting state when a prop
+     changes"), bukan lewat effect. */
+  const [prevPercentKey, setPrevPercentKey] = useState(null)
+  const percentKey = `${workItemId}:${existing?.progress ?? 0}`
+  if (prevPercentKey !== percentKey) {
+    setPrevPercentKey(percentKey)
     setPercent(String(existing?.progress ?? 0))
-  }, [workItemId, existing?.progress])
+  }
 
   const numericPercent = clampPercent(percent)
   const selectedItem = workItems.find(

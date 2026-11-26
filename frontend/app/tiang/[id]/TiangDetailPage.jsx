@@ -373,7 +373,7 @@ function TiangDetailContent() {
     if (typeof document !== "undefined") {
       document.title = `${pole.poleCode} · Monitoring ${unitName}`;
     }
-  }, [pole]);
+  }, [pole, unitName]);
 
   if (!enabled) {
     return (

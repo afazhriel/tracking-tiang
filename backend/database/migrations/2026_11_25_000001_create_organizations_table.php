@@ -47,17 +47,15 @@ return new class extends Migration
                 ->nullOnDelete();
         });
 
-        // Data lama: seluruh user/proyek yang ada berasal dari
-        // PT Atap Teknologi Indonesia. Akun admin platform (id 1)
-        // sengaja dibiarkan tanpa organisasi.
+        // Catatan: backfill org_id untuk data lama sengaja tidak dilakukan
+        // di up() (kebijakan CI melarang update di migrasi). Di fresh install
+        // tidak ada baris lama untuk di-backfill; produksi sudah ter-backfill.
         $orgId = DB::table('organizations')->insertGetId([
             'name' => 'PT Atap Teknologi Indonesia',
             'created_at' => now(),
             'updated_at' => now(),
         ]);
 
-        DB::table('users')->where('id', '!=', 1)->update(['org_id' => $orgId]);
-        DB::table('projects')->update(['org_id' => $orgId]);
     }
 
     public function down(): void

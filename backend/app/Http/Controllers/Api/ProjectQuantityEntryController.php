@@ -16,6 +16,7 @@ use Illuminate\Support\Facades\DB;
 class ProjectQuantityEntryController extends Controller
 {
     public function __construct(private NotificationService $notifications, private ActivityLogger $activity) {}
+
     public function index(
         Project $project,
         ProjectQuantityProgress $progress

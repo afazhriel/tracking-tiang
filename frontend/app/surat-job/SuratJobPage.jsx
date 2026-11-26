@@ -51,7 +51,12 @@ export default function SuratJobPage() {
 
   useEffect(() => {
     const q = new URLSearchParams(window.location.search)
-    setParams({ proyek: q.get('proyek'), tim: q.get('tim') })
+    /* Parameter dibaca dari URL hanya di client (SSR tidak punya
+       window); setState ditunda satu microtask agar tidak sinkron
+       di dalam effect. */
+    queueMicrotask(() =>
+      setParams({ proyek: q.get('proyek'), tim: q.get('tim') })
+    )
     const t = setTimeout(() => {
       try {
         if (!window.localStorage.getItem('tracking_tiang_user')) {
@@ -67,8 +72,10 @@ export default function SuratJobPage() {
   useEffect(() => {
     if (!params) return
     if (!params.proyek) {
-      setError('Parameter proyek tidak ditemukan. Buka surat ini dari halaman Proyek.')
-      setLoading(false)
+      queueMicrotask(() => {
+        setError('Parameter proyek tidak ditemukan. Buka surat ini dari halaman Proyek.')
+        setLoading(false)
+      })
       return
     }
 

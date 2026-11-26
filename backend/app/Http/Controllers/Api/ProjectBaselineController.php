@@ -17,6 +17,7 @@ use Illuminate\Support\Facades\DB;
 class ProjectBaselineController extends Controller
 {
     public function __construct(private NotificationService $notifications, private ActivityLogger $activity) {}
+
     public function index(Project $project): JsonResponse
     {
         $this->authorize('view', $project);

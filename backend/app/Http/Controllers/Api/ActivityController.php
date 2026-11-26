@@ -10,6 +10,7 @@ use App\Models\ProjectActivity;
 use App\Services\PoleVisibility;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 
 /**
  * Aktivitas lapangan — bersumber dari histori progress tiang.
@@ -138,7 +139,7 @@ class ActivityController extends Controller
      * baseline, progres kuantitas) dalam bentuk yang sama dengan
      * baris histori progres tiang.
      */
-    private function logRows(Project $project, array $validated, int $limit): \Illuminate\Support\Collection
+    private function logRows(Project $project, array $validated, int $limit): Collection
     {
         $logs = ProjectActivity::with('user:id,name')
             ->where('project_id', $project->id)

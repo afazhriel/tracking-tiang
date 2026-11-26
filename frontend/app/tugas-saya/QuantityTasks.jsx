@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { ChevronDown, Hash } from 'lucide-react'
 
 import QuantityPanel from '../proyek/QuantityPanel'
@@ -35,9 +35,14 @@ export default function QuantityTasks({ initialOpenProjectId = null }) {
     initialOpenProjectId ? String(initialOpenProjectId) : null
   )
 
-  useEffect(() => {
-    if (initialOpenProjectId) setOpenId(String(initialOpenProjectId))
-  }, [initialOpenProjectId])
+  /* Sinkronisasi prop ke state saat render (pola "adjusting state
+     when a prop changes"), bukan lewat effect. */
+  const [prevOpenProjectId, setPrevOpenProjectId] =
+    useState(initialOpenProjectId)
+  if (prevOpenProjectId !== initialOpenProjectId) {
+    setPrevOpenProjectId(initialOpenProjectId)
+    setOpenId(initialOpenProjectId ? String(initialOpenProjectId) : null)
+  }
 
   if (loading) return null
   if (error) return null

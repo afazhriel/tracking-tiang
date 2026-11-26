@@ -3,7 +3,6 @@
 namespace App\Services;
 
 use App\Models\Pole;
-use App\Models\PoleAssignment;
 use App\Models\User;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;

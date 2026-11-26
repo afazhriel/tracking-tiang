@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\Project;
 use App\Services\AiAssistant;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -32,7 +33,7 @@ class AiChatController extends Controller
 
         if ($projectId === null) {
             $ids = $request->user()->accessibleProjectIds();
-            $projectId = \App\Models\Project::query()
+            $projectId = Project::query()
                 ->when($ids !== null, fn ($q) => $q->whereIn('id', $ids))
                 ->where('status', 'active')
                 ->orderBy('id')

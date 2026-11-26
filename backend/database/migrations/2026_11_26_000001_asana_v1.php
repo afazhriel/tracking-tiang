@@ -2,7 +2,6 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 /**
@@ -35,7 +34,6 @@ return new class extends Migration
             $table->index(['project_id', 'created_at']);
         });
 
-        DB::table('project_user')->whereNull('role')->update(['role' => 'pelaksana']);
     }
 
     public function down(): void

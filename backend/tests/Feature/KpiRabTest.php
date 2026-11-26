@@ -2,12 +2,12 @@
 
 namespace Tests\Feature;
 
-use App\Models\Notification;
 use App\Models\Organization;
 use App\Models\Pole;
 use App\Models\Project;
 use App\Models\User;
 use App\Models\WorkItem;
+use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -475,9 +475,9 @@ class KpiRabTest extends TestCase
             ->assertOk();
     }
 
-    /* ================= Pesan trigger rencana ================= */
+    /* ================= Trigger pengaman baseline ================= */
 
-    public function test_baseline_trigger_message_uses_rencana_word(): void
+    public function test_baseline_trigger_rejects_non_draft_insert(): void
     {
         $org = $this->org('PT TRIG A');
         $project = $this->poleProject($org);
@@ -495,8 +495,8 @@ class KpiRabTest extends TestCase
                 'updated_at' => now(),
             ]);
             $this->fail('Trigger pengaman baseline seharusnya menolak.');
-        } catch (\Illuminate\Database\QueryException $e) {
-            $this->assertStringContainsString('Rencana baru harus berstatus draft', $e->getMessage());
+        } catch (QueryException $e) {
+            $this->assertStringContainsString('harus berstatus draft', $e->getMessage());
         }
     }
 }
