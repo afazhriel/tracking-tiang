@@ -132,7 +132,7 @@ class ProjectController extends Controller
 
             if ($hasData) {
                 return response()->json([
-                    'message' => 'Mode pencatatan tidak dapat diubah karena proyek sudah memiliki data titik lokasi atau catatan kuantitas.',
+                    'message' => 'Mode pencatatan tidak dapat diubah karena proyek sudah memiliki data lokasi atau catatan jumlah.',
                 ], 422);
             }
         }

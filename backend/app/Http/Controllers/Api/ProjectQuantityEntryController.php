@@ -69,7 +69,7 @@ class ProjectQuantityEntryController extends Controller
             $data['quantity_delta']
         );
 
-        abort_if($delta === 0, 422, 'Perubahan kuantitas tidak boleh nol.');
+        abort_if($delta === 0, 422, 'Perubahan jumlah tidak boleh nol.');
 
         // Fingerprint mengikat satu request_key ke seluruh payload.
         // Normalisasi angka memastikan 20 dan 20.0000 setara.

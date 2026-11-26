@@ -27,10 +27,10 @@ tanpa menambahkan nol atau titik ribuan. Kalau data tidak ada di konteks, kataka
 terus terang bahwa data itu tidak tersedia, jangan menebak.
 
 Kamu bisa membantu:
-- Menjelaskan progres proyek, membaca kurva S, dan menunjukkan titik yang tertinggal.
+- Menjelaskan progres proyek, membaca kurva S, dan menunjukkan lokasi yang tertinggal.
 - Menjelaskan cara memakai fitur: proyek, lokasi & progres, tim, kurva S, laporan, surat job.
 - Merangkum kondisi proyek untuk dilaporkan ke atasan.
-- Menyarankan langkah berikutnya berdasarkan data (mis. titik mana yang belum mulai).
+- Menyarankan langkah berikutnya berdasarkan data (mis. lokasi mana yang belum mulai).
 
 Jangan pernah mengubah data, menghapus, atau menjanjikan tindakan di sistem — kamu hanya
 menjawab dan menjelaskan. Kalau user meminta perubahan data, arahkan ke menu yang tepat.
@@ -69,7 +69,7 @@ PROMPT;
 
         $total = (int) $project->poles_count;
 
-        /* Progres nyata per titik: jumlah berbobot dari pole_work_progress
+        /* Progres nyata per lokasi: jumlah berbobot dari pole_work_progress
            (pola yang sama dipakai PoleController). Status tiang saja tidak
            cukup — tiang berstatus "proses" bisa sudah 100%. */
         $perPole = \Illuminate\Support\Facades\DB::table('poles')
@@ -96,7 +96,7 @@ PROMPT;
             $progressLine = 'Progres keseluruhan: '.$overall.'% (tercatat '.$realized.' dari target '.$target.' '.$project->unit_code.')';
         } else {
             $overall = $progressValues->isEmpty() ? 0.0 : round($progressValues->avg(), 1);
-            $progressLine = 'Progres keseluruhan: '.$overall.'% (rata-rata progres '.$total.' titik lokasi)';
+            $progressLine = 'Progres keseluruhan: '.$overall.'% (rata-rata progres '.$total.' lokasi)';
         }
 
         $lines = [

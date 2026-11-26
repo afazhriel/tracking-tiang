@@ -334,7 +334,7 @@ class PoleController extends Controller
         ]);
 
         return response()->json([
-            'message' => 'Tenggat titik diperbarui.',
+            'message' => 'Tenggat lokasi diperbarui.',
             'data' => $this->polePayload($pole),
         ]);
     }

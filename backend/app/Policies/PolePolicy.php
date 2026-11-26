@@ -3,6 +3,7 @@
 namespace App\Policies;
 
 use App\Models\Pole;
+use App\Models\ProjectUser;
 use App\Models\User;
 use Illuminate\Auth\Access\Response;
 
@@ -74,9 +75,11 @@ class PolePolicy
      * Boleh menulis progress?
      *
      * Admin/Supervisor/pemilik proyek: selalu.
-     * PIC: hanya di titik yang ditugaskan ke dia (langsung atau
+     * PIC: hanya di lokasi yang ditugaskan ke dia (langsung atau
      * lewat timnya). Akses wilayah saja tidak cukup untuk mencatat
      * — wilayah hanya mengatur apa yang bisa dilihat/dibuat.
+     * Anggota dengan peran Pelihat tidak bisa mencatat, sekalipun
+     * lokasi itu ditugaskan ke dia.
      */
     public function updateProgress(User $user, Pole $pole): bool|Response
     {
@@ -93,8 +96,12 @@ class PolePolicy
             return Response::deny('Anda bukan anggota proyek ini.');
         }
 
+        if ($user->projectRole((int) $pole->project_id) === ProjectUser::ROLE_PELIHAT) {
+            return Response::deny('Peran Anda di proyek ini hanya melihat, tidak bisa mencatat progres.');
+        }
+
         if (! $user->isPoleAssignedTo((int) $pole->id)) {
-            return Response::deny('Titik ini belum ditugaskan ke Anda. Minta supervisor menugaskan titik ini ke Anda.');
+            return Response::deny('Lokasi ini belum ditugaskan ke Anda. Minta supervisor menugaskan lokasi ini ke Anda.');
         }
 
         return true;

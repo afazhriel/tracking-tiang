@@ -107,7 +107,7 @@ class PoleAssignmentController extends Controller
             }
             $project = Project::findOrFail($pole->project_id);
             if ($user->isActive()) {
-                $this->notifications->send($user->id, $pole->project_id, 'sistem', "Anda ditugaskan ke {$pole->pole_code}", 'Tiang ini kini menjadi bagian dari tugas lapangan Anda.', "/tiang/{$pole->id}", ['pole_id' => $pole->id]);
+                $this->notifications->send($user->id, $pole->project_id, 'sistem', "Anda ditugaskan ke {$pole->pole_code}", 'Lokasi ini kini menjadi bagian dari tugas lapangan Anda.', "/tiang/{$pole->id}", ['pole_id' => $pole->id]);
             }
             // Kabari anggota proyek lain (sekali per orang, tanpa pelaku
             // dan tanpa PIC yang ditugaskan — dia sudah dapat notif langsung).
@@ -163,7 +163,7 @@ class PoleAssignmentController extends Controller
 
         $project = Project::findOrFail($pole->project_id);
         if ($user->isActive()) {
-            $this->notifications->send($user->id, $pole->project_id, 'sistem', "Penugasan Anda di {$pole->pole_code} dicabut", 'Titik ini tidak lagi menjadi bagian dari tugas lapangan Anda.', "/tiang/{$pole->id}", ['pole_id' => $pole->id]);
+            $this->notifications->send($user->id, $pole->project_id, 'sistem', "Penugasan Anda di {$pole->pole_code} dicabut", 'Lokasi ini tidak lagi menjadi bagian dari tugas lapangan Anda.', "/tiang/{$pole->id}", ['pole_id' => $pole->id]);
         }
         $this->activity->log(
             $project,

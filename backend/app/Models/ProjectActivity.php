@@ -29,6 +29,14 @@ class ProjectActivity extends Model
 
     public const ACTION_PROGRESS_KUANTITAS = 'progress_kuantitas';
 
+    public const ACTION_RAB_BUAT = 'rab_buat';
+
+    public const ACTION_RAB_AJUKAN = 'rab_ajukan';
+
+    public const ACTION_RAB_DISETUJUI = 'rab_disetujui';
+
+    public const ACTION_RAB_DITOLAK = 'rab_ditolak';
+
     protected $fillable = [
         'project_id',
         'user_id',

@@ -65,7 +65,7 @@ class ProjectBaselineController extends Controller
                 $lockedProject->end_date &&
                 (float) $lockedProject->target_quantity > 0,
                 422,
-                'Tanggal dan target kuantitas proyek wajib diisi.'
+                'Tanggal dan target jumlah proyek wajib diisi.'
             );
 
             $version = (int) ProjectBaseline::query()
@@ -140,7 +140,7 @@ class ProjectBaselineController extends Controller
             abort_unless(
                 $draft->status === 'draft',
                 422,
-                'Baseline yang sudah disahkan tidak boleh diedit.'
+                'Rencana yang sudah disahkan tidak boleh diedit.'
             );
 
             $draft->update(['notes' => $data['notes'] ?? null]);
@@ -176,7 +176,7 @@ class ProjectBaselineController extends Controller
             // Trigger penjaga baseline di database menolak dengan pesan
             // Bahasa Indonesia yang memang ditulis untuk pengguna; teruskan
             // sebagai 422, bukan 500 "Server Error".
-            $message = 'Baseline belum memenuhi syarat pengesahan.';
+            $message = 'Rencana belum memenuhi syarat pengesahan.';
             if (preg_match('/ERROR:\s*(.+?)(?:\s*\(Connection|\s*\(SQLSTATE|$)/s', $e->getMessage(), $m)) {
                 $message = trim($m[1]);
             }
